@@ -46,7 +46,7 @@ app.use((err, _req, res, _next) => {
 });
 
 // Connect to MongoDB and start server
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI, { family: 4, serverSelectionTimeoutMS: 10000 })
   .then(() => {
     console.log('✅ MongoDB conectado');
     app.listen(PORT, () => console.log(`🚀 Routiflow API corriendo en http://localhost:${PORT}`));
