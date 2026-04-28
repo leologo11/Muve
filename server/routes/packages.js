@@ -2,7 +2,7 @@ import { Router } from 'express';
 import Package from '../models/Package.js';
 import Route from '../models/Route.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { upload, deletePhoto } from '../utils/cloudinary.js';
+import { upload, uploadToCloudinary, deletePhoto } from '../utils/cloudinary.js';
 import { syncRouteStats } from './deliveryRoutes.js';
 
 const router = Router();
@@ -148,8 +148,9 @@ router.post('/:id/photo', upload.single('photo'), async (req, res) => {
     // Delete previous photo from Cloudinary if exists
     if (pkg.photoPublicId) await deletePhoto(pkg.photoPublicId);
 
-    pkg.photoUrl = req.file.path;
-    pkg.photoPublicId = req.file.filename;
+    const result = await uploadToCloudinary(req.file.buffer);
+    pkg.photoUrl = result.secure_url;
+    pkg.photoPublicId = result.public_id;
     pkg.photoUploadedAt = new Date();
     await pkg.save();
 
