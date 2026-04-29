@@ -38,6 +38,7 @@ export const api = {
   updateRoute: (id, data) => request('PATCH', `/routes/${id}`, data),
   deleteRoute: (id) => request('DELETE', `/routes/${id}`),
   optimizeRoute: (id) => request('POST', `/routes/${id}/optimize`),
+  geocodeRoute: (id) => request('POST', `/routes/${id}/geocode`),
 
   // Packages
   getPackages: (routeId) => request('GET', `/packages?routeId=${routeId}`),
@@ -48,10 +49,10 @@ export const api = {
   restorePackage: (id) => request('PATCH', `/packages/${id}/restore`),
   reorderPackages: (order) => request('PATCH', '/packages/reorder/batch', { order }),
 
-  uploadPhoto: (packageId, file) => {
+  uploadPhoto: (packageId, file, n = 1) => {
     const fd = new FormData();
     fd.append('photo', file);
-    return request('POST', `/packages/${packageId}/photo`, fd, true);
+    return request('POST', `/packages/${packageId}/photo?n=${n}`, fd, true);
   },
 
   // Public tracking

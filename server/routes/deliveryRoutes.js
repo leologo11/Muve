@@ -3,6 +3,7 @@ import Route from '../models/Route.js';
 import Package from '../models/Package.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import Anthropic from '@anthropic-ai/sdk';
+import { geocodeAddress, sleep } from '../utils/geocode.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -43,7 +44,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const route = await Route.findById(req.params.id)
-      .populate('driverId', 'name email')
+      .populate('driverId', 'name email phone vehicle licensePlate')
       .populate('companyId', 'name')
       .lean();
     if (!route) return res.status(404).json({ error: 'Ruta no encontrada' });
@@ -174,6 +175,30 @@ router.get('/:id/stats', requireAuth, async (req, res) => {
   try {
     const stats = await syncRouteStats(req.params.id);
     res.json(stats);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/routes/:id/geocode — batch geocode packages missing coordinates
+router.post('/:id/geocode', requireRole('admin'), async (req, res) => {
+  try {
+    const pkgs = await Package.find({
+      routeId: req.params.id,
+      status: { $ne: 'eliminado' },
+      $or: [{ lat: null }, { lng: null }, { lat: { $exists: false } }, { lng: { $exists: false } }]
+    }).lean();
+
+    let geocoded = 0;
+    for (const pkg of pkgs) {
+      const geo = await geocodeAddress(pkg.address, pkg.commune);
+      if (geo) {
+        await Package.findByIdAndUpdate(pkg._id, { lat: geo.lat, lng: geo.lng });
+        geocoded++;
+      }
+      if (pkgs.length > 1) await sleep(1200);
+    }
+    res.json({ geocoded, skipped: pkgs.length - geocoded, total: pkgs.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

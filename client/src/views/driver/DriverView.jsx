@@ -143,7 +143,7 @@ export default function DriverView() {
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
         {/* Map */}
         <div style={{ display: tab === 'm' ? 'block' : 'none', height: '100%' }}>
-          <RouteMap packages={packages} onPkgClick={setEditPkg} />
+          <RouteMap packages={packages} onPkgClick={setEditPkg} visible={tab === 'm'} />
         </div>
 
         {/* List */}
@@ -172,6 +172,7 @@ export default function DriverView() {
       {editPkg && (
         <DeliveryModal
           pkg={editPkg}
+          route={selectedRoute}
           onClose={() => setEditPkg(null)}
           onSaved={() => loadRoute(selectedRoute._id)}
         />

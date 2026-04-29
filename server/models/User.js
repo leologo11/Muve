@@ -10,10 +10,15 @@ const userSchema = new mongoose.Schema({
     enum: ['admin', 'driver', 'company', 'customer'],
     required: true
   },
-  // For company role: which company they belong to
   companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company' },
-  // For driver role: current assigned route
-  active: { type: Boolean, default: true }
+  active: { type: Boolean, default: true },
+  phone: { type: String, trim: true },
+  // Driver-specific
+  vehicle: { type: String, trim: true },
+  licensePlate: { type: String, trim: true },
+  // Company-specific
+  companyName: { type: String, trim: true },
+  rut: { type: String, trim: true }
 }, { timestamps: true });
 
 userSchema.pre('save', async function (next) {

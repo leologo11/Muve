@@ -137,13 +137,12 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-// POST /api/packages/:id/photo — upload delivery photo
+// POST /api/packages/:id/photo?n=1|2 — upload delivery photo (max 2 per package)
 router.post('/:id/photo', upload.single('photo'), async (req, res) => {
   try {
     const pkg = await Package.findById(req.params.id);
     if (!pkg) return res.status(404).json({ error: 'Paquete no encontrado' });
 
-    // Driver access check
     if (req.user.role === 'driver') {
       const route = await Route.findById(pkg.routeId).lean();
       if (String(route?.driverId) !== String(req.user._id)) {
@@ -153,16 +152,27 @@ router.post('/:id/photo', upload.single('photo'), async (req, res) => {
       return res.status(403).json({ error: 'Sin permisos' });
     }
 
-    // Delete previous photo from Cloudinary if exists
-    if (pkg.photoPublicId) await deletePhoto(pkg.photoPublicId);
+    const n = req.query.n === '2' ? 2 : 1;
 
-    const result = await uploadToCloudinary(req.file.buffer);
-    pkg.photoUrl = result.secure_url;
-    pkg.photoPublicId = result.public_id;
-    pkg.photoUploadedAt = new Date();
+    if (n === 2) {
+      if (pkg.photo2PublicId) await deletePhoto(pkg.photo2PublicId);
+      const result = await uploadToCloudinary(req.file.buffer);
+      pkg.photo2Url = result.secure_url;
+      pkg.photo2PublicId = result.public_id;
+      pkg.photo2UploadedAt = new Date();
+    } else {
+      if (pkg.photoPublicId) await deletePhoto(pkg.photoPublicId);
+      const result = await uploadToCloudinary(req.file.buffer);
+      pkg.photoUrl = result.secure_url;
+      pkg.photoPublicId = result.public_id;
+      pkg.photoUploadedAt = new Date();
+    }
+
     await pkg.save();
-
-    res.json({ photoUrl: pkg.photoUrl, photoUploadedAt: pkg.photoUploadedAt });
+    res.json({
+      photoUrl: pkg.photoUrl, photo2Url: pkg.photo2Url,
+      photoUploadedAt: pkg.photoUploadedAt, photo2UploadedAt: pkg.photo2UploadedAt
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -11,7 +11,7 @@ const routeSchema = new mongoose.Schema({
 
   status: {
     type: String,
-    enum: ['draft', 'active', 'completed', 'cancelled'],
+    enum: ['draft', 'active', 'paused', 'completed', 'cancelled'],
     default: 'active'
   },
 

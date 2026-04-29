@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
+import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
 
 // Client-side price suggestion by commune
 const COMMUNE_PRICES = {
@@ -82,7 +83,22 @@ export default function AddPackageModal({ routeId, onClose, onCreated }) {
             <Field label="Teléfono" value={form.customerPhone} onChange={v => set('customerPhone', v)} placeholder="+56912345678" type="tel" />
           </div>
           <div style={{ gridColumn: '1/-1' }}>
-            <Field label="Dirección *" value={form.address} onChange={v => set('address', v)} placeholder="Av. Providencia 1100" />
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 5 }}>Dirección *</div>
+            <AddressAutocomplete
+              value={form.address}
+              onChange={v => set('address', v)}
+              onSelect={({ address, commune, lat, lng }) => {
+                setForm(f => ({
+                  ...f,
+                  address,
+                  commune: commune || f.commune,
+                  lat: lat || f.lat,
+                  lng: lng || f.lng
+                }));
+                if (commune) handleCommuneChange(commune);
+              }}
+              placeholder="Av. Providencia 1100, Santiago"
+            />
           </div>
 
           {/* Comuna with price suggestion */}

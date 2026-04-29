@@ -37,10 +37,13 @@ const packageSchema = new mongoose.Schema({
   failReason: { type: String, trim: true },
   note: { type: String, trim: true },
 
-  // Photo stored on Cloudinary
+  // Photos stored on Cloudinary (max 2)
   photoUrl: { type: String },
   photoPublicId: { type: String },
   photoUploadedAt: { type: Date },
+  photo2Url: { type: String },
+  photo2PublicId: { type: String },
+  photo2UploadedAt: { type: Date },
 
   // Timestamps for delivery events
   deliveredAt: { type: Date },
