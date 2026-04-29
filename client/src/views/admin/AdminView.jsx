@@ -8,6 +8,7 @@ import Toast, { toast } from '../../components/Toast.jsx';
 import UserManager from './UserManager.jsx';
 import AddPackageModal from './AddPackageModal.jsx';
 import AddRouteModal from './AddRouteModal.jsx';
+import ImportModal from './ImportModal.jsx';
 
 export default function AdminView() {
   const [view, setView] = useState('routes'); // routes | route | users
@@ -20,6 +21,7 @@ export default function AdminView() {
   const [editPkg, setEditPkg] = useState(null);
   const [showAddPkg, setShowAddPkg] = useState(false);
   const [showAddRoute, setShowAddRoute] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -308,7 +310,7 @@ export default function AdminView() {
 
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
         <div style={{ display: tab === 'm' ? 'block' : 'none', height: '100%' }}>
-          <RouteMap packages={packages} onPkgClick={setEditPkg} />
+          <RouteMap packages={packages} onPkgClick={setEditPkg} startPoint={selectedRoute?.startPoint} />
         </div>
 
         {tab === 'l' && (
@@ -334,18 +336,29 @@ export default function AdminView() {
         {tab === 'r' && <AdminReport packages={packages} route={selectedRoute} />}
       </div>
 
-      {/* FAB: add package */}
+      {/* FABs: add package + import */}
       {tab !== 'm' && (
-        <button
-          onClick={() => setShowAddPkg(true)}
-          style={{
-            position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16,
-            width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)',
-            border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer',
-            boxShadow: '0 4px 16px #00885540', zIndex: 400,
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}
-        >＋</button>
+        <div style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16, display: 'flex', flexDirection: 'column', gap: 10, zIndex: 400 }}>
+          <button
+            onClick={() => setShowImport(true)}
+            title="Importar con IA"
+            style={{
+              width: 52, height: 52, borderRadius: '50%', background: '#9c27b0',
+              border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer',
+              boxShadow: '0 4px 16px #9c27b040',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}
+          >🤖</button>
+          <button
+            onClick={() => setShowAddPkg(true)}
+            style={{
+              width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)',
+              border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer',
+              boxShadow: '0 4px 16px #00885540',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}
+          >＋</button>
+        </div>
       )}
 
       {editPkg && (
@@ -361,6 +374,14 @@ export default function AdminView() {
           routeId={selectedRoute._id}
           onClose={() => setShowAddPkg(false)}
           onCreated={() => { setShowAddPkg(false); refreshRoute(); }}
+        />
+      )}
+
+      {showImport && (
+        <ImportModal
+          routeId={selectedRoute._id}
+          onClose={() => setShowImport(false)}
+          onImported={() => { setShowImport(false); refreshRoute(); }}
         />
       )}
 

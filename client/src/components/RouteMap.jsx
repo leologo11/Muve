@@ -31,11 +31,12 @@ function pinLabel(pkg, index) {
   return String(index + 1);
 }
 
-export default function RouteMap({ packages, onPkgClick, readOnly }) {
+export default function RouteMap({ packages, onPkgClick, readOnly, startPoint }) {
   const mapRef = useRef(null);
   const instanceRef = useRef(null);
   const markersRef = useRef({});
   const lineRef = useRef(null);
+  const startMarkerRef = useRef(null);
 
   useEffect(() => {
     if (instanceRef.current) return;
@@ -64,6 +65,18 @@ export default function RouteMap({ packages, onPkgClick, readOnly }) {
       .map(p => [p.lat, p.lng]);
     if (pts.length > 1) {
       lineRef.current = L.polyline(pts, { color: '#008855', weight: 2, opacity: .35, dashArray: '5,8' }).addTo(map);
+    }
+
+    // Start point marker
+    if (startMarkerRef.current) { startMarkerRef.current.remove(); startMarkerRef.current = null; }
+    if (startPoint?.lat && startPoint?.lng) {
+      const startIcon = L.divIcon({
+        className: '',
+        html: `<div style="background:#1a1a2e;color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:16px;border:3px solid #fff;box-shadow:0 2px 8px #00000033;">🏠</div>`,
+        iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -36]
+      });
+      startMarkerRef.current = L.marker([startPoint.lat, startPoint.lng], { icon: startIcon }).addTo(map);
+      startMarkerRef.current.bindPopup(`<div style="font-family:'Space Grotesk',sans-serif"><b>📍 Punto de inicio</b><br><span style="font-size:12px;color:#777">${startPoint.address || 'Bodega / Pickup'}</span></div>`);
     }
 
     // Add markers

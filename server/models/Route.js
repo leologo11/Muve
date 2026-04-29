@@ -34,6 +34,13 @@ const routeSchema = new mongoose.Schema({
     collectedAmount: { type: Number, default: 0 }
   },
 
+  // Pickup / starting point
+  startPoint: {
+    address: { type: String, trim: true },
+    lat: { type: Number },
+    lng: { type: Number }
+  },
+
   notes: { type: String, trim: true }
 }, { timestamps: true });
 

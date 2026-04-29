@@ -8,6 +8,7 @@ import userRoutes from './routes/users.js';
 import companyRoutes from './routes/companies.js';
 import routeRoutes from './routes/deliveryRoutes.js';
 import packageRoutes from './routes/packages.js';
+import importRoutes from './routes/importAI.js';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -36,6 +37,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/routes', routeRoutes);
 app.use('/api/packages', packageRoutes);
+app.use('/api/import', importRoutes);
 
 app.get('/api/health', (_, res) => res.json({ ok: true, ts: Date.now() }));
 

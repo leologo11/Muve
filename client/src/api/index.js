@@ -63,6 +63,15 @@ export const api = {
   updateUser: (id, data) => request('PATCH', `/users/${id}`, data),
   deleteUser: (id) => request('DELETE', `/users/${id}`),
 
+  // AI Import
+  importPreview: (routeId, file) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return request('POST', `/import/${routeId}/preview`, fd, true);
+  },
+  importConfirm: (routeId, packages) => request('POST', `/import/${routeId}/confirm`, { packages }),
+  getPriceSuggestion: (commune) => request('GET', `/import/price-suggestion?commune=${encodeURIComponent(commune)}`),
+
   // Companies
   getCompanies: () => request('GET', '/companies'),
   createCompany: (data) => request('POST', '/companies', data),

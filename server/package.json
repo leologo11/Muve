@@ -16,6 +16,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.4",
     "multer": "^1.4.5-lts.1",
-    "nanoid": "^5.0.9"
+    "nanoid": "^5.0.9",
+    "xlsx": "^0.18.5"
   }
 }

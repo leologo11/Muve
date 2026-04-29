@@ -93,9 +93,10 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
   }
 });
 
-// POST /api/routes/:id/optimize — Claude AI reorders packages
+// POST /api/routes/:id/optimize — Claude AI reorders packages considering start point
 router.post('/:id/optimize', requireRole('admin'), async (req, res) => {
   try {
+    const route = await Route.findById(req.params.id).lean();
     const packages = await Package.find({
       routeId: req.params.id,
       status: { $ne: 'eliminado' }
@@ -109,21 +110,33 @@ router.post('/:id/optimize', requireRole('admin'), async (req, res) => {
 
     const packageList = packages.map((p, i) => ({
       index: i,
-      id: p._id,
-      address: `${p.address}, ${p.commune || ''}`,
+      id: String(p._id),
+      address: `${p.address}${p.commune ? ', ' + p.commune : ''}`,
       lat: p.lat,
       lng: p.lng,
       zone: p.zone
     }));
 
+    const startInfo = route?.startPoint?.address
+      ? `\nPUNTO DE INICIO (bodega/pickup): ${route.startPoint.address}${route.startPoint.lat ? ` (lat:${route.startPoint.lat}, lng:${route.startPoint.lng})` : ''}\n`
+      : '\nNo hay punto de inicio definido, empieza por la parada más al norte.\n';
+
     const message = await client.messages.create({
       model: 'claude-opus-4-7',
-      max_tokens: 1024,
+      max_tokens: 2048,
       messages: [{
         role: 'user',
-        content: `Eres un optimizador de rutas de delivery en Chile (Santiago).
-Tienes esta lista de paradas con coordenadas GPS. Ordénalas para minimizar la distancia total recorrida (algoritmo del vecino más cercano o similar).
-Devuelve SOLO un array JSON con los _id en el orden óptimo. Sin explicación, solo el JSON.
+        content: `Eres un experto en optimización de rutas de delivery en Santiago de Chile.
+${startInfo}
+Tienes estas paradas con coordenadas GPS. Ordénalas para hacer el recorrido más eficiente:
+- Minimiza la distancia total recorrida
+- Agrupa por zonas geográficas contiguas (ej: todas las Condes juntas, luego Vitacura, etc.)
+- Considera el flujo natural del tráfico en Santiago (hora punta, autopistas, etc.)
+- La ruta debe ser secuencial y lógica geográficamente
+- Empieza desde el punto de inicio si está definido
+
+Devuelve SOLO un array JSON con los valores del campo "id" en el orden óptimo.
+Sin explicaciones, sin markdown, solo el JSON.
 
 Paradas:
 ${JSON.stringify(packageList, null, 2)}`
