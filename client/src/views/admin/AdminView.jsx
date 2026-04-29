@@ -338,6 +338,8 @@ export default function AdminView() {
           <RouteMap
             packages={packages}
             onPkgClick={setEditPkg}
+            onPkgDelete={handleDelete}
+            onPkgRestore={handleRestore}
             startPoint={selectedRoute?.startPoint}
             visible={tab === 'm'}
           />

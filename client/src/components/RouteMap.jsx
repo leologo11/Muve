@@ -7,11 +7,11 @@ const ZONE_COLORS = {
   Vitacura: '#2a9940',
   'Lo Barnechea': '#cc6600',
   Chicureo: '#cc3333',
-  default: '#555588'
+  default: '#e8740a'
 };
 
 function pinColor(pkg) {
-  if (pkg.status === 'eliminado') return '#aaa';
+  if (pkg.status === 'eliminado') return '#aaaaaa';
   if (pkg.status === 'entregado') return '#008855';
   if (pkg.status === 'no-entregado') return '#cc2244';
   return ZONE_COLORS[pkg.zone] || ZONE_COLORS.default;
@@ -24,7 +24,72 @@ function pinLabel(pkg, i) {
   return String(i + 1);
 }
 
-export default function RouteMap({ packages, onPkgClick, readOnly, startPoint, visible = true }) {
+function makeIcon(pkg, i) {
+  const color = pinColor(pkg);
+  const label = pinLabel(pkg, i);
+  const elim = pkg.status === 'eliminado';
+  const size = 32;
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      width:${size}px;height:${size}px;
+      border-radius:50%;
+      background:${color};
+      border:2.5px solid rgba(255,255,255,0.92);
+      box-shadow:0 2px 10px rgba(0,0,0,0.38);
+      display:flex;align-items:center;justify-content:center;
+      font-size:${label.length > 2 ? 9 : 12}px;font-weight:800;color:#fff;
+      font-family:'Space Grotesk',sans-serif;
+      ${elim ? 'opacity:.35;filter:grayscale(1);' : ''}
+      cursor:pointer;
+    ">${label}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -(size / 2 + 6)]
+  });
+}
+
+function makePopup(pkg, i, onPkgClick, readOnly) {
+  const color = pinColor(pkg);
+  const statusText = { pendiente: '⏳ Pendiente', entregado: '✅ Entregado', 'no-entregado': '❌ No entregado', eliminado: '🗑️ Eliminado' }[pkg.status] || pkg.status;
+  const price = pkg.price ? ` · $${Number(pkg.price).toLocaleString('es-CL')}` : '';
+  const aptHtml = pkg.aptFloor ? `<div style="font-size:12px;font-weight:700;color:#d4650a;margin-top:2px;font-style:italic">${pkg.aptFloor}</div>` : '';
+  const phoneHtml = pkg.customerPhone
+    ? `<a href="tel:${pkg.customerPhone}" style="${btnStyle('#008855')}">📞 Llamar</a>`
+    : '';
+  const wazeHtml = `<a href="https://waze.com/ul?q=${encodeURIComponent((pkg.address || '') + (pkg.commune ? ', ' + pkg.commune : '') + ', Chile')}&navigate=yes" target="_blank" style="${btnStyle('#0077aa')}">🔵 Waze</a>`;
+  const mapsHtml = `<a href="https://maps.google.com/?daddr=${pkg.lat},${pkg.lng}&dir_action=navigate" target="_blank" style="${btnStyle('#2a9940')}">📍 Maps</a>`;
+  const editHtml = !readOnly
+    ? `<button onclick="window.__pkgClick('${pkg._id}')" style="${btnStyle('#555555')}">✏️ Editar</button>`
+    : `<button onclick="window.__pkgClick('${pkg._id}')" style="${btnStyle('#555555')}">🔍 Ver</button>`;
+  const deleteHtml = !readOnly && pkg.status !== 'eliminado'
+    ? `<button onclick="window.__pkgDelete('${pkg._id}')" style="${btnStyle('#cc2244')}">🗑️ Eliminar</button>`
+    : '';
+  const restoreHtml = !readOnly && pkg.status === 'eliminado'
+    ? `<button onclick="window.__pkgRestore('${pkg._id}')" style="${btnStyle('#008855')}">↩ Restaurar</button>`
+    : '';
+
+  return `<div style="font-family:'Space Grotesk',sans-serif;min-width:210px;max-width:270px">
+    <div style="font-size:14px;font-weight:700;margin-bottom:4px">${i + 1}. ${pkg.customerName} ${pkg.customerLastName || ''}</div>
+    <div style="font-size:12px;color:#666;line-height:1.4">${pkg.address || ''}</div>
+    ${aptHtml}
+    ${pkg.commune ? `<div style="font-size:11px;color:#999;margin-top:1px">${pkg.commune}</div>` : ''}
+    <div style="font-size:12px;font-weight:700;color:${color};margin-top:6px">${statusText}${price}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:10px">
+      ${phoneHtml}${wazeHtml}${mapsHtml}${editHtml}${deleteHtml}${restoreHtml}
+    </div>
+  </div>`;
+}
+
+function btnStyle(color) {
+  return `display:flex;align-items:center;justify-content:center;gap:4px;
+    padding:7px 6px;border-radius:8px;border:1px solid ${color}30;
+    background:${color}14;color:${color};font-size:11px;font-weight:700;
+    cursor:pointer;text-decoration:none;font-family:'Space Grotesk',sans-serif;
+    white-space:nowrap;`;
+}
+
+export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgRestore, readOnly, startPoint, visible = true }) {
   const mapRef = useRef(null);
   const instanceRef = useRef(null);
   const markersRef = useRef({});
@@ -35,7 +100,6 @@ export default function RouteMap({ packages, onPkgClick, readOnly, startPoint, v
   useEffect(() => {
     if (instanceRef.current) return;
     const map = L.map(mapRef.current, { zoomControl: true }).setView([-33.45, -70.65], 12);
-    // OpenStreetMap — reliable fallback
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a>',
       maxZoom: 19
@@ -55,6 +119,20 @@ export default function RouteMap({ packages, onPkgClick, readOnly, startPoint, v
     const map = instanceRef.current;
     if (!map) return;
 
+    // Register global callbacks
+    window.__pkgClick = (id) => {
+      const pkg = (packages || []).find(p => p._id === id);
+      if (pkg) onPkgClick?.(pkg);
+    };
+    window.__pkgDelete = (id) => {
+      const pkg = (packages || []).find(p => p._id === id);
+      if (pkg && confirm(`¿Eliminar a ${pkg.customerName}?`)) onPkgDelete?.(pkg);
+    };
+    window.__pkgRestore = (id) => {
+      const pkg = (packages || []).find(p => p._id === id);
+      if (pkg) onPkgRestore?.(pkg);
+    };
+
     // Clear existing layers
     Object.values(markersRef.current).forEach(m => m.remove());
     markersRef.current = {};
@@ -62,65 +140,50 @@ export default function RouteMap({ packages, onPkgClick, readOnly, startPoint, v
     if (startRef.current) { startRef.current.remove(); startRef.current = null; }
 
     const active = (packages || []).filter(p => p.status !== 'eliminado');
+    const allPkgs = (packages || []);
     const withCoords = active.filter(p => p.lat && p.lng);
 
-    // Route line through coords in order
+    // Route dashed line
     if (withCoords.length > 1) {
       lineRef.current = L.polyline(
         withCoords.map(p => [p.lat, p.lng]),
-        { color: '#008855', weight: 3, opacity: 0.45, dashArray: '6,10' }
+        { color: '#008855', weight: 2.5, opacity: 0.5, dashArray: '6,10' }
       ).addTo(map);
     }
 
-    // Start point
+    // Start point marker
     if (startPoint?.lat && startPoint?.lng) {
       const icon = L.divIcon({
         className: '',
-        html: `<div style="background:#1a1a2e;color:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid #fff;box-shadow:0 2px 8px #0003">🏠</div>`,
-        iconSize: [34, 34], iconAnchor: [17, 34], popupAnchor: [0, -38]
+        html: `<div style="
+          width:36px;height:36px;border-radius:50%;
+          background:#1a1a2e;border:2.5px solid rgba(255,255,255,.9);
+          box-shadow:0 2px 10px rgba(0,0,0,.4);
+          display:flex;align-items:center;justify-content:center;
+          font-size:18px;
+        ">🏠</div>`,
+        iconSize: [36, 36], iconAnchor: [18, 18], popupAnchor: [0, -24]
       });
       startRef.current = L.marker([startPoint.lat, startPoint.lng], { icon }).addTo(map);
       startRef.current.bindPopup(
-        `<b style="font-family:'Space Grotesk',sans-serif">📍 Inicio / Bodega</b><br><span style="font-size:12px;color:#777">${startPoint.address || ''}</span>`
+        `<b>📍 Inicio / Bodega</b><br><span style="font-size:12px;color:#777">${startPoint.address || ''}</span>`
       );
     }
 
-    // Package markers
-    active.forEach((pkg, i) => {
+    // Package markers — use sequential index within active only
+    let activeIdx = 0;
+    allPkgs.forEach(pkg => {
       if (!pkg.lat || !pkg.lng) return;
-
-      const color = pinColor(pkg);
-      const label = pinLabel(pkg, i);
-      const elim = pkg.status === 'eliminado';
-
-      const icon = L.divIcon({
-        className: '',
-        html: `<div class="mpin" style="background:${color};${elim ? 'opacity:.35;filter:grayscale(1)' : ''}">${label}</div>`,
-        iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -32]
-      });
-
-      const statusText = { pendiente: '⏳ Pendiente', entregado: '✅ Entregado', 'no-entregado': '❌ No entregado', eliminado: '🗑️' }[pkg.status];
-      const fullAddr = [pkg.address, pkg.aptFloor, pkg.commune].filter(Boolean).join(' · ');
-
-      const nav = `<a href="https://maps.google.com/maps?daddr=${pkg.lat},${pkg.lng}&dir_action=navigate" target="_blank" style="padding:4px 8px;background:#2a994018;color:#2a9940;border:1px solid #2a994030;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none">📍 Maps</a>`;
-      const waze = `<a href="https://waze.com/ul?q=${encodeURIComponent((pkg.address || '') + ', Chile')}&navigate=yes" target="_blank" style="padding:4px 8px;background:#0077aa18;color:#0077aa;border:1px solid #0077aa30;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none">🔵 Waze</a>`;
-      const editBtn = !readOnly
-        ? `<button onclick="window.__pkgClick('${pkg._id}')" style="padding:4px 8px;background:#55555518;color:#444;border:1px solid #55555530;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">✏️ Editar</button>`
-        : '';
-
-      const popup = `<div style="font-family:'Space Grotesk',sans-serif;min-width:200px">
-        <b style="font-size:13px">${i + 1}. ${pkg.customerName} ${pkg.customerLastName || ''}</b><br>
-        <span style="font-size:11px;color:#777;line-height:1.5">${fullAddr}</span><br>
-        <span style="font-size:11px;font-weight:700;color:${color};margin-top:4px;display:block">${statusText}</span>
-        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px">${nav} ${waze} ${editBtn}</div>
-      </div>`;
-
+      const idx = pkg.status !== 'eliminado' ? activeIdx++ : -1;
+      if (pkg.status === 'eliminado') return; // skip eliminated
+      const icon = makeIcon(pkg, idx);
+      const popup = makePopup(pkg, idx, onPkgClick, readOnly);
       const marker = L.marker([pkg.lat, pkg.lng], { icon }).addTo(map);
-      marker.bindPopup(popup, { maxWidth: 290 });
+      marker.bindPopup(popup, { maxWidth: 280 });
       markersRef.current[pkg._id] = marker;
     });
 
-    // Fit map to all visible points
+    // Fit map bounds
     const allPts = [
       ...withCoords.map(p => [p.lat, p.lng]),
       ...(startPoint?.lat && startPoint?.lng ? [[startPoint.lat, startPoint.lng]] : [])
@@ -128,13 +191,8 @@ export default function RouteMap({ packages, onPkgClick, readOnly, startPoint, v
     if (allPts.length === 1) {
       map.setView(allPts[0], 15);
     } else if (allPts.length > 1) {
-      map.fitBounds(allPts, { padding: [45, 45], maxZoom: 15 });
+      map.fitBounds(allPts, { padding: [50, 50], maxZoom: 15 });
     }
-
-    window.__pkgClick = (id) => {
-      const pkg = (packages || []).find(p => p._id === id);
-      if (pkg) onPkgClick?.(pkg);
-    };
   }, [packages, startPoint, readOnly]);
 
   const noCoords = (packages || []).filter(p => p.status !== 'eliminado' && (!p.lat || !p.lng)).length;
@@ -148,9 +206,10 @@ export default function RouteMap({ packages, onPkgClick, readOnly, startPoint, v
           position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
           background: '#fff8e1', border: '1px solid #f57c0044', borderRadius: 20,
           padding: '6px 14px', fontSize: 11, fontWeight: 700, color: '#f57c00',
-          zIndex: 900, pointerEvents: 'none', boxShadow: '0 2px 8px #0002'
+          zIndex: 900, pointerEvents: 'none', boxShadow: '0 2px 8px #0002',
+          whiteSpace: 'nowrap'
         }}>
-          ⚠️ {noCoords}/{total} sin coordenadas · Usa "Geocodificar ruta" en INFO
+          ⚠️ {noCoords}/{total} sin coordenadas · usar "Geocodificar ruta" en INFO
         </div>
       )}
     </div>
