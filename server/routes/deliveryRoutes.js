@@ -2,7 +2,6 @@ import { Router } from 'express';
 import Route from '../models/Route.js';
 import Package from '../models/Package.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import Anthropic from '@anthropic-ai/sdk';
 import { geocodeAddress, sleep } from '../utils/geocode.js';
 
 const router = Router();
@@ -97,7 +96,7 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
   }
 });
 
-// POST /api/routes/:id/optimize — Claude AI reorders packages considering start point
+// POST /api/routes/:id/optimize — OSRM real-road TSP optimization
 router.post('/:id/optimize', requireRole('admin'), async (req, res) => {
   try {
     const route = await Route.findById(req.params.id).lean();
@@ -110,61 +109,49 @@ router.post('/:id/optimize', requireRole('admin'), async (req, res) => {
       return res.json({ message: 'La ruta ya está optimizada', packages });
     }
 
-    const client = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
-
-    const packageList = packages.map((p, i) => ({
-      index: i,
-      id: String(p._id),
-      address: `${p.address}${p.commune ? ', ' + p.commune : ''}`,
-      lat: p.lat,
-      lng: p.lng,
-      zone: p.zone
-    }));
-
-    const startInfo = route?.startPoint?.address
-      ? `\nPUNTO DE INICIO (bodega/pickup): ${route.startPoint.address}${route.startPoint.lat ? ` (lat:${route.startPoint.lat}, lng:${route.startPoint.lng})` : ''}\n`
-      : '\nNo hay punto de inicio definido, empieza por la parada más al norte.\n';
-
-    const message = await client.messages.create({
-      model: 'claude-opus-4-7',
-      max_tokens: 2048,
-      messages: [{
-        role: 'user',
-        content: `Eres un experto en optimización de rutas de delivery en Santiago de Chile.
-${startInfo}
-Tienes estas paradas con coordenadas GPS. Ordénalas para hacer el recorrido más eficiente:
-- Minimiza la distancia total recorrida
-- Agrupa por zonas geográficas contiguas (ej: todas las Condes juntas, luego Vitacura, etc.)
-- Considera el flujo natural del tráfico en Santiago (hora punta, autopistas, etc.)
-- La ruta debe ser secuencial y lógica geográficamente
-- Empieza desde el punto de inicio si está definido
-
-Devuelve SOLO un array JSON con los valores del campo "id" en el orden óptimo.
-Sin explicaciones, sin markdown, solo el JSON.
-
-Paradas:
-${JSON.stringify(packageList, null, 2)}`
-      }]
-    });
-
-    let orderedIds;
-    try {
-      const text = message.content[0].text.trim();
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      orderedIds = JSON.parse(jsonMatch[0]);
-    } catch {
-      return res.status(422).json({ error: 'No se pudo parsear la respuesta de la IA' });
+    const pkgsWithCoords = packages.filter(p => p.lat && p.lng);
+    if (pkgsWithCoords.length < 2) {
+      return res.status(400).json({ error: 'Se necesitan al menos 2 paquetes con coordenadas. Usa "Geocodificar ruta" primero.' });
     }
 
-    // Update order field for each package
-    await Promise.all(
-      orderedIds.map((id, idx) =>
-        Package.findByIdAndUpdate(id, { order: idx })
-      )
-    );
+    const startPoint = route.startPoint?.lat && route.startPoint?.lng ? route.startPoint : null;
+
+    // Build coordinate list: optional start point + packages with coords (max 100 for OSRM)
+    const batch = pkgsWithCoords.slice(0, startPoint ? 99 : 100);
+    const coordParts = [
+      ...(startPoint ? [`${startPoint.lng},${startPoint.lat}`] : []),
+      ...batch.map(p => `${p.lng},${p.lat}`)
+    ];
+
+    const osrmUrl = `https://router.project-osrm.org/trip/v1/driving/${coordParts.join(';')}?source=first&roundtrip=false&annotations=false`;
+
+    const osrmRes = await fetch(osrmUrl, {
+      headers: { 'User-Agent': 'Routiflow/1.0' },
+      signal: AbortSignal.timeout(15000)
+    });
+
+    if (!osrmRes.ok) throw new Error(`OSRM error HTTP ${osrmRes.status}`);
+    const osrmData = await osrmRes.json();
+    if (osrmData.code !== 'Ok') throw new Error('OSRM: ' + (osrmData.message || osrmData.code));
+
+    // OSRM waypoints are in INPUT order; each has .waypoint_index = position in optimal trip
+    const startOffset = startPoint ? 1 : 0;
+    const sorted = [...osrmData.waypoints]
+      .map((wp, inputIdx) => ({ inputIdx, waypointIdx: wp.waypoint_index }))
+      .sort((a, b) => a.waypointIdx - b.waypointIdx)
+      .filter(x => x.inputIdx >= startOffset)
+      .map(x => batch[x.inputIdx - startOffset]);
+
+    // Update order for optimized packages
+    await Promise.all(sorted.map((pkg, i) => Package.findByIdAndUpdate(pkg._id, { order: i })));
+
+    // Packages without coords (or beyond batch limit) go at the end
+    const remainder = packages.filter(p => !p.lat || !p.lng || pkgsWithCoords.indexOf(p) >= 100);
+    await Promise.all(remainder.map((p, i) => Package.findByIdAndUpdate(p._id, { order: sorted.length + i })));
 
     const updatedPackages = await Package.find({ routeId: req.params.id }).sort({ order: 1 }).lean();
-    res.json({ optimized: true, packages: updatedPackages });
+    const distanceKm = osrmData.trips?.[0]?.distance ? (osrmData.trips[0].distance / 1000).toFixed(1) : null;
+    res.json({ optimized: true, packages: updatedPackages, distanceKm });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

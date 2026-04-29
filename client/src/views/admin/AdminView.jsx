@@ -105,9 +105,9 @@ export default function AdminView() {
   const handleOptimize = async () => {
     setOptimizing(true);
     try {
-      const { packages: optimized } = await api.optimizeRoute(selectedRoute._id);
+      const { packages: optimized, distanceKm } = await api.optimizeRoute(selectedRoute._id);
       setPackages(optimized);
-      toast('🤖 Ruta optimizada');
+      toast(`🗺️ Ruta optimizada${distanceKm ? ` · ${distanceKm} km` : ''}`);
     } catch (err) { toast('❌ ' + err.message); }
     finally { setOptimizing(false); }
   };

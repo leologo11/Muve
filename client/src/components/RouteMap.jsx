@@ -143,30 +143,51 @@ export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgResto
     const allPkgs = (packages || []);
     const withCoords = active.filter(p => p.lat && p.lng);
 
-    // Route dashed line
+    // Draw straight fallback line immediately, then replace with real road geometry
     if (withCoords.length > 1) {
       lineRef.current = L.polyline(
         withCoords.map(p => [p.lat, p.lng]),
-        { color: '#008855', weight: 2.5, opacity: 0.5, dashArray: '6,10' }
+        { color: '#008855', weight: 2.5, opacity: 0.35, dashArray: '6,10' }
       ).addTo(map);
+
+      // Fetch actual road route from OSRM asynchronously
+      const coordStr = withCoords.map(p => `${p.lng},${p.lat}`).join(';');
+      fetch(`https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson`, {
+        signal: AbortSignal.timeout(10000)
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.code === 'Ok' && data.routes?.[0]?.geometry) {
+            if (lineRef.current) { lineRef.current.remove(); lineRef.current = null; }
+            const latlngs = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+            lineRef.current = L.polyline(latlngs, { color: '#008855', weight: 3, opacity: 0.65 }).addTo(map);
+          }
+        })
+        .catch(() => {}); // Keep straight fallback on error
     }
 
-    // Start point marker
+    // Start point — distinctive square "S" marker
     if (startPoint?.lat && startPoint?.lng) {
       const icon = L.divIcon({
         className: '',
         html: `<div style="
-          width:36px;height:36px;border-radius:50%;
-          background:#1a1a2e;border:2.5px solid rgba(255,255,255,.9);
-          box-shadow:0 2px 10px rgba(0,0,0,.4);
+          width:36px;height:36px;border-radius:9px;
+          background:#5c35cc;
+          border:2.5px solid rgba(255,255,255,.95);
+          box-shadow:0 2px 12px rgba(92,53,204,.55);
           display:flex;align-items:center;justify-content:center;
-          font-size:18px;
-        ">🏠</div>`,
-        iconSize: [36, 36], iconAnchor: [18, 18], popupAnchor: [0, -24]
+          font-size:15px;font-weight:900;color:#fff;
+          font-family:'Space Grotesk',sans-serif;
+          cursor:pointer;
+        ">S</div>`,
+        iconSize: [36, 36], iconAnchor: [18, 18], popupAnchor: [0, -22]
       });
       startRef.current = L.marker([startPoint.lat, startPoint.lng], { icon }).addTo(map);
       startRef.current.bindPopup(
-        `<b>📍 Inicio / Bodega</b><br><span style="font-size:12px;color:#777">${startPoint.address || ''}</span>`
+        `<div style="font-family:'Space Grotesk',sans-serif">
+          <b style="font-size:13px;color:#5c35cc">📍 Punto de salida</b>
+          <div style="font-size:12px;color:#666;margin-top:4px">${startPoint.address || ''}</div>
+        </div>`
       );
     }
 
