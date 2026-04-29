@@ -9,6 +9,8 @@ export default function AddRouteModal({ onClose, onCreated }) {
     driverId: '',
     companyId: '',
     status: 'active',
+    clientCompany: { name: '', contactPerson: '', contactPhone: '' },
+    invoice: { status: 'none', amount: '', invoiceDate: '' },
     startPoint: { address: '', lat: '', lng: '' }
   });
   const [drivers, setDrivers] = useState([]);
@@ -21,15 +23,25 @@ export default function AddRouteModal({ onClose, onCreated }) {
   }, []);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setCompany = (k, v) => setForm(f => ({ ...f, clientCompany: { ...f.clientCompany, [k]: v } }));
+  const setInvoice = (k, v) => setForm(f => ({ ...f, invoice: { ...f.invoice, [k]: v } }));
   const setStart = (k, v) => setForm(f => ({ ...f, startPoint: { ...f.startPoint, [k]: v } }));
 
   const handleSave = async () => {
     setSaving(true);
     try {
       const payload = {
-        ...form,
+        name: form.name,
+        date: form.date,
+        status: form.status,
         driverId: form.driverId || undefined,
         companyId: form.companyId || undefined,
+        clientCompany: form.clientCompany,
+        invoice: {
+          status: form.invoice.status,
+          amount: form.invoice.amount ? Number(form.invoice.amount) : undefined,
+          invoiceDate: form.invoice.invoiceDate || undefined
+        },
         startPoint: {
           address: form.startPoint.address || undefined,
           lat: form.startPoint.lat ? Number(form.startPoint.lat) : undefined,
@@ -47,8 +59,10 @@ export default function AddRouteModal({ onClose, onCreated }) {
   };
 
   return (
-    <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-      style={{ position: 'fixed', inset: 0, background: '#0006', zIndex: 800, display: 'flex', alignItems: 'flex-end' }}>
+    <div
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: 'fixed', inset: 0, background: '#0006', zIndex: 800, display: 'flex', alignItems: 'flex-end' }}
+    >
       <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxHeight: '95dvh', overflowY: 'auto', padding: '18px 16px calc(30px + env(safe-area-inset-bottom))', boxShadow: '0 -4px 30px #00000015' }}>
         <div style={{ width: 38, height: 4, background: 'var(--border)', borderRadius: 2, margin: '0 auto 16px' }} />
         <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 13 }}>🗺 Nueva Ruta</h2>
@@ -71,29 +85,56 @@ export default function AddRouteModal({ onClose, onCreated }) {
           {drivers.map(d => <option key={d._id} value={d._id}>{d.name} ({d.email})</option>)}
         </select>
 
-        <Label>Empresa (opcional)</Label>
+        <Label>Empresa sistema (opcional)</Label>
         <select value={form.companyId} onChange={e => set('companyId', e.target.value)} style={inp}>
           <option value="">Sin empresa</option>
           {companies.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
         </select>
 
-        {/* Starting point section */}
-        <div style={{ margin: '16px 0 5px', padding: '12px 14px', background: '#00885508', border: '1px solid #00885520', borderRadius: 12 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 10 }}>
-            📍 Punto de inicio / Bodega
-          </div>
+        {/* Client company */}
+        <div style={{ margin: '16px 0 5px', padding: '12px 14px', background: '#00507808', border: '1px solid #00507820', borderRadius: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#005078', marginBottom: 10 }}>🏢 Empresa cliente (quien contrata el servicio)</div>
+          <Label>Nombre empresa</Label>
+          <input value={form.clientCompany.name} onChange={e => setCompany('name', e.target.value)} placeholder="Ej: Importadora ABC" style={inp} />
+          <Label>Responsable / Contacto</Label>
+          <input value={form.clientCompany.contactPerson} onChange={e => setCompany('contactPerson', e.target.value)} placeholder="Nombre y apellido" style={inp} />
+          <Label>Teléfono</Label>
+          <input value={form.clientCompany.contactPhone} onChange={e => setCompany('contactPhone', e.target.value)} placeholder="+56 9 xxxx xxxx" style={inp} />
+        </div>
+
+        {/* Invoice */}
+        <div style={{ margin: '10px 0 5px', padding: '12px 14px', background: '#f57c0008', border: '1px solid #f57c0020', borderRadius: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#f57c00', marginBottom: 10 }}>💳 Estado de factura / pago</div>
+          <Label>Estado</Label>
+          <select value={form.invoice.status} onChange={e => setInvoice('status', e.target.value)} style={inp}>
+            <option value="none">Sin factura</option>
+            <option value="pending">Pendiente de cobro</option>
+            <option value="net30">Crédito 30 días (Neto 30)</option>
+            <option value="paid">Pagada ✓</option>
+          </select>
+          {form.invoice.status !== 'none' && (
+            <>
+              <Label>Monto (CLP)</Label>
+              <input type="number" value={form.invoice.amount} onChange={e => setInvoice('amount', e.target.value)} placeholder="0" style={inp} />
+              <Label>Fecha de factura</Label>
+              <input type="date" value={form.invoice.invoiceDate} onChange={e => setInvoice('invoiceDate', e.target.value)} style={inp} />
+              {form.invoice.status === 'net30' && form.invoice.invoiceDate && (
+                <div style={{ fontSize: 11, color: '#f57c00', marginTop: 6 }}>
+                  Vence: {new Date(new Date(form.invoice.invoiceDate).getTime() + 30 * 86400000).toLocaleDateString('es-CL')}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Starting point */}
+        <div style={{ margin: '10px 0 5px', padding: '12px 14px', background: '#00885508', border: '1px solid #00885520', borderRadius: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', marginBottom: 10 }}>📍 Punto de inicio / Bodega</div>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
-            Desde aquí parte el repartidor. La IA usará este punto para optimizar el orden de la ruta.
+            Desde aquí parte el repartidor. La IA usa este punto para optimizar el orden.
           </div>
-
-          <Label>Dirección de bodega / pickup</Label>
-          <input
-            value={form.startPoint.address}
-            onChange={e => setStart('address', e.target.value)}
-            placeholder="Ej: Av. Vitacura 2939, Vitacura"
-            style={inp}
-          />
-
+          <Label>Dirección bodega / pickup</Label>
+          <input value={form.startPoint.address} onChange={e => setStart('address', e.target.value)} placeholder="Ej: Av. Vitacura 2939, Vitacura" style={inp} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
             <div>
               <Label>Latitud (opcional)</Label>
@@ -106,17 +147,30 @@ export default function AddRouteModal({ onClose, onCreated }) {
           </div>
         </div>
 
-        <button onClick={handleSave} disabled={saving} style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', marginTop: 14, background: saving ? 'var(--border)' : 'var(--accent)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', marginTop: 14, background: saving ? 'var(--border)' : 'var(--accent)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}
+        >
           {saving ? 'Creando…' : '✓ CREAR RUTA'}
         </button>
-        <button onClick={onClose} style={{ width: '100%', padding: 13, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--card2)', color: 'var(--muted)', fontSize: 14, fontWeight: 700, cursor: 'pointer', marginTop: 7 }}>Cancelar</button>
+        <button
+          onClick={onClose}
+          style={{ width: '100%', padding: 13, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--card2)', color: 'var(--muted)', fontSize: 14, fontWeight: 700, cursor: 'pointer', marginTop: 7 }}
+        >
+          Cancelar
+        </button>
       </div>
     </div>
   );
 }
 
 function Label({ children }) {
-  return <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: 'var(--muted)', textTransform: 'uppercase', margin: '10px 0 4px' }}>{children}</div>;
+  return <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: 'var(--muted)', textTransform: 'uppercase', margin: '10px 0 4px' }}>{children}</div>;
 }
 
-const inp = { width: '100%', background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)', fontSize: 14, padding: '10px 12px', outline: 'none', display: 'block', WebkitAppearance: 'none' };
+const inp = {
+  width: '100%', background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 10,
+  color: 'var(--text)', fontSize: 14, padding: '10px 12px', outline: 'none',
+  display: 'block', WebkitAppearance: 'none', boxSizing: 'border-box'
+};

@@ -73,10 +73,13 @@ router.post('/', requireRole('admin'), async (req, res) => {
   }
 });
 
-// PATCH /api/routes/:id — admin updates route
+// PATCH /api/routes/:id — admin updates route (use save() so pre-save hook runs for net30 dueDate)
 router.patch('/:id', requireRole('admin'), async (req, res) => {
   try {
-    const route = await Route.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const route = await Route.findById(req.params.id);
+    if (!route) return res.status(404).json({ error: 'Ruta no encontrada' });
+    Object.assign(route, req.body);
+    await route.save();
     res.json(route);
   } catch (err) {
     res.status(400).json({ error: err.message });

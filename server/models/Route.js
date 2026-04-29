@@ -2,29 +2,47 @@ import mongoose from 'mongoose';
 import { nanoid } from 'nanoid';
 
 const routeSchema = new mongoose.Schema({
-  // Unique route code: RT-YYYYMMDD-XXXX
-  routeCode: {
-    type: String,
-    unique: true,
-    index: true
-  },
-
+  routeCode: { type: String, unique: true, index: true },
   name: { type: String, trim: true },
   date: { type: Date, required: true, default: Date.now },
 
-  // Driver assigned to this route
   driverId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-
-  // Company that contracted this route (optional)
   companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company' },
 
   status: {
     type: String,
     enum: ['draft', 'active', 'completed', 'cancelled'],
-    default: 'draft'
+    default: 'active'
   },
 
-  // Cached stats (updated on package status change)
+  // Client company info (the business contracting the delivery)
+  clientCompany: {
+    name: { type: String, trim: true },
+    contactPerson: { type: String, trim: true },
+    contactPhone: { type: String, trim: true }
+  },
+
+  // Invoice / payment tracking
+  invoice: {
+    status: {
+      type: String,
+      enum: ['none', 'pending', 'net30', 'paid', 'overdue'],
+      default: 'none'
+    },
+    amount: { type: Number },
+    invoiceDate: { type: Date },
+    dueDate: { type: Date },
+    notes: { type: String, trim: true }
+  },
+
+  // Pickup / starting point (bodega)
+  startPoint: {
+    address: { type: String, trim: true },
+    lat: { type: Number },
+    lng: { type: Number }
+  },
+
+  // Cached stats
   stats: {
     total: { type: Number, default: 0 },
     delivered: { type: Number, default: 0 },
@@ -32,13 +50,6 @@ const routeSchema = new mongoose.Schema({
     pending: { type: Number, default: 0 },
     totalAmount: { type: Number, default: 0 },
     collectedAmount: { type: Number, default: 0 }
-  },
-
-  // Pickup / starting point
-  startPoint: {
-    address: { type: String, trim: true },
-    lat: { type: Number },
-    lng: { type: Number }
   },
 
   notes: { type: String, trim: true }
@@ -49,6 +60,12 @@ routeSchema.pre('save', function (next) {
     const d = new Date(this.date);
     const dateStr = d.toISOString().slice(0, 10).replace(/-/g, '');
     this.routeCode = `RT-${dateStr}-${nanoid(4).toUpperCase()}`;
+  }
+  // Auto-set due date for net30
+  if (this.invoice?.status === 'net30' && this.invoice?.invoiceDate && !this.invoice?.dueDate) {
+    const due = new Date(this.invoice.invoiceDate);
+    due.setDate(due.getDate() + 30);
+    this.invoice.dueDate = due;
   }
   next();
 });

@@ -4,6 +4,7 @@ import Route from '../models/Route.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { upload, uploadToCloudinary, deletePhoto } from '../utils/cloudinary.js';
 import { syncRouteStats } from './deliveryRoutes.js';
+import { geocodeAddress, sleep } from '../utils/geocode.js';
 
 const router = Router();
 
@@ -58,9 +59,16 @@ router.get('/', async (req, res) => {
 // POST /api/packages — admin adds package to route
 router.post('/', requireRole('admin'), async (req, res) => {
   try {
-    // Auto-set order to end of route
     const count = await Package.countDocuments({ routeId: req.body.routeId });
-    const pkg = await Package.create({ ...req.body, order: count });
+    const data = { ...req.body, order: count };
+
+    // Auto-geocode if no coordinates provided
+    if ((!data.lat || !data.lng) && data.address) {
+      const geo = await geocodeAddress(data.address, data.commune);
+      if (geo) { data.lat = geo.lat; data.lng = geo.lng; }
+    }
+
+    const pkg = await Package.create(data);
     await syncRouteStats(pkg.routeId);
     res.status(201).json(pkg);
   } catch (err) {

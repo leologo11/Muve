@@ -3,6 +3,7 @@ import { api } from '../../api/index.js';
 import Header from '../../components/Header.jsx';
 import RouteMap from '../../components/RouteMap.jsx';
 import PackageCard from '../../components/PackageCard.jsx';
+import PackageTable from './PackageTable.jsx';
 import DeliveryModal from '../../components/DeliveryModal.jsx';
 import Toast, { toast } from '../../components/Toast.jsx';
 import UserManager from './UserManager.jsx';
@@ -11,7 +12,7 @@ import AddRouteModal from './AddRouteModal.jsx';
 import ImportModal from './ImportModal.jsx';
 
 export default function AdminView() {
-  const [view, setView] = useState('routes'); // routes | route | users
+  const [view, setView] = useState('routes');
   const [routes, setRoutes] = useState([]);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [packages, setPackages] = useState([]);
@@ -24,6 +25,8 @@ export default function AdminView() {
   const [showImport, setShowImport] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [editingName, setEditingName] = useState(false);
+  const [routeName, setRouteName] = useState('');
 
   useEffect(() => { loadRoutes(); }, []);
 
@@ -43,6 +46,7 @@ export default function AdminView() {
       const { route, packages } = await api.getRoute(id);
       setSelectedRoute(route);
       setPackages(packages);
+      setRouteName(route.name || '');
       setView('route');
     } catch (err) {
       toast('❌ ' + err.message);
@@ -50,10 +54,26 @@ export default function AdminView() {
   };
 
   const refreshRoute = async () => {
-    if (selectedRoute) {
-      const { packages } = await api.getRoute(selectedRoute._id);
-      setPackages(packages);
+    if (!selectedRoute) return;
+    const { route, packages } = await api.getRoute(selectedRoute._id);
+    setSelectedRoute(route);
+    setPackages(packages);
+  };
+
+  const saveRouteName = async () => {
+    setEditingName(false);
+    if (routeName.trim() === (selectedRoute?.name || '')) return;
+    try {
+      const updated = await api.updateRoute(selectedRoute._id, { name: routeName.trim() });
+      setSelectedRoute(prev => ({ ...prev, name: updated.name }));
+      toast('✅ Nombre guardado');
+    } catch (err) {
+      toast('❌ ' + err.message);
     }
+  };
+
+  const handlePkgUpdate = (updated) => {
+    setPackages(prev => prev.map(p => p._id === updated._id ? { ...p, ...updated } : p));
   };
 
   const handleStatusChange = async (pkg, newStatus) => {
@@ -119,15 +139,36 @@ export default function AdminView() {
     return matchQ && matchF;
   });
 
+  const activePackages = packages.filter(p => p.status !== 'eliminado');
+
+  const invBadge = (() => {
+    const inv = selectedRoute?.invoice;
+    if (!inv || inv.status === 'none') return null;
+    if (inv.status === 'paid') return { label: '💳', value: 'Pagada', color: 'var(--accent)' };
+    if (inv.status === 'pending') return { label: '💳', value: 'Por cobrar', color: '#f57c00' };
+    if (inv.status === 'net30' || inv.status === 'overdue') {
+      const due = inv.dueDate ? new Date(inv.dueDate) : null;
+      if (!due) return { label: '💳', value: 'Neto 30', color: '#f57c00' };
+      const days = Math.ceil((due - Date.now()) / 86400000);
+      return { label: '💳', value: days < 0 ? `Vencida ${Math.abs(days)}d` : `${days}d restantes`, color: days <= 7 ? 'var(--danger)' : '#f57c00' };
+    }
+    return null;
+  })();
+
   const stats = selectedRoute ? [
     { label: 'Entregadas', value: packages.filter(p => p.status === 'entregado').length, color: 'var(--accent)' },
     { label: 'No entregadas', value: packages.filter(p => p.status === 'no-entregado').length, color: 'var(--danger)' },
     { label: 'Pendientes', value: packages.filter(p => p.status === 'pendiente').length },
     { label: 'Cobrado', value: '$' + packages.filter(p => p.status === 'entregado').reduce((s, p) => s + (p.price || 0), 0).toLocaleString('es-CL'), color: 'var(--accent)' },
-    { label: 'Total', value: '$' + packages.reduce((s, p) => s + (p.price || 0), 0).toLocaleString('es-CL') }
+    { label: 'Total', value: '$' + activePackages.reduce((s, p) => s + (p.price || 0), 0).toLocaleString('es-CL') },
+    ...(invBadge ? [invBadge] : [])
   ] : null;
 
-  if (loading) return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>Cargando…</div>;
+  if (loading) return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>
+      Cargando…
+    </div>
+  );
 
   // ── USERS VIEW ──
   if (view === 'users') {
@@ -152,7 +193,6 @@ export default function AdminView() {
             </button>
           }
         />
-
         <div style={{ flex: 1, overflowY: 'auto', padding: '14px 10px calc(90px + env(safe-area-inset-bottom))' }}>
           {routes.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)' }}>
@@ -161,104 +201,56 @@ export default function AdminView() {
             </div>
           ) : (
             routes.map(route => (
-              <div key={route._id} style={{
-                background: '#fff', borderRadius: 14, border: '1px solid var(--border)',
-                padding: '14px', marginBottom: 10, cursor: 'pointer',
-                boxShadow: '0 1px 4px #0000000a'
-              }} onClick={() => loadRoute(route._id)}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 700 }}>{route.routeCode}</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-                      {new Date(route.date).toLocaleDateString('es-CL', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
-                      {route.driverId && ` · 🚗 ${route.driverId.name}`}
-                    </div>
-                  </div>
-                  <span style={{
-                    fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 20,
-                    background: route.status === 'active' ? '#00885512' : route.status === 'completed' ? '#00885508' : 'var(--card2)',
-                    color: route.status === 'active' ? 'var(--accent)' : route.status === 'completed' ? 'var(--a2)' : 'var(--muted)',
-                    border: `1px solid ${route.status === 'active' ? '#00885530' : 'var(--border)'}`
-                  }}>
-                    {{ draft: 'Borrador', active: '● Activa', completed: 'Completada', cancelled: 'Cancelada' }[route.status] || route.status}
-                  </span>
-                </div>
-
-                {route.stats && (
-                  <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                    {[
-                      { label: 'Total', val: route.stats.total },
-                      { label: '✅', val: route.stats.delivered, color: 'var(--accent)' },
-                      { label: '❌', val: route.stats.failed, color: 'var(--danger)' },
-                      { label: '⏳', val: route.stats.pending }
-                    ].map(({ label, val, color }) => (
-                      <div key={label} style={{ fontSize: 11, color: color || 'var(--muted)', fontWeight: 700 }}>
-                        {label} {val}
-                      </div>
-                    ))}
-                    <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 700, marginLeft: 'auto' }}>
-                      ${(route.stats.collectedAmount || 0).toLocaleString('es-CL')} / ${(route.stats.totalAmount || 0).toLocaleString('es-CL')}
-                    </div>
-                  </div>
-                )}
-
-                <button
-                  onClick={e => { e.stopPropagation(); handleDeleteRoute(route); }}
-                  style={{ marginTop: 8, background: 'none', border: 'none', color: 'var(--elim)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
-                >
-                  🗑️ Cancelar ruta
-                </button>
-              </div>
+              <RouteCard key={route._id} route={route} onClick={() => loadRoute(route._id)} onDelete={handleDeleteRoute} />
             ))
           )}
         </div>
 
-        {/* FAB */}
         <button
           onClick={() => setShowAddRoute(true)}
-          style={{
-            position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16,
-            width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)',
-            border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer',
-            boxShadow: '0 4px 16px #00885540', zIndex: 400,
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}
+          style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16, width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', boxShadow: '0 4px 16px #00885540', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >＋</button>
 
         {showAddRoute && (
           <AddRouteModal
             onClose={() => setShowAddRoute(false)}
-            onCreated={async (route) => {
-              setShowAddRoute(false);
-              await loadRoutes();
-              await loadRoute(route._id);
-            }}
+            onCreated={async (route) => { setShowAddRoute(false); await loadRoutes(); await loadRoute(route._id); }}
           />
         )}
-
         <Toast />
       </div>
     );
   }
 
   // ── SINGLE ROUTE VIEW ──
+  const routeTitle = editingName ? (
+    <input
+      value={routeName}
+      onChange={e => setRouteName(e.target.value)}
+      onBlur={saveRouteName}
+      onKeyDown={e => { if (e.key === 'Enter') saveRouteName(); if (e.key === 'Escape') setEditingName(false); }}
+      autoFocus
+      style={{ fontSize: 15, fontWeight: 700, color: 'var(--accent)', background: 'none', border: '1px solid var(--accent)', borderRadius: 6, padding: '2px 6px', outline: 'none', maxWidth: 155 }}
+    />
+  ) : (
+    <span onClick={() => { setRouteName(selectedRoute?.name || ''); setEditingName(true); }} title="Clic para editar nombre" style={{ cursor: 'text' }}>
+      ⚙️ {selectedRoute?.name || selectedRoute?.routeCode} <span style={{ fontSize: 12, color: 'var(--muted)' }}>✏️</span>
+    </span>
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Header
-        title={`⚙️ ${selectedRoute?.routeCode}`}
+        title={routeTitle}
         stats={stats}
-        onBack={() => { setView('routes'); setSelectedRoute(null); setPackages([]); }}
+        onBack={() => { setView('routes'); setSelectedRoute(null); setPackages([]); setEditingName(false); setTab('m'); }}
         extra={
           <button
             onClick={handleOptimize}
             disabled={optimizing}
-            style={{
-              background: optimizing ? 'var(--card2)' : '#00885512', border: '1px solid #00885530',
-              borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700,
-              color: 'var(--accent)', cursor: optimizing ? 'not-allowed' : 'pointer'
-            }}
+            style={{ background: optimizing ? 'var(--card2)' : '#00885512', border: '1px solid #00885530', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', cursor: optimizing ? 'not-allowed' : 'pointer' }}
           >
-            {optimizing ? '⏳ Optimizando…' : '🤖 Optimizar IA'}
+            {optimizing ? '⏳…' : '🤖 IA'}
           </button>
         }
       />
@@ -267,14 +259,16 @@ export default function AdminView() {
       <div style={{ height: 2, background: 'var(--border)', flexShrink: 0 }}>
         <div style={{
           height: 2, background: 'linear-gradient(90deg, var(--accent), var(--a2))',
-          width: packages.length ? `${(packages.filter(p => ['entregado', 'no-entregado'].includes(p.status)).length / packages.filter(p => p.status !== 'eliminado').length * 100) || 0}%` : '0%',
+          width: activePackages.length
+            ? `${(packages.filter(p => ['entregado', 'no-entregado'].includes(p.status)).length / activePackages.length * 100) || 0}%`
+            : '0%',
           transition: 'width .5s'
         }} />
       </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', background: '#fff', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        {[['m', '🗺 MAPA'], ['l', '📋 LISTA'], ['r', '📊 REPORTE']].map(([t, label]) => (
+        {[['m', '🗺 MAPA'], ['l', '📋 LISTA'], ['t', '📝 TABLA'], ['r', '📊 INFO']].map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)} style={{
             flex: 1, padding: '10px 4px', textAlign: 'center', fontSize: 10, fontWeight: 700,
             letterSpacing: .5, border: 'none', background: 'none', cursor: 'pointer',
@@ -284,7 +278,7 @@ export default function AdminView() {
         ))}
       </div>
 
-      {/* Search */}
+      {/* Search bar — only for list */}
       {tab === 'l' && (
         <div style={{ padding: '8px 10px 4px', background: '#fff', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
           <input
@@ -318,11 +312,11 @@ export default function AdminView() {
             {visible.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)', fontSize: 14 }}>🔍 Sin resultados</div>
             ) : (
-              visible.map((pkg, i) => (
+              visible.map(pkg => (
                 <PackageCard
                   key={pkg._id}
                   pkg={pkg}
-                  index={packages.filter(p => p.status !== 'eliminado').indexOf(pkg)}
+                  index={activePackages.indexOf(pkg)}
                   onEdit={setEditPkg}
                   onStatusChange={handleStatusChange}
                   onDelete={handleDelete}
@@ -333,72 +327,289 @@ export default function AdminView() {
           </div>
         )}
 
-        {tab === 'r' && <AdminReport packages={packages} route={selectedRoute} />}
+        {tab === 't' && <PackageTable packages={packages} onUpdate={handlePkgUpdate} />}
+
+        {tab === 'r' && (
+          <AdminReport
+            packages={packages}
+            route={selectedRoute}
+            onRouteUpdate={updated => setSelectedRoute(prev => ({ ...prev, ...updated }))}
+          />
+        )}
       </div>
 
-      {/* FABs: add package + import */}
       {tab !== 'm' && (
         <div style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16, display: 'flex', flexDirection: 'column', gap: 10, zIndex: 400 }}>
-          <button
-            onClick={() => setShowImport(true)}
-            title="Importar con IA"
-            style={{
-              width: 52, height: 52, borderRadius: '50%', background: '#9c27b0',
-              border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer',
-              boxShadow: '0 4px 16px #9c27b040',
-              display: 'flex', alignItems: 'center', justifyContent: 'center'
-            }}
-          >🤖</button>
-          <button
-            onClick={() => setShowAddPkg(true)}
-            style={{
-              width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)',
-              border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer',
-              boxShadow: '0 4px 16px #00885540',
-              display: 'flex', alignItems: 'center', justifyContent: 'center'
-            }}
-          >＋</button>
+          <button onClick={() => setShowImport(true)} title="Importar con IA" style={{ width: 52, height: 52, borderRadius: '50%', background: '#9c27b0', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', boxShadow: '0 4px 16px #9c27b040', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🤖</button>
+          <button onClick={() => setShowAddPkg(true)} style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', boxShadow: '0 4px 16px #00885540', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>＋</button>
         </div>
       )}
 
-      {editPkg && (
-        <DeliveryModal
-          pkg={editPkg}
-          onClose={() => setEditPkg(null)}
-          onSaved={refreshRoute}
-        />
-      )}
-
-      {showAddPkg && (
-        <AddPackageModal
-          routeId={selectedRoute._id}
-          onClose={() => setShowAddPkg(false)}
-          onCreated={() => { setShowAddPkg(false); refreshRoute(); }}
-        />
-      )}
-
-      {showImport && (
-        <ImportModal
-          routeId={selectedRoute._id}
-          onClose={() => setShowImport(false)}
-          onImported={() => { setShowImport(false); refreshRoute(); }}
-        />
-      )}
-
+      {editPkg && <DeliveryModal pkg={editPkg} onClose={() => setEditPkg(null)} onSaved={refreshRoute} />}
+      {showAddPkg && <AddPackageModal routeId={selectedRoute._id} onClose={() => setShowAddPkg(false)} onCreated={() => { setShowAddPkg(false); refreshRoute(); }} />}
+      {showImport && <ImportModal routeId={selectedRoute._id} onClose={() => setShowImport(false)} onImported={() => { setShowImport(false); refreshRoute(); }} />}
       <Toast />
     </div>
   );
 }
 
-function AdminReport({ packages, route }) {
+// ── Route card in list ──
+function RouteCard({ route, onClick, onDelete }) {
+  const inv = route.invoice;
+  const daysLeft = inv?.status === 'net30' && inv?.dueDate
+    ? Math.ceil((new Date(inv.dueDate) - Date.now()) / 86400000)
+    : null;
+
+  const invBadge = inv?.status === 'paid'
+    ? { text: '💳 Pagada', color: 'var(--accent)' }
+    : inv?.status === 'net30'
+      ? { text: daysLeft < 0 ? '💳 Vencida' : `💳 ${daysLeft}d`, color: daysLeft != null && daysLeft <= 7 ? 'var(--danger)' : '#f57c00' }
+      : inv?.status === 'pending'
+        ? { text: '💳 Por cobrar', color: '#f57c00' }
+        : inv?.status === 'overdue'
+          ? { text: '💳 Vencida', color: 'var(--danger)' }
+          : null;
+
+  return (
+    <div
+      style={{ background: '#fff', borderRadius: 14, border: '1px solid var(--border)', padding: '14px', marginBottom: 10, cursor: 'pointer', boxShadow: '0 1px 4px #0000000a' }}
+      onClick={onClick}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>{route.name || route.routeCode}</div>
+          {route.name && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{route.routeCode}</div>}
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+            {new Date(route.date).toLocaleDateString('es-CL', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+            {route.driverId && ` · 🚗 ${route.driverId.name}`}
+          </div>
+          {route.clientCompany?.name && (
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+              🏢 {route.clientCompany.name}
+              {route.clientCompany.contactPerson && ` · ${route.clientCompany.contactPerson}`}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0, marginLeft: 8 }}>
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 20,
+            background: route.status === 'active' ? '#00885512' : 'var(--card2)',
+            color: route.status === 'active' ? 'var(--accent)' : 'var(--muted)',
+            border: `1px solid ${route.status === 'active' ? '#00885530' : 'var(--border)'}`
+          }}>
+            {{ draft: 'Borrador', active: '● Activa', completed: 'Completada', cancelled: 'Cancelada' }[route.status] || route.status}
+          </span>
+          {invBadge && <span style={{ fontSize: 10, fontWeight: 700, color: invBadge.color }}>{invBadge.text}</span>}
+        </div>
+      </div>
+
+      {route.stats && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          {[
+            { label: 'Total', val: route.stats.total },
+            { label: '✅', val: route.stats.delivered, color: 'var(--accent)' },
+            { label: '❌', val: route.stats.failed, color: 'var(--danger)' },
+            { label: '⏳', val: route.stats.pending }
+          ].map(({ label, val, color }) => (
+            <div key={label} style={{ fontSize: 11, color: color || 'var(--muted)', fontWeight: 700 }}>{label} {val}</div>
+          ))}
+          <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 700, marginLeft: 'auto' }}>
+            ${(route.stats.collectedAmount || 0).toLocaleString('es-CL')} / ${(route.stats.totalAmount || 0).toLocaleString('es-CL')}
+          </div>
+        </div>
+      )}
+
+      <button
+        onClick={e => { e.stopPropagation(); onDelete(route); }}
+        style={{ marginTop: 8, background: 'none', border: 'none', color: 'var(--elim)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+      >
+        🗑️ Cancelar ruta
+      </button>
+    </div>
+  );
+}
+
+// ── Info / Report tab ──
+function AdminReport({ packages, route, onRouteUpdate }) {
+  const [editingRoute, setEditingRoute] = useState(false);
+  const [form, setForm] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setForm({
+      name: route?.name || '',
+      clientCompany: {
+        name: route?.clientCompany?.name || '',
+        contactPerson: route?.clientCompany?.contactPerson || '',
+        contactPhone: route?.clientCompany?.contactPhone || ''
+      },
+      invoice: {
+        status: route?.invoice?.status || 'none',
+        amount: route?.invoice?.amount ?? '',
+        invoiceDate: route?.invoice?.invoiceDate
+          ? new Date(route.invoice.invoiceDate).toISOString().slice(0, 10)
+          : '',
+        notes: route?.invoice?.notes || ''
+      },
+      startPoint: {
+        address: route?.startPoint?.address || '',
+        lat: route?.startPoint?.lat ?? '',
+        lng: route?.startPoint?.lng ?? ''
+      }
+    });
+  }, [route]);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setCompany = (k, v) => setForm(f => ({ ...f, clientCompany: { ...f.clientCompany, [k]: v } }));
+  const setInvoice = (k, v) => setForm(f => ({ ...f, invoice: { ...f.invoice, [k]: v } }));
+  const setStart = (k, v) => setForm(f => ({ ...f, startPoint: { ...f.startPoint, [k]: v } }));
+
+  const saveRoute = async () => {
+    setSaving(true);
+    try {
+      const payload = {
+        name: form.name,
+        clientCompany: form.clientCompany,
+        invoice: {
+          ...form.invoice,
+          amount: form.invoice.amount !== '' ? Number(form.invoice.amount) : undefined,
+          invoiceDate: form.invoice.invoiceDate || undefined
+        },
+        startPoint: {
+          address: form.startPoint.address || undefined,
+          lat: form.startPoint.lat !== '' ? Number(form.startPoint.lat) : undefined,
+          lng: form.startPoint.lng !== '' ? Number(form.startPoint.lng) : undefined
+        }
+      };
+      const updated = await api.updateRoute(route._id, payload);
+      onRouteUpdate(updated);
+      setEditingRoute(false);
+      toast('✅ Ruta actualizada');
+    } catch (err) {
+      toast('❌ ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const active = packages.filter(p => p.status !== 'eliminado');
   const delivered = active.filter(p => p.status === 'entregado');
   const failed = active.filter(p => p.status === 'no-entregado');
   const total = active.reduce((s, p) => s + (p.price || 0), 0);
   const collected = delivered.reduce((s, p) => s + (p.price || 0), 0);
 
+  const inv = route?.invoice;
+  const dueDate = inv?.dueDate ? new Date(inv.dueDate) : null;
+  const daysLeft = dueDate ? Math.ceil((dueDate - Date.now()) / 86400000) : null;
+
+  if (!form) return null;
+
   return (
-    <div style={{ padding: '14px 10px calc(50px + env(safe-area-inset-bottom))', overflowY: 'auto', height: '100%' }}>
+    <div style={{ padding: '14px 10px calc(80px + env(safe-area-inset-bottom))', overflowY: 'auto', height: '100%' }}>
+
+      {/* Route info card — editable */}
+      <div style={{ background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 13, padding: 14, marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: 'var(--muted)' }}>INFO DE RUTA</div>
+          <button
+            onClick={() => setEditingRoute(v => !v)}
+            style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', cursor: 'pointer' }}
+          >
+            {editingRoute ? '✕ Cancelar' : '✏️ Editar'}
+          </button>
+        </div>
+
+        {editingRoute ? (
+          <div>
+            <Label>Nombre de ruta</Label>
+            <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="Ej: Ruta Lunes Zona Norte" style={inp} />
+
+            <div style={{ margin: '14px 0 4px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: 1 }}>🏢 EMPRESA CLIENTE</div>
+            <Label>Nombre empresa</Label>
+            <input value={form.clientCompany.name} onChange={e => setCompany('name', e.target.value)} placeholder="Ej: Importadora ABC" style={inp} />
+            <Label>Responsable</Label>
+            <input value={form.clientCompany.contactPerson} onChange={e => setCompany('contactPerson', e.target.value)} placeholder="Nombre contacto" style={inp} />
+            <Label>Teléfono</Label>
+            <input value={form.clientCompany.contactPhone} onChange={e => setCompany('contactPhone', e.target.value)} placeholder="+56 9 xxxx xxxx" style={inp} />
+
+            <div style={{ margin: '14px 0 4px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: 1 }}>💳 FACTURA / PAGO</div>
+            <Label>Estado de pago</Label>
+            <select value={form.invoice.status} onChange={e => setInvoice('status', e.target.value)} style={inp}>
+              <option value="none">Sin factura</option>
+              <option value="pending">Pendiente de cobro</option>
+              <option value="net30">Crédito 30 días (Neto 30)</option>
+              <option value="paid">Pagada ✓</option>
+              <option value="overdue">Vencida</option>
+            </select>
+            <Label>Monto factura (CLP)</Label>
+            <input type="number" value={form.invoice.amount} onChange={e => setInvoice('amount', e.target.value)} placeholder="0" style={inp} />
+            <Label>Fecha de factura</Label>
+            <input type="date" value={form.invoice.invoiceDate} onChange={e => setInvoice('invoiceDate', e.target.value)} style={inp} />
+            <Label>Notas de pago</Label>
+            <input value={form.invoice.notes} onChange={e => setInvoice('notes', e.target.value)} placeholder="Ej: Pago a 30 días desde entrega" style={inp} />
+
+            <div style={{ margin: '14px 0 4px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: 1 }}>📍 PUNTO DE INICIO</div>
+            <Label>Dirección bodega / pickup</Label>
+            <input value={form.startPoint.address} onChange={e => setStart('address', e.target.value)} placeholder="Av. Vitacura 2939, Vitacura" style={inp} />
+
+            <button
+              onClick={saveRoute}
+              disabled={saving}
+              style={{ width: '100%', padding: 12, borderRadius: 10, border: 'none', marginTop: 14, background: saving ? 'var(--border)' : 'var(--accent)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}
+            >
+              {saving ? 'Guardando…' : '✓ Guardar cambios'}
+            </button>
+          </div>
+        ) : (
+          <div>
+            {route?.name && (
+              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{route.name}</div>
+            )}
+
+            {route?.clientCompany?.name ? (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>🏢 {route.clientCompany.name}</div>
+                {route.clientCompany.contactPerson && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>👤 {route.clientCompany.contactPerson}</div>}
+                {route.clientCompany.contactPhone && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 1 }}>📞 {route.clientCompany.contactPhone}</div>}
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Sin empresa cliente asignada</div>
+            )}
+
+            {inv && inv.status !== 'none' && (
+              <div style={{
+                padding: '10px 12px', borderRadius: 10, marginBottom: 6,
+                background: inv.status === 'paid' ? '#e8f5e9' : inv.status === 'overdue' ? '#fce4ec' : '#fff8e1'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: inv.status === 'paid' ? 'var(--accent)' : inv.status === 'overdue' ? 'var(--danger)' : '#f57c00' }}>
+                    💳 {{ pending: 'Por cobrar', net30: 'Neto 30 días', paid: 'Pagada ✓', overdue: 'Vencida' }[inv.status]}
+                  </span>
+                  {inv.amount ? <span style={{ fontSize: 13, fontWeight: 700 }}>${Number(inv.amount).toLocaleString('es-CL')}</span> : null}
+                </div>
+                {inv.invoiceDate && (
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>
+                    Fecha: {new Date(inv.invoiceDate).toLocaleDateString('es-CL')}
+                    {dueDate && ` · Vence: ${dueDate.toLocaleDateString('es-CL')}`}
+                  </div>
+                )}
+                {daysLeft !== null && inv.status !== 'paid' && (
+                  <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4, color: daysLeft < 0 ? 'var(--danger)' : daysLeft <= 7 ? '#e65100' : '#f57c00' }}>
+                    {daysLeft < 0 ? `⚠️ Vencida hace ${Math.abs(daysLeft)} días` : `⏳ Vence en ${daysLeft} días`}
+                  </div>
+                )}
+                {inv.notes && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>{inv.notes}</div>}
+              </div>
+            )}
+
+            {route?.startPoint?.address && (
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>📍 Inicio: {route.startPoint.address}</div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Delivery stats */}
       <div style={{ background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 13, padding: 14, marginBottom: 14 }}>
         {[
           ['Ruta', route?.routeCode || '-'],
@@ -419,6 +630,7 @@ function AdminReport({ packages, route }) {
         ))}
       </div>
 
+      {/* Package lists */}
       {[
         { title: 'ENTREGADOS', items: delivered, color: 'var(--accent)', border: '#00885528' },
         { title: 'NO ENTREGADOS', items: failed, color: 'var(--danger)', border: '#cc224428' },
@@ -451,3 +663,13 @@ function AdminReport({ packages, route }) {
     </div>
   );
 }
+
+function Label({ children }) {
+  return <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: 'var(--muted)', textTransform: 'uppercase', margin: '8px 0 3px' }}>{children}</div>;
+}
+
+const inp = {
+  width: '100%', background: '#fff', border: '1px solid var(--border)', borderRadius: 10,
+  color: 'var(--text)', fontSize: 13, padding: '9px 12px', outline: 'none',
+  display: 'block', WebkitAppearance: 'none', boxSizing: 'border-box'
+};

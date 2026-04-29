@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import Package from '../models/Package.js';
 import { syncRouteStats } from './deliveryRoutes.js';
 import { suggestPrice, roundPrice } from '../utils/priceByCommune.js';
+import { geocodeAddress, sleep } from '../utils/geocode.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -109,17 +110,27 @@ router.post('/:routeId/preview', requireAuth, requireRole('admin'), upload.singl
   }
 });
 
-// POST /api/import/:routeId/confirm — save previewed packages to DB
+// POST /api/import/:routeId/confirm — save previewed packages, auto-geocode missing coords
 router.post('/:routeId/confirm', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const { packages } = req.body;
     if (!packages?.length) return res.status(400).json({ error: 'No hay paquetes para guardar' });
 
     const existing = await Package.countDocuments({ routeId: req.params.routeId });
-    const docs = packages.map((p, i) => {
-      const { _preview, _suggestedPrice, ...rest } = p;
-      return { ...rest, routeId: req.params.routeId, order: existing + i };
-    });
+
+    // Geocode packages that have no coordinates
+    const docs = [];
+    for (let i = 0; i < packages.length; i++) {
+      const { _preview, _suggestedPrice, ...p } = packages[i];
+      const doc = { ...p, routeId: req.params.routeId, order: existing + i };
+
+      if ((!doc.lat || !doc.lng) && doc.address) {
+        const geo = await geocodeAddress(doc.address, doc.commune);
+        if (geo) { doc.lat = geo.lat; doc.lng = geo.lng; }
+        await sleep(1100); // Nominatim rate limit: 1 req/s
+      }
+      docs.push(doc);
+    }
 
     const created = await Package.insertMany(docs);
     await syncRouteStats(req.params.routeId);
