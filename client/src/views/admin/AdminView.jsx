@@ -7,6 +7,7 @@ import PackageTable from './PackageTable.jsx';
 import DeliveryModal from '../../components/DeliveryModal.jsx';
 import Toast, { toast } from '../../components/Toast.jsx';
 import UserManager from './UserManager.jsx';
+import InvoiceView from './InvoiceView.jsx';
 import AddPackageModal from './AddPackageModal.jsx';
 import AddRouteModal from './AddRouteModal.jsx';
 import ImportModal from './ImportModal.jsx';
@@ -190,6 +191,16 @@ export default function AdminView() {
     );
   }
 
+  // ── INVOICE VIEW ──
+  if (view === 'invoices') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <InvoiceView onBack={() => setView('routes')} />
+        <Toast />
+      </div>
+    );
+  }
+
   // ── ROUTES LIST ──
   if (view === 'routes') {
     return (
@@ -197,9 +208,14 @@ export default function AdminView() {
         <Header
           title="⚙️ Admin · Rutas"
           extra={
-            <button onClick={() => setView('users')} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', cursor: 'pointer' }}>
-              👥 Usuarios
-            </button>
+            <div style={{ display: 'flex', gap: 5 }}>
+              <button onClick={() => setView('invoices')} style={{ background: '#fff3e0', border: '1px solid #f57c0030', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#f57c00', cursor: 'pointer' }}>
+                💳 Cobros
+              </button>
+              <button onClick={() => setView('users')} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', cursor: 'pointer' }}>
+                👥 Usuarios
+              </button>
+            </div>
           }
         />
 
