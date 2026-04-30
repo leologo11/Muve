@@ -5,7 +5,7 @@ let debounceTimer;
 // Photon API (komoot) — faster than Nominatim, no rate limit issues, OSM data
 async function searchPhoton(q) {
   // Bias results toward Santiago Chile with location + country filter
-  const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=6&lang=es&lat=-33.45&lon=-70.65&zoom=12`;
+  const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=6&lang=es&lat=-33.45&lon=-70.65`;
   const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
   if (!res.ok) throw new Error('Search failed');
   const data = await res.json();
@@ -27,15 +27,23 @@ function formatSuggestion(f) {
   return { address, commune, lat, lng, label: address, sublabel: commune };
 }
 
-export default function AddressAutocomplete({ value, onChange, onSelect, placeholder = 'Buscar dirección…', style = {} }) {
+export default function AddressAutocomplete({ value, onChange, onSelect, placeholder = 'Buscar dirección…', style = {}, dropdownFixed = false }) {
   const [query, setQuery] = useState(value || '');
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState(null);
   const containerRef = useRef();
+  const inputRef = useRef();
   const abortRef = useRef();
 
   useEffect(() => { setQuery(value || ''); }, [value]);
+
+  const updateDropdownPos = () => {
+    if (!dropdownFixed || !inputRef.current) return;
+    const rect = inputRef.current.getBoundingClientRect();
+    setDropdownPos({ top: rect.bottom + 5, left: rect.left, width: rect.width });
+  };
 
   const search = useCallback((q) => {
     clearTimeout(debounceTimer);
@@ -48,7 +56,7 @@ export default function AddressAutocomplete({ value, onChange, onSelect, placeho
         const results = await searchPhoton(q);
         const formatted = results.map(formatSuggestion).filter(r => r.address);
         setSuggestions(formatted);
-        setOpen(formatted.length > 0);
+        if (formatted.length > 0) { updateDropdownPos(); setOpen(true); }
       } catch {
         setSuggestions([]);
       } finally {
@@ -90,9 +98,9 @@ export default function AddressAutocomplete({ value, onChange, onSelect, placeho
     <div ref={containerRef} style={{ position: 'relative', ...style }}>
       <div style={{ position: 'relative' }}>
         <input
+          ref={inputRef}
           value={query}
           onChange={e => handleChange(e.target.value)}
-          onFocus={() => suggestions.length > 0 && setOpen(true)}
           placeholder={placeholder}
           autoComplete="off"
           style={{
@@ -106,7 +114,7 @@ export default function AddressAutocomplete({ value, onChange, onSelect, placeho
             outline: 'none',
             transition: 'border-color .15s'
           }}
-          onFocus={e => { e.target.style.borderColor = 'var(--accent)'; suggestions.length > 0 && setOpen(true); }}
+          onFocus={e => { e.target.style.borderColor = 'var(--accent)'; if (suggestions.length > 0) { updateDropdownPos(); setOpen(true); } }}
           onBlur={e => { e.target.style.borderColor = 'var(--border)'; }}
         />
         <span style={{
@@ -119,14 +127,14 @@ export default function AddressAutocomplete({ value, onChange, onSelect, placeho
       </div>
 
       {open && suggestions.length > 0 && (
-        <div style={{
+        <div style={dropdownFixed && dropdownPos ? {
+          position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width, zIndex: 2000,
+          background: '#fff', border: '1px solid var(--border)', borderRadius: 12,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.18)', overflow: 'hidden'
+        } : {
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000,
-          background: '#fff',
-          border: '1px solid var(--border)',
-          borderRadius: 12,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-          marginTop: 5,
-          overflow: 'hidden'
+          background: '#fff', border: '1px solid var(--border)', borderRadius: 12,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.12)', marginTop: 5, overflow: 'hidden'
         }}>
           {suggestions.map((item, idx) => (
             <div

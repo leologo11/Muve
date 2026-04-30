@@ -11,6 +11,10 @@ import InvoiceView from './InvoiceView.jsx';
 import AddPackageModal from './AddPackageModal.jsx';
 import AddRouteModal from './AddRouteModal.jsx';
 import ImportModal from './ImportModal.jsx';
+import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
+import PriceSettings from '../../components/PriceSettings.jsx';
+import SectorMap from './SectorMap.jsx';
+import AllPackagesView from './AllPackagesView.jsx';
 
 const STATUS_META = {
   draft:      { label: 'Borrador',   color: 'var(--muted)',   bg: 'var(--card2)' },
@@ -139,7 +143,18 @@ export default function AdminView() {
     } catch (err) { toast('❌ ' + err.message); }
   };
 
+  const handleCompleteRoute = async () => {
+    if (!confirm('¿Finalizar la ruta como completada? Esta acción marcará la ruta como cerrada.')) return;
+    try {
+      await api.updateRoute(selectedRoute._id, { status: 'completed' });
+      const { route } = await api.getRoute(selectedRoute._id);
+      setSelectedRoute(route);
+      toast('✅ Ruta finalizada como completada');
+    } catch (err) { toast('❌ ' + err.message); }
+  };
+
   const activePackages = packages.filter(p => p.status !== 'eliminado');
+  const allDone = activePackages.length > 0 && activePackages.every(p => p.status !== 'pendiente') && selectedRoute?.status === 'active';
 
   const visible = packages.filter(p => {
     const q = search.toLowerCase();
@@ -180,6 +195,39 @@ export default function AdminView() {
 
   if (loading) return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>Cargando…</div>;
 
+  // ── ALL PACKAGES VIEW ──
+  if (view === 'allPackages') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Header title="📦 Todos los paquetes" onBack={() => setView('routes')} />
+        <AllPackagesView />
+        <Toast />
+      </div>
+    );
+  }
+
+  // ── SECTOR MAP VIEW ──
+  if (view === 'zones') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Header title="🗺 Mapa de zonas y precios" onBack={() => setView('routes')} />
+        <SectorMap />
+        <Toast />
+      </div>
+    );
+  }
+
+  // ── PRICES VIEW ──
+  if (view === 'prices') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Header title="💰 Precios por Comuna" onBack={() => setView('routes')} />
+        <PriceSettings />
+        <Toast />
+      </div>
+    );
+  }
+
   // ── USERS VIEW ──
   if (view === 'users') {
     return (
@@ -208,7 +256,16 @@ export default function AdminView() {
         <Header
           title="⚙️ Admin · Rutas"
           extra={
-            <div style={{ display: 'flex', gap: 5 }}>
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+              <button onClick={() => setView('allPackages')} style={{ background: '#00885514', border: '1px solid #00885530', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', cursor: 'pointer' }}>
+                📦 Paquetes
+              </button>
+              <button onClick={() => setView('zones')} style={{ background: '#5c35cc14', border: '1px solid #5c35cc30', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#5c35cc', cursor: 'pointer' }}>
+                🗺 Zonas
+              </button>
+              <button onClick={() => setView('prices')} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', cursor: 'pointer' }}>
+                💰 Precios
+              </button>
               <button onClick={() => setView('invoices')} style={{ background: '#fff3e0', border: '1px solid #f57c0030', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#f57c00', cursor: 'pointer' }}>
                 💳 Cobros
               </button>
@@ -307,6 +364,25 @@ export default function AdminView() {
         }
       />
 
+      {/* Driver info banner */}
+      {selectedRoute?.driverId && (
+        <div style={{ background: '#0077aa08', borderBottom: '1px solid #0077aa1a', padding: '7px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 14 }}>🚗</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#0077aa' }}>{selectedRoute.driverId.name}</span>
+          {selectedRoute.driverId.phone && (
+            <>
+              <span style={{ color: 'var(--border)', fontSize: 14 }}>·</span>
+              <a href={`tel:${selectedRoute.driverId.phone}`} style={{ fontSize: 12, color: 'var(--muted)', textDecoration: 'none', fontWeight: 600 }}>
+                📞 {selectedRoute.driverId.phone}
+              </a>
+            </>
+          )}
+          <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, padding: '2px 9px', borderRadius: 20, background: '#0077aa14', color: '#0077aa', border: '1px solid #0077aa20' }}>
+            {new Date(selectedRoute.date).toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+          </span>
+        </div>
+      )}
+
       <div style={{ height: 2, background: 'var(--border)', flexShrink: 0 }}>
         <div style={{
           height: 2, background: 'linear-gradient(90deg, var(--accent), var(--a2))',
@@ -391,6 +467,24 @@ export default function AdminView() {
           />
         )}
       </div>
+
+      {allDone && (
+        <div style={{ position: 'fixed', bottom: 'calc(90px + env(safe-area-inset-bottom))', left: '50%', transform: 'translateX(-50%)', zIndex: 500, animation: 'scaleIn .3s var(--ease-spring) both' }}>
+          <button
+            onClick={handleCompleteRoute}
+            style={{
+              padding: '14px 28px', borderRadius: 'var(--r-full)', border: 'none',
+              background: 'linear-gradient(135deg, #008855, #00aa66)',
+              color: '#fff', fontSize: 15, fontWeight: 800,
+              cursor: 'pointer', whiteSpace: 'nowrap',
+              boxShadow: '0 6px 24px #00885550, 0 2px 8px #00000020',
+              letterSpacing: '-.2px'
+            }}
+          >
+            ✅ Finalizar ruta
+          </button>
+        </div>
+      )}
 
       {tab !== 'm' && (
         <div style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16, display: 'flex', flexDirection: 'column', gap: 10, zIndex: 400 }}>
@@ -488,6 +582,49 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate }) {
   const [editingRoute, setEditingRoute] = useState(false);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [geocodingStart, setGeocodingStart] = useState(false);
+  const [shareToken, setShareToken] = useState(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareRevoked, setShareRevoked] = useState(false);
+
+  const handleShare = async () => {
+    setShareLoading(true);
+    try {
+      const data = await api.generateShareLink(route._id);
+      setShareToken(data.shareToken);
+      setShareRevoked(false);
+    } catch (err) { toast('❌ ' + err.message); }
+    finally { setShareLoading(false); }
+  };
+
+  const handleRevokeShare = async () => {
+    if (!confirm('¿Revocar el enlace? Las personas con el enlace actual ya no podrán acceder.')) return;
+    try {
+      await api.revokeShareLink(route._id);
+      setShareToken(null);
+      setShareRevoked(true);
+      toast('✅ Enlace revocado');
+    } catch (err) { toast('❌ ' + err.message); }
+  };
+
+  const shareUrl = shareToken ? `${window.location.origin}/route/${shareToken}` : null;
+
+  const copyShare = () => {
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl).then(() => toast('📋 Enlace copiado'));
+  };
+
+  const handleGeocodeStart = async () => {
+    if (!route?.startPoint?.address) return;
+    setGeocodingStart(true);
+    try {
+      const updated = await api.updateRoute(route._id, { startPoint: { address: route.startPoint.address } });
+      onRouteUpdate(updated);
+      if (updated.startPoint?.lat) toast('✅ Punto de inicio ubicado en el mapa');
+      else toast('⚠ No se encontró la dirección exacta — intenta editarla');
+    } catch (err) { toast('❌ ' + err.message); }
+    finally { setGeocodingStart(false); }
+  };
 
   useEffect(() => {
     setForm({
@@ -594,8 +731,17 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate }) {
             </>)}
 
             <div style={{ margin: '14px 0 4px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: 1 }}>📍 PUNTO DE INICIO</div>
-            <Label>Dirección bodega</Label>
-            <input value={form.startPoint.address} onChange={e => setStart('address', e.target.value)} placeholder="Av. Vitacura 2939, Vitacura" style={inp} />
+            <Label>Dirección bodega / bodega de retiro</Label>
+            <AddressAutocomplete
+              value={form.startPoint.address}
+              onChange={v => setStart('address', v)}
+              onSelect={({ address, lat, lng }) => setForm(f => ({ ...f, startPoint: { address, lat, lng } }))}
+              placeholder="Av. Vitacura 2939, Vitacura…"
+              dropdownFixed
+            />
+            {form.startPoint.lat && form.startPoint.lng && (
+              <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 4 }}>✓ Coordenadas listas — aparecerá en el mapa como punto #1</div>
+            )}
 
             <button onClick={saveRoute} disabled={saving} style={{ width: '100%', padding: 12, borderRadius: 10, border: 'none', marginTop: 14, background: saving ? 'var(--border)' : 'var(--accent)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
               {saving ? 'Guardando…' : '✓ Guardar cambios'}
@@ -633,7 +779,54 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate }) {
                 {inv.notes && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>{inv.notes}</div>}
               </div>
             )}
-            {route?.startPoint?.address && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>📍 Inicio: {route.startPoint.address}</div>}
+            {route?.startPoint?.address && (
+              <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>📍 Inicio: {route.startPoint.address}</span>
+                {(!route.startPoint?.lat || !route.startPoint?.lng) && (
+                  <button
+                    onClick={handleGeocodeStart}
+                    disabled={geocodingStart}
+                    style={{ padding: '3px 10px', borderRadius: 20, border: 'none', background: '#f57c00', color: '#fff', fontSize: 10, fontWeight: 700, cursor: geocodingStart ? 'not-allowed' : 'pointer', flexShrink: 0 }}
+                  >
+                    {geocodingStart ? '⏳…' : '🗺 Ubicar'}
+                  </button>
+                )}
+                {route.startPoint?.lat && route.startPoint?.lng && (
+                  <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 700 }}>✓ en mapa</span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Share link card */}
+      <div style={{ background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 13, padding: 14, marginBottom: 12 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: 'var(--muted)', marginBottom: 10 }}>🔗 ENLACE PARA EMPRESA</div>
+        {shareUrl ? (
+          <div>
+            <div style={{ background: '#e8f5e9', border: '1px solid #00885530', borderRadius: 10, padding: '9px 12px', marginBottom: 8, fontSize: 11, color: '#005a30', wordBreak: 'break-all', fontFamily: 'monospace' }}>
+              {shareUrl}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={copyShare} style={{ flex: 1, padding: '8px', borderRadius: 9, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>📋 Copiar enlace</button>
+              <a href={shareUrl} target="_blank" rel="noreferrer" style={{ flex: 1, padding: '8px', borderRadius: 9, border: '1px solid var(--border)', background: 'none', color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', textAlign: 'center' }}>👁 Ver</a>
+              <button onClick={handleRevokeShare} style={{ padding: '8px 10px', borderRadius: 9, border: '1px solid #cc224430', background: 'none', color: '#cc2244', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>🗑️</button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.4 }}>
+              Genera un enlace para que la empresa vea el estado de la ruta en tiempo real sin necesidad de iniciar sesión. Solo verán el progreso total, no los precios por paquete.
+            </div>
+            {shareRevoked && <div style={{ fontSize: 11, color: '#cc2244', marginBottom: 8 }}>✓ Enlace anterior revocado</div>}
+            <button
+              onClick={handleShare}
+              disabled={shareLoading}
+              style={{ width: '100%', padding: '9px', borderRadius: 10, border: 'none', background: shareLoading ? 'var(--border)' : '#0077aa', color: '#fff', fontSize: 13, fontWeight: 700, cursor: shareLoading ? 'not-allowed' : 'pointer' }}
+            >
+              {shareLoading ? '⏳ Generando…' : '🔗 Generar enlace de seguimiento'}
+            </button>
           </div>
         )}
       </div>

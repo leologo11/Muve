@@ -6,7 +6,10 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import Package from '../models/Package.js';
 import { syncRouteStats } from './deliveryRoutes.js';
 import { suggestPrice, roundPrice } from '../utils/priceByCommune.js';
+import { getDbPricesMap } from './priceRoutes.js';
 import { geocodeAddress, sleep } from '../utils/geocode.js';
+import Zone from '../models/Zone.js';
+import { pointInPolygon } from '../utils/zones.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -47,13 +50,26 @@ async function parseWithClaude(client, content) {
   return JSON.parse(jsonMatch[0]);
 }
 
-function applyPrices(packages) {
-  return packages.map((p, i) => ({
-    ...p,
-    price: p.price ? roundPrice(p.price) : suggestPrice(p.commune),
-    _suggestedPrice: !p.price,
-    order: i
-  }));
+function normalize(str) {
+  return (str || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+function applyPrices(packages, dbPricesMap = {}, zones = []) {
+  return packages.map((p, i) => {
+    const key = normalize(p.commune);
+    const dbPrice = dbPricesMap[key];
+
+    let price = p.price ? roundPrice(p.price) : null;
+    if (!price) {
+      // Custom zone takes priority over commune price (more specific area)
+      if (p.lat && p.lng && zones.length) {
+        const zone = zones.find(z => pointInPolygon([p.lng, p.lat], z.polygon.coordinates[0]));
+        if (zone) price = zone.price;
+      }
+      if (!price) price = dbPrice || suggestPrice(p.commune);
+    }
+    return { ...p, price, _suggestedPrice: !p.price, order: i };
+  });
 }
 
 // POST /api/import/:routeId/preview — parse file, return preview without saving
@@ -101,7 +117,11 @@ router.post('/:routeId/preview', requireAuth, requireRole('admin'), upload.singl
       return res.status(400).json({ error: 'Formato no soportado. Usa imagen (JPG/PNG), Excel (.xlsx) o CSV.' });
     }
 
-    const withPrices = applyPrices(packages);
+    const [dbPricesMap, zones] = await Promise.all([
+      getDbPricesMap().catch(() => ({})),
+      Zone.find().lean().catch(() => [])
+    ]);
+    const withPrices = applyPrices(packages, dbPricesMap, zones);
     res.json({ count: withPrices.length, packages: withPrices });
 
   } catch (err) {
@@ -142,8 +162,10 @@ router.post('/:routeId/confirm', requireAuth, requireRole('admin'), async (req, 
 });
 
 // GET /api/import/price-suggestion?commune=Vitacura
-router.get('/price-suggestion', requireAuth, (req, res) => {
-  const price = suggestPrice(req.query.commune);
+router.get('/price-suggestion', requireAuth, async (req, res) => {
+  const dbMap = await getDbPricesMap().catch(() => ({}));
+  const key = normalize(req.query.commune);
+  const price = dbMap[key] || suggestPrice(req.query.commune);
   res.json({ price, commune: req.query.commune });
 });
 

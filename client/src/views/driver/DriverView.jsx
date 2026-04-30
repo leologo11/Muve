@@ -14,6 +14,7 @@ export default function DriverView() {
   const [filter, setFilter] = useState('todos');
   const [search, setSearch] = useState('');
   const [editPkg, setEditPkg] = useState(null);
+  const [showLoadCheck, setShowLoadCheck] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -52,11 +53,15 @@ export default function DriverView() {
     return matchQ && matchF;
   });
 
+  const active = packages.filter(p => p.status !== 'eliminado');
   const stats = [
+    { label: 'Total', value: active.length },
     { label: 'Entregadas', value: packages.filter(p => p.status === 'entregado').length, color: 'var(--accent)' },
     { label: 'No entregadas', value: packages.filter(p => p.status === 'no-entregado').length, color: 'var(--danger)' },
     { label: 'Pendientes', value: packages.filter(p => p.status === 'pendiente').length },
-    { label: 'Cobrado', value: '$' + packages.filter(p => p.status === 'entregado').reduce((s, p) => s + (p.price || 0), 0).toLocaleString('es-CL'), color: 'var(--accent)' }
+    ...(selectedRoute?.driverPayout
+      ? [{ label: 'Mi pago', value: '$' + Number(selectedRoute.driverPayout).toLocaleString('es-CL'), color: 'var(--accent)' }]
+      : [])
   ];
 
   if (loading) return (
@@ -71,6 +76,35 @@ export default function DriverView() {
         title={selectedRoute ? `🚗 ${selectedRoute.routeCode}` : '🚚 Routiflow'}
         stats={selectedRoute ? stats : null}
       />
+
+      {/* Route summary banner */}
+      {selectedRoute && (
+        <div style={{ background: 'linear-gradient(90deg, #00885508, #00885514)', borderBottom: '1px solid #00885522', padding: '7px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ fontSize: 15 }}>📦</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>{active.length}</span>
+            <span style={{ fontSize: 12, color: 'var(--muted)' }}>paquetes</span>
+          </div>
+          {selectedRoute.distanceKm && (
+            <>
+              <span style={{ color: 'var(--border)', fontSize: 14 }}>·</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ fontSize: 15 }}>🗺</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>{selectedRoute.distanceKm} km</span>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>estimados</span>
+              </div>
+            </>
+          )}
+          {selectedRoute.startPoint?.address && (
+            <>
+              <span style={{ color: 'var(--border)', fontSize: 14 }}>·</span>
+              <div style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                📍 {selectedRoute.startPoint.address}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Route selector if multiple */}
       {routes.length > 1 && (
@@ -98,7 +132,7 @@ export default function DriverView() {
         <div style={{
           height: 2,
           background: 'linear-gradient(90deg, var(--accent), var(--a2))',
-          width: packages.length ? `${(packages.filter(p => p.status !== 'pendiente' && p.status !== 'eliminado').length / packages.filter(p => p.status !== 'eliminado').length * 100) || 0}%` : '0%',
+          width: active.length ? `${(active.filter(p => p.status !== 'pendiente').length / active.length * 100) || 0}%` : '0%',
           transition: 'width .5s'
         }} />
       </div>
@@ -125,14 +159,14 @@ export default function DriverView() {
             style={{ width: '100%', background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 22, padding: '8px 14px', fontSize: 14, outline: 'none' }}
           />
           <div style={{ display: 'flex', gap: 6, marginTop: 7, overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 4 }}>
-            {['todos', 'pendiente', 'entregado', 'no-entregado', 'eliminado'].map(f => (
+            {['todos', 'pendiente', 'entregado', 'no-entregado'].map(f => (
               <button key={f} onClick={() => setFilter(f)} style={{
                 flexShrink: 0, padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
                 cursor: 'pointer', border: '1px solid var(--border)',
                 background: filter === f ? 'var(--accent)' : 'var(--card2)',
                 color: filter === f ? '#fff' : 'var(--muted)'
               }}>
-                {{ todos: 'Todos', pendiente: '⏳ Pendientes', entregado: '✅ Entregados', 'no-entregado': '❌ No entregados', eliminado: '🗑️ Eliminados' }[f]}
+                {{ todos: 'Todos', pendiente: '⏳ Pendientes', entregado: '✅ Entregados', 'no-entregado': '❌ No entregados' }[f]}
               </button>
             ))}
           </div>
@@ -143,7 +177,13 @@ export default function DriverView() {
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
         {/* Map */}
         <div style={{ display: tab === 'm' ? 'block' : 'none', height: '100%' }}>
-          <RouteMap packages={packages} onPkgClick={setEditPkg} visible={tab === 'm'} />
+          <RouteMap
+            packages={packages}
+            onPkgClick={setEditPkg}
+            startPoint={selectedRoute?.startPoint}
+            onVerifyLoad={() => setShowLoadCheck(true)}
+            visible={tab === 'm'}
+          />
         </div>
 
         {/* List */}
@@ -159,6 +199,7 @@ export default function DriverView() {
                   index={i}
                   onEdit={setEditPkg}
                   onStatusChange={handleStatusChange}
+                  hidePrice
                 />
               ))
             )}
@@ -178,6 +219,14 @@ export default function DriverView() {
         />
       )}
 
+      {showLoadCheck && (
+        <LoadCheckModal
+          packages={packages}
+          onClose={() => setShowLoadCheck(false)}
+          onUpdated={() => loadRoute(selectedRoute._id)}
+        />
+      )}
+
       <Toast />
     </div>
   );
@@ -188,8 +237,6 @@ function DriverReport({ packages, route }) {
   const delivered = active.filter(p => p.status === 'entregado');
   const failed = active.filter(p => p.status === 'no-entregado');
   const pending = active.filter(p => p.status === 'pendiente');
-  const total = active.reduce((s, p) => s + (p.price || 0), 0);
-  const collected = delivered.reduce((s, p) => s + (p.price || 0), 0);
 
   return (
     <div style={{ padding: '14px 10px calc(50px + env(safe-area-inset-bottom))', overflowY: 'auto', height: '100%' }}>
@@ -199,8 +246,7 @@ function DriverReport({ packages, route }) {
           ['Entregados', delivered.length],
           ['No entregados', failed.length],
           ['Pendientes', pending.length],
-          ['Total ruta', '$' + total.toLocaleString('es-CL')],
-          ['Cobrado', '$' + collected.toLocaleString('es-CL')]
+          ...(route?.driverPayout ? [['Mi pago', '$' + Number(route.driverPayout).toLocaleString('es-CL')]] : [])
         ].map(([label, val]) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 13, borderBottom: '1px solid var(--border)' }}>
             <span>{label}</span>
@@ -237,14 +283,165 @@ function ReportCard({ pkg, type }) {
       <div style={{ fontWeight: 700, fontSize: 14 }}>{pkg.customerName} {pkg.customerLastName}</div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{pkg.address}{pkg.commune ? `, ${pkg.commune}` : ''}</div>
       <div style={{ fontSize: 11, fontWeight: 700, color, marginTop: 5 }}>
-        ${(pkg.price || 0).toLocaleString('es-CL')}
-        {pkg.deliveredAt && ` · ${new Date(pkg.deliveredAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}`}
+        {pkg.deliveredAt && new Date(pkg.deliveredAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
       </div>
       {pkg.note && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>📝 {pkg.note}</div>}
       {pkg.failReason && <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 3 }}>↳ {pkg.failReason}</div>}
       {pkg.photoUrl && (
         <img src={pkg.photoUrl} alt="foto" style={{ width: '100%', borderRadius: 9, maxHeight: 130, objectFit: 'cover', marginTop: 8, cursor: 'pointer' }} onClick={() => window.open(pkg.photoUrl, '_blank')} />
       )}
+    </div>
+  );
+}
+
+function LoadCheckModal({ packages, onClose, onUpdated }) {
+  const active = packages.filter(p => p.status !== 'eliminado');
+  // state: null = unchecked, 'ok' = tengo, 'missing' = falta
+  const [state, setState] = React.useState({});
+  const [reasons, setReasons] = React.useState({});
+  const [saving, setSaving] = React.useState(false);
+
+  const setpState = (id, val) => setState(s => ({ ...s, [id]: val }));
+  const setReason = (id, val) => setReasons(r => ({ ...r, [id]: val }));
+
+  const okCount = active.filter(p => state[p._id] === 'ok').length;
+  const missingCount = active.filter(p => state[p._id] === 'missing').length;
+  const checkedCount = okCount + missingCount;
+  const allChecked = checkedCount === active.length;
+  const missing = active.filter(p => state[p._id] === 'missing');
+
+  const handleConfirm = async () => {
+    if (!allChecked) return;
+    setSaving(true);
+    try {
+      // Mark each missing package as 'eliminado' with reason
+      await Promise.all(missing.map(pkg =>
+        api.updatePackage(pkg._id, {
+          status: 'eliminado',
+          note: reasons[pkg._id] ? `No entregado por bodega: ${reasons[pkg._id]}` : 'No entregado por bodega'
+        })
+      ));
+      onUpdated?.();
+      onClose();
+    } catch (err) {
+      toast('❌ ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: '#0007', zIndex: 950, display: 'flex', alignItems: 'flex-end' }}>
+      <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxHeight: '93dvh', display: 'flex', flexDirection: 'column', boxShadow: '0 -4px 30px #00000022' }}>
+
+        {/* Header */}
+        <div style={{ padding: '16px 16px 10px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+          <div style={{ width: 38, height: 4, background: 'var(--border)', borderRadius: 2, margin: '0 auto 12px' }} />
+          <div style={{ fontSize: 16, fontWeight: 700 }}>📦 Verificar carga en bodega</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
+            Confirma qué paquetes te entregaron antes de salir
+          </div>
+          {/* Progress bar */}
+          <div style={{ marginTop: 10, height: 5, background: 'var(--border)', borderRadius: 3 }}>
+            <div style={{
+              height: 5, borderRadius: 3,
+              background: allChecked ? (missingCount > 0 ? '#f57c00' : 'var(--accent)') : 'linear-gradient(90deg, var(--accent), var(--a2))',
+              width: active.length ? `${(checkedCount / active.length) * 100}%` : '0%',
+              transition: 'width .3s'
+            }} />
+          </div>
+          <div style={{ fontSize: 11, fontWeight: 700, marginTop: 5, color: allChecked ? (missingCount > 0 ? '#f57c00' : 'var(--accent)') : 'var(--muted)' }}>
+            {allChecked
+              ? missingCount > 0 ? `⚠ ${missingCount} faltante${missingCount > 1 ? 's' : ''} · ${okCount} confirmados`
+              : '✓ Todos confirmados'
+              : `${checkedCount} de ${active.length} revisados`}
+          </div>
+        </div>
+
+        {/* Package list */}
+        <div style={{ overflowY: 'auto', flex: 1, padding: '8px 12px' }}>
+          {active.map((pkg, i) => {
+            const st = state[pkg._id];
+            return (
+              <div key={pkg._id} style={{
+                borderRadius: 13, marginBottom: 8, overflow: 'hidden',
+                border: `1px solid ${st === 'ok' ? '#00885530' : st === 'missing' ? '#cc224430' : 'var(--border)'}`,
+                background: st === 'ok' ? '#edfff5' : st === 'missing' ? '#fff0f3' : '#fff',
+                transition: 'all .15s'
+              }}>
+                {/* Row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px' }}>
+                  <div style={{
+                    width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: st ? 14 : 11, fontWeight: 700,
+                    background: st === 'ok' ? 'var(--accent)' : st === 'missing' ? 'var(--danger)' : 'var(--card2)',
+                    color: st ? '#fff' : 'var(--muted)',
+                    border: `2px solid ${st === 'ok' ? 'var(--accent)' : st === 'missing' ? 'var(--danger)' : 'var(--border)'}`
+                  }}>
+                    {st === 'ok' ? '✓' : st === 'missing' ? '✗' : i + 1}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: st === 'ok' ? 'var(--accent)' : st === 'missing' ? 'var(--danger)' : 'var(--text)' }}>
+                      {pkg.customerName} {pkg.customerLastName}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {pkg.address}{pkg.commune ? `, ${pkg.commune}` : ''}
+                    </div>
+                  </div>
+                  {/* Buttons */}
+                  <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+                    <button
+                      onClick={() => setpState(pkg._id, st === 'ok' ? null : 'ok')}
+                      style={{ padding: '6px 11px', borderRadius: 20, border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                        background: st === 'ok' ? 'var(--accent)' : '#00885514', color: st === 'ok' ? '#fff' : 'var(--accent)' }}
+                    >✓ Tengo</button>
+                    <button
+                      onClick={() => setpState(pkg._id, st === 'missing' ? null : 'missing')}
+                      style={{ padding: '6px 11px', borderRadius: 20, border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                        background: st === 'missing' ? 'var(--danger)' : '#cc224414', color: st === 'missing' ? '#fff' : 'var(--danger)' }}
+                    >✗ Falta</button>
+                  </div>
+                </div>
+                {/* Missing reason */}
+                {st === 'missing' && (
+                  <div style={{ padding: '0 12px 10px' }}>
+                    <input
+                      value={reasons[pkg._id] || ''}
+                      onChange={e => setReason(pkg._id, e.target.value)}
+                      placeholder="¿Qué pasó? (ej: no lo encontraron, error de código…)"
+                      style={{ width: '100%', background: '#fff0f3', border: '1px solid #cc224430', borderRadius: 9, padding: '8px 12px', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: 'var(--danger)' }}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '12px 16px calc(20px + env(safe-area-inset-bottom))', borderTop: '1px solid var(--border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button
+            onClick={handleConfirm}
+            disabled={!allChecked || saving}
+            style={{
+              width: '100%', padding: 14, borderRadius: 12, border: 'none', fontSize: 14, fontWeight: 700,
+              cursor: allChecked && !saving ? 'pointer' : 'not-allowed',
+              background: !allChecked ? 'var(--card2)' : missingCount > 0 ? '#f57c00' : 'var(--accent)',
+              color: allChecked ? '#fff' : 'var(--muted)',
+              transition: 'background .2s'
+            }}
+          >
+            {saving ? 'Guardando…'
+              : !allChecked ? `Faltan ${active.length - checkedCount} por revisar`
+              : missingCount > 0 ? `🚗 Salir sin ${missingCount} paquete${missingCount > 1 ? 's' : ''}`
+              : '🚗 ¡Todo a bordo! Iniciar ruta'}
+          </button>
+          <button onClick={onClose} style={{ width: '100%', padding: 11, borderRadius: 12, border: '1px solid var(--border)', background: 'transparent', fontSize: 13, color: 'var(--muted)', fontWeight: 600, cursor: 'pointer' }}>
+            Cancelar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

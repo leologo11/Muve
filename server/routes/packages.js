@@ -41,6 +41,44 @@ router.get('/track/:trackingId', async (req, res) => {
 // All routes below require auth
 router.use(requireAuth);
 
+// GET /api/packages/all — admin: all packages across all routes
+router.get('/all', requireRole('admin'), async (req, res) => {
+  try {
+    const { search, status, routeId, driverId, page = 1, limit = 60 } = req.query;
+
+    const filter = {};
+    if (status && status !== 'todos') filter.status = status;
+    if (routeId) filter.routeId = routeId;
+
+    let pkgs = await Package.find(filter)
+      .populate({
+        path: 'routeId',
+        select: 'routeCode name date driverId status',
+        populate: { path: 'driverId', select: 'name phone' }
+      })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (driverId) {
+      pkgs = pkgs.filter(p => String(p.routeId?.driverId?._id) === driverId);
+    }
+
+    if (search) {
+      const q = search.toLowerCase();
+      pkgs = pkgs.filter(p =>
+        [p.customerName, p.customerLastName, p.address, p.commune, p.trackingId, p.customerPhone]
+          .filter(Boolean).join(' ').toLowerCase().includes(q)
+      );
+    }
+
+    const total = pkgs.length;
+    const skip = (Number(page) - 1) * Number(limit);
+    res.json({ packages: pkgs.slice(skip, skip + Number(limit)), total, page: Number(page), limit: Number(limit) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/packages?routeId=xxx — list packages for a route
 router.get('/', async (req, res) => {
   try {
@@ -118,13 +156,17 @@ router.patch('/:id', async (req, res) => {
       if (note !== undefined) pkg.note = note;
       if (failReason !== undefined) pkg.failReason = failReason;
     } else if (req.user.role === 'admin') {
-      // Admin can update everything except photo (separate endpoint)
+      const oldRouteId = String(pkg.routeId);
       const { photoUrl, photoPublicId, photoUploadedAt, ...rest } = req.body;
       Object.assign(pkg, rest);
       if (rest.status === 'entregado' && !pkg.deliveredAt) {
         pkg.deliveredAt = new Date();
         pkg.deliveredBy = req.user._id;
       }
+      await pkg.save();
+      await syncRouteStats(pkg.routeId);
+      if (String(pkg.routeId) !== oldRouteId) await syncRouteStats(oldRouteId);
+      return res.json(pkg);
     } else {
       return res.status(403).json({ error: 'Sin permisos' });
     }

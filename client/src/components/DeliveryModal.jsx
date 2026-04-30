@@ -113,7 +113,19 @@ export default function DeliveryModal({ pkg, onClose, onSaved, readOnly, route }
           {pkg.commune && (
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 1 }}>{pkg.commune}</div>
           )}
-          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 5 }}>#{pkg.trackingId}</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
+            <div style={{ fontSize: 10, color: 'var(--muted)' }}>#{pkg.trackingId}</div>
+            {pkg.trackingId && (
+              <div style={{ textAlign: 'center' }}>
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=72x72&data=${encodeURIComponent(window.location.origin + '/track/' + pkg.trackingId)}`}
+                  alt="QR"
+                  style={{ width: 72, height: 72, borderRadius: 8, border: '1px solid var(--border)' }}
+                />
+                <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>QR tracking</div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* WhatsApp company button — only for drivers when company phone exists */}

@@ -32,8 +32,15 @@ const routeSchema = new mongoose.Schema({
     amount: { type: Number },
     invoiceDate: { type: Date },
     dueDate: { type: Date },
-    notes: { type: String, trim: true }
+    notes: { type: String, trim: true },
+    invoiceFileUrl: { type: String },
+    invoiceFilePublicId: { type: String },
+    paymentProofUrl: { type: String },
+    paymentProofPublicId: { type: String }
   },
+
+  // Driver payout — what we pay the driver for this route (separate from client invoice)
+  driverPayout: { type: Number },
 
   // Pickup / starting point (bodega)
   startPoint: {
@@ -41,6 +48,12 @@ const routeSchema = new mongoose.Schema({
     lat: { type: Number },
     lng: { type: Number }
   },
+
+  // Estimated road distance after optimization (km)
+  distanceKm: { type: Number },
+
+  // Public share token — gives company read-only access without login
+  shareToken: { type: String, index: true, sparse: true },
 
   // Cached stats
   stats: {

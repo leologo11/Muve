@@ -5,13 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Routiflow">
-  <meta name="theme-color" content="#008855">
+  <meta name="theme-color" content="#0a2219">
+  <meta name="description" content="Sistema de gestión de rutas y entregas">
   <title>Routiflow</title>
+
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+  <!-- Font preconnect for performance -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap">
+
+  <style>
+    /* Prevent flash of unstyled content */
+    body { background: #f4f4ef; margin: 0; }
+    #root:empty::after {
+      content: '';
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+  </style>
 </head>
 <body>
   <div id="root"></div>

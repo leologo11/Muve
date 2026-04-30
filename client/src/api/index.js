@@ -39,8 +39,16 @@ export const api = {
   deleteRoute: (id) => request('DELETE', `/routes/${id}`),
   optimizeRoute: (id) => request('POST', `/routes/${id}/optimize`),
   geocodeRoute: (id) => request('POST', `/routes/${id}/geocode`),
+  generateShareLink: (id) => request('POST', `/routes/${id}/share`),
+  revokeShareLink: (id) => request('DELETE', `/routes/${id}/share`),
+  getPublicRoute: (token) => request('GET', `/public/route/${token}`),
 
   // Packages
+  getAllPackages: (params = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => v != null && v !== '' && q.set(k, v));
+    return request('GET', `/packages/all?${q}`);
+  },
   getPackages: (routeId) => request('GET', `/packages?routeId=${routeId}`),
   createPackage: (data) => request('POST', '/packages', data),
   bulkCreatePackages: (routeId, packages) => request('POST', '/packages/bulk', { routeId, packages }),
@@ -72,6 +80,26 @@ export const api = {
   },
   importConfirm: (routeId, packages) => request('POST', `/import/${routeId}/confirm`, { packages }),
   getPriceSuggestion: (commune) => request('GET', `/import/price-suggestion?commune=${encodeURIComponent(commune)}`),
+
+  uploadInvoiceFile: (routeId, file, type = 'invoice') => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return request('POST', `/routes/${routeId}/invoice-file?type=${type}`, fd, true);
+  },
+
+  // Commune prices
+  getPrices: () => request('GET', '/prices'),
+  upsertPrice: (data) => request('POST', '/prices', data),
+  updatePrice: (id, data) => request('PATCH', `/prices/${id}`, data),
+  deletePrice: (id) => request('DELETE', `/prices/${id}`),
+
+  // Zones (geo zones — communes + custom)
+  getZones: () => request('GET', '/zones'),
+  createZone: (data) => request('POST', '/zones', data),
+  updateZone: (id, data) => request('PATCH', `/zones/${id}`, data),
+  deleteZone: (id) => request('DELETE', `/zones/${id}`),
+  seedCommunes: (features) => request('POST', '/zones/seed-communes', features ? { features } : undefined),
+  deleteAllCommunes: () => request('DELETE', '/zones/communes/all'),
 
   // Companies
   getCompanies: () => request('GET', '/companies'),

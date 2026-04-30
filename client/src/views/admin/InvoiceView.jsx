@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
 
@@ -77,7 +77,7 @@ export default function InvoiceView({ onBack }) {
 
   const markPaid = async (route) => {
     try {
-      await api.updateRoute(route._id, { invoice: { ...route.invoice, status: 'paid' } });
+      await api.updateRoute(route._id, { invoice: { status: 'paid' } });
       toast('✅ Marcada como pagada');
       refresh();
     } catch (err) { toast('❌ ' + err.message); }
@@ -189,7 +189,7 @@ export default function InvoiceView({ onBack }) {
           onSave={async (data) => {
             setSaving(true);
             try {
-              await api.updateRoute(editRoute._id, { invoice: data, clientCompany: data.clientCompany });
+              await api.updateRoute(editRoute._id, data);
               toast('✅ Factura actualizada');
               setEditRoute(null);
               refresh();
@@ -334,8 +334,15 @@ function InvoiceEditModal({ route, saving, onClose, onSave }) {
       name: route.clientCompany?.name || '',
       contactPerson: route.clientCompany?.contactPerson || '',
       contactPhone: route.clientCompany?.contactPhone || ''
-    }
+    },
+    driverPayout: route.driverPayout ?? ''
   });
+  const [uploadingInv, setUploadingInv] = useState(false);
+  const [uploadingProof, setUploadingProof] = useState(false);
+  const [invFile, setInvFile] = useState(route.invoice?.invoiceFileUrl || null);
+  const [proofFile, setProofFile] = useState(route.invoice?.paymentProofUrl || null);
+  const invFileRef = useRef();
+  const proofFileRef = useRef();
 
   const setInv = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setCo = (k, v) => setForm(f => ({ ...f, clientCompany: { ...f.clientCompany, [k]: v } }));
@@ -344,34 +351,51 @@ function InvoiceEditModal({ route, saving, onClose, onSave }) {
     ? new Date(new Date(form.invoiceDate).getTime() + 30 * 86400000).toLocaleDateString('es-CL')
     : null;
 
+  const margin = form.amount !== '' && form.driverPayout !== ''
+    ? Number(form.amount) - Number(form.driverPayout) : null;
+
+  const handleUpload = async (file, type) => {
+    const setter = type === 'proof' ? setUploadingProof : setUploadingInv;
+    setter(true);
+    try {
+      const result = await api.uploadInvoiceFile(route._id, file, type);
+      if (type === 'proof') setProofFile(result.paymentProofUrl);
+      else setInvFile(result.invoiceFileUrl);
+      toast('✅ Archivo subido');
+    } catch (err) { toast('❌ ' + err.message); }
+    finally { setter(false); }
+  };
+
   const handleSave = () => {
-    const data = {
-      status: form.status,
-      amount: form.amount !== '' ? Number(form.amount) : undefined,
-      invoiceDate: form.invoiceDate || undefined,
-      notes: form.notes || undefined,
-      clientCompany: form.clientCompany
-    };
-    onSave(data);
+    onSave({
+      invoice: {
+        status: form.status,
+        amount: form.amount !== '' ? Number(form.amount) : undefined,
+        invoiceDate: form.invoiceDate || undefined,
+        notes: form.notes || undefined
+      },
+      clientCompany: form.clientCompany,
+      driverPayout: form.driverPayout !== '' ? Number(form.driverPayout) : undefined
+    });
   };
 
   return (
     <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       style={{ position: 'fixed', inset: 0, background: '#0006', zIndex: 900, display: 'flex', alignItems: 'flex-end' }}>
-      <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxHeight: '92dvh', overflowY: 'auto', padding: '18px 16px calc(30px + env(safe-area-inset-bottom))', boxShadow: '0 -4px 30px #00000015' }}>
+      <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxHeight: '93dvh', overflowY: 'auto', padding: '18px 16px calc(30px + env(safe-area-inset-bottom))', boxShadow: '0 -4px 30px #00000015' }}>
         <div style={{ width: 38, height: 4, background: 'var(--border)', borderRadius: 2, margin: '0 auto 14px' }} />
         <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>💳 Factura · {route.name || route.routeCode}</h2>
         <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>{new Date(route.date).toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
 
-        {/* Company info */}
-        <SectionTitle>🏢 Empresa cliente</SectionTitle>
+        {/* Company */}
+        <SectionTitle color="#0077aa">🏢 Empresa cliente</SectionTitle>
         <FL label="Nombre empresa" value={form.clientCompany.name} onChange={v => setCo('name', v)} placeholder="Importadora ABC" />
         <FL label="Responsable" value={form.clientCompany.contactPerson} onChange={v => setCo('contactPerson', v)} placeholder="Juan Pérez" />
         <FL label="Teléfono / WhatsApp" value={form.clientCompany.contactPhone} onChange={v => setCo('contactPhone', v)} placeholder="+56 9 xxxx xxxx" />
 
         {/* Invoice */}
-        <SectionTitle>💳 Datos de factura</SectionTitle>
-        <FL label="Monto (CLP)" value={form.amount} onChange={v => setInv('amount', v)} placeholder="150000" type="number" />
+        <SectionTitle color="#f57c00">💳 Factura al cliente</SectionTitle>
+        <FL label="Monto cobrado al cliente (CLP)" value={form.amount} onChange={v => setInv('amount', v)} placeholder="150000" type="number" />
         <FL label="Fecha de factura" value={form.invoiceDate} onChange={v => setInv('invoiceDate', v)} type="date" />
 
         <Label>Estado de pago</Label>
@@ -381,17 +405,57 @@ function InvoiceEditModal({ route, saving, onClose, onSave }) {
           <option value="paid">✅ Pagada</option>
           <option value="overdue">⚠️ Vencida</option>
         </select>
+        {net30Due && <div style={{ fontSize: 12, color: '#0077aa', padding: '6px 12px', background: '#e3f2fd', borderRadius: 8, marginTop: 6, marginBottom: 6 }}>📅 Vence el {net30Due}</div>}
+        <FL label="Notas" value={form.notes} onChange={v => setInv('notes', v)} placeholder="Transferencia banco X, ref. 12345…" />
 
-        {net30Due && (
-          <div style={{ fontSize: 12, color: '#0077aa', padding: '6px 12px', background: '#e3f2fd', borderRadius: 8, marginBottom: 10 }}>
-            📅 Vence el {net30Due} (30 días desde la fecha de factura)
+        {/* Driver payout + margin */}
+        <SectionTitle color="#008855">🚗 Pago al repartidor</SectionTitle>
+        <FL label="Monto a pagar al driver (CLP)" value={form.driverPayout} onChange={v => setForm(f => ({ ...f, driverPayout: v }))} placeholder="80000" type="number" />
+        {margin !== null && (
+          <div style={{ padding: '10px 14px', borderRadius: 10, background: margin >= 0 ? '#e8f5e9' : '#fce4e8', border: `1px solid ${margin >= 0 ? '#00885530' : '#cc224430'}`, marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>GANANCIA NETA</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: margin >= 0 ? '#008855' : '#cc2244', marginTop: 2 }}>
+              ${margin.toLocaleString('es-CL')}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+              ${Number(form.amount).toLocaleString('es-CL')} cliente − ${Number(form.driverPayout).toLocaleString('es-CL')} driver
+            </div>
           </div>
         )}
 
-        <FL label="Notas" value={form.notes} onChange={v => setInv('notes', v)} placeholder="Transferencia banco X, ref. 12345…" />
+        {/* Invoice file upload */}
+        <SectionTitle color="#555">📎 Archivos</SectionTitle>
+        <div style={{ marginBottom: 10 }}>
+          <Label>Factura / documento</Label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={() => invFileRef.current.click()} disabled={uploadingInv} style={{ ...btn('#0077aa'), padding: '8px 14px', fontSize: 12, flexShrink: 0 }}>
+              {uploadingInv ? '⏳…' : '📎 Subir factura'}
+            </button>
+            {invFile && (
+              <a href={invFile} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#0077aa', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                Ver archivo ↗
+              </a>
+            )}
+          </div>
+          <input ref={invFileRef} type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={e => e.target.files?.[0] && handleUpload(e.target.files[0], 'invoice')} />
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <Label>Comprobante de pago</Label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={() => proofFileRef.current.click()} disabled={uploadingProof} style={{ ...btn('#008855'), padding: '8px 14px', fontSize: 12, flexShrink: 0 }}>
+              {uploadingProof ? '⏳…' : '✅ Subir comprobante'}
+            </button>
+            {proofFile && (
+              <a href={proofFile} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#008855', fontWeight: 600 }}>
+                Ver comprobante ↗
+              </a>
+            )}
+          </div>
+          <input ref={proofFileRef} type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={e => e.target.files?.[0] && handleUpload(e.target.files[0], 'proof')} />
+        </div>
 
-        <button onClick={handleSave} disabled={saving} style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', marginTop: 14, background: saving ? 'var(--border)' : 'var(--accent)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
-          {saving ? 'Guardando…' : '✓ Guardar factura'}
+        <button onClick={handleSave} disabled={saving} style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: saving ? 'var(--border)' : 'var(--accent)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
+          {saving ? 'Guardando…' : '✓ Guardar'}
         </button>
         <button onClick={onClose} style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--card2)', color: 'var(--muted)', fontSize: 14, fontWeight: 700, cursor: 'pointer', marginTop: 7 }}>Cancelar</button>
       </div>
@@ -399,8 +463,8 @@ function InvoiceEditModal({ route, saving, onClose, onSave }) {
   );
 }
 
-function SectionTitle({ children }) {
-  return <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: '#0077aa', textTransform: 'uppercase', margin: '14px 0 6px' }}>{children}</div>;
+function SectionTitle({ children, color = 'var(--muted)' }) {
+  return <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color, textTransform: 'uppercase', margin: '14px 0 6px' }}>{children}</div>;
 }
 function Label({ children }) {
   return <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.2, color: 'var(--muted)', textTransform: 'uppercase', margin: '10px 0 4px' }}>{children}</div>;

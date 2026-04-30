@@ -1,0 +1,9 @@
+{
+  "name": "routiflow",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "npm install --prefix client && npm run build --prefix client",
+    "start": "node --dns-result-order=ipv4first server/index.js",
+    "install:server": "npm install --prefix server"
+  }
+}

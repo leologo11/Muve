@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
+import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
 
 export default function AddRouteModal({ onClose, onCreated }) {
   const [form, setForm] = useState({
@@ -129,22 +130,27 @@ export default function AddRouteModal({ onClose, onCreated }) {
 
         {/* Starting point */}
         <div style={{ margin: '10px 0 5px', padding: '12px 14px', background: '#00885508', border: '1px solid #00885520', borderRadius: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', marginBottom: 10 }}>📍 Punto de inicio / Bodega</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', marginBottom: 6 }}>📍 Punto de inicio / Bodega</div>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
             Desde aquí parte el repartidor. La IA usa este punto para optimizar el orden.
           </div>
           <Label>Dirección bodega / pickup</Label>
-          <input value={form.startPoint.address} onChange={e => setStart('address', e.target.value)} placeholder="Ej: Av. Vitacura 2939, Vitacura" style={inp} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
-            <div>
-              <Label>Latitud (opcional)</Label>
-              <input type="number" step="any" value={form.startPoint.lat} onChange={e => setStart('lat', e.target.value)} placeholder="-33.4196" style={inp} />
+          <AddressAutocomplete
+            value={form.startPoint.address}
+            onChange={v => setStart('address', v)}
+            onSelect={({ address, lat, lng }) => setForm(f => ({ ...f, startPoint: { address, lat, lng } }))}
+            placeholder="Ej: Av. Vitacura 2939, Vitacura…"
+            dropdownFixed
+          />
+          {form.startPoint.lat && form.startPoint.lng ? (
+            <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 6, fontWeight: 600 }}>
+              ✓ Coordenadas obtenidas — aparecerá como punto #1 en el mapa
             </div>
-            <div>
-              <Label>Longitud (opcional)</Label>
-              <input type="number" step="any" value={form.startPoint.lng} onChange={e => setStart('lng', e.target.value)} placeholder="-70.6062" style={inp} />
+          ) : form.startPoint.address ? (
+            <div style={{ fontSize: 11, color: '#f57c00', marginTop: 6 }}>
+              ⚠ Selecciona una sugerencia para obtener coordenadas exactas
             </div>
-          </div>
+          ) : null}
         </div>
 
         <button

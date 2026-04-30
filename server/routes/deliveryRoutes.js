@@ -1,8 +1,10 @@
 import { Router } from 'express';
+import { nanoid } from 'nanoid';
 import Route from '../models/Route.js';
 import Package from '../models/Package.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { geocodeAddress, sleep } from '../utils/geocode.js';
+import { upload, uploadToCloudinary, deletePhoto } from '../utils/cloudinary.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -29,7 +31,7 @@ router.get('/', async (req, res) => {
     if (req.user.role === 'company') filter.companyId = req.user.companyId;
 
     const routes = await Route.find(filter)
-      .populate('driverId', 'name email')
+      .populate('driverId', 'name email phone')
       .populate('companyId', 'name')
       .sort({ date: -1 })
       .lean();
@@ -66,7 +68,12 @@ router.get('/:id', async (req, res) => {
 // POST /api/routes — admin creates route
 router.post('/', requireRole('admin'), async (req, res) => {
   try {
-    const route = await Route.create(req.body);
+    const body = { ...req.body };
+    if (body.startPoint?.address && (!body.startPoint.lat || !body.startPoint.lng)) {
+      const coords = await geocodeAddress(body.startPoint.address);
+      if (coords) { body.startPoint.lat = coords.lat; body.startPoint.lng = coords.lng; }
+    }
+    const route = await Route.create(body);
     res.status(201).json(route);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -78,11 +85,49 @@ router.patch('/:id', requireRole('admin'), async (req, res) => {
   try {
     const route = await Route.findById(req.params.id);
     if (!route) return res.status(404).json({ error: 'Ruta no encontrada' });
-    Object.assign(route, req.body);
+    const { invoice, clientCompany, startPoint, stats, ...rest } = req.body;
+    Object.assign(route, rest);
+    // Nested objects require explicit set + markModified so Mongoose detects the change
+    if (invoice !== undefined) { route.set('invoice', { ...route.invoice?.toObject?.() || {}, ...invoice }); route.markModified('invoice'); }
+    if (clientCompany !== undefined) { route.set('clientCompany', { ...route.clientCompany?.toObject?.() || {}, ...clientCompany }); route.markModified('clientCompany'); }
+    if (startPoint !== undefined) {
+      const sp = { ...route.startPoint?.toObject?.() || {}, ...startPoint };
+      if (sp.address && (!sp.lat || !sp.lng)) {
+        const coords = await geocodeAddress(sp.address);
+        if (coords) { sp.lat = coords.lat; sp.lng = coords.lng; }
+      }
+      route.set('startPoint', sp);
+      route.markModified('startPoint');
+    }
     await route.save();
     res.json(route);
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/routes/:id/invoice-file?type=invoice|proof — upload invoice or payment proof
+router.post('/:id/invoice-file', requireRole('admin'), upload.single('file'), async (req, res) => {
+  try {
+    const route = await Route.findById(req.params.id);
+    if (!route) return res.status(404).json({ error: 'Ruta no encontrada' });
+    const isProof = req.query.type === 'proof';
+    const pidField = isProof ? 'paymentProofPublicId' : 'invoiceFilePublicId';
+    const urlField = isProof ? 'paymentProofUrl' : 'invoiceFileUrl';
+    const existingPid = route.invoice?.[pidField];
+    if (existingPid) await deletePhoto(existingPid);
+    const result = await uploadToCloudinary(req.file.buffer, {
+      folder: 'routiflow/invoices',
+      resource_type: 'auto',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'pdf', 'webp', 'heic']
+    });
+    route.set(`invoice.${urlField}`, result.secure_url);
+    route.set(`invoice.${pidField}`, result.public_id);
+    route.markModified('invoice');
+    await route.save();
+    res.json({ invoiceFileUrl: route.invoice.invoiceFileUrl, paymentProofUrl: route.invoice.paymentProofUrl });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -96,61 +141,96 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
   }
 });
 
-// POST /api/routes/:id/optimize — OSRM real-road TSP optimization
+// Haversine straight-line distance (km) between two {lat,lng} points
+function haversine(a, b) {
+  const R = 6371;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+}
+
+// Nearest-neighbor greedy TSP starting from `start`, then 2-opt improvement
+function tspOptimize(start, points) {
+  if (points.length <= 1) return [...points];
+
+  // Step 1: Nearest-neighbor — greedily pick closest unvisited at each step
+  const unvisited = [...points];
+  const route = [];
+  let cur = start;
+  while (unvisited.length) {
+    let bestIdx = 0, bestDist = haversine(cur, unvisited[0]);
+    for (let i = 1; i < unvisited.length; i++) {
+      const d = haversine(cur, unvisited[i]);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    cur = unvisited[bestIdx];
+    route.push(unvisited.splice(bestIdx, 1)[0]);
+  }
+
+  // Step 2: 2-opt — swap pairs of edges if it reduces total distance
+  let improved = true;
+  while (improved) {
+    improved = false;
+    for (let i = 0; i < route.length - 1; i++) {
+      for (let j = i + 1; j < route.length; j++) {
+        const prev = i === 0 ? start : route[i - 1];
+        const next = j === route.length - 1 ? null : route[j + 1];
+        const dOld = haversine(prev, route[i]) + (next ? haversine(route[j], next) : 0);
+        const dNew = haversine(prev, route[j]) + (next ? haversine(route[i], next) : 0);
+        if (dNew < dOld - 1e-6) {
+          route.splice(i, j - i + 1, ...route.slice(i, j + 1).reverse());
+          improved = true;
+        }
+      }
+    }
+  }
+  return route;
+}
+
+// POST /api/routes/:id/optimize — nearest-neighbor + 2-opt TSP optimization
 router.post('/:id/optimize', requireRole('admin'), async (req, res) => {
   try {
     const route = await Route.findById(req.params.id).lean();
-    const packages = await Package.find({
-      routeId: req.params.id,
-      status: { $ne: 'eliminado' }
-    }).lean();
+    const packages = await Package.find({ routeId: req.params.id, status: { $ne: 'eliminado' } }).lean();
 
-    if (packages.length < 2) {
-      return res.json({ message: 'La ruta ya está optimizada', packages });
-    }
+    if (packages.length < 2) return res.json({ message: 'La ruta ya está optimizada', packages });
 
-    const pkgsWithCoords = packages.filter(p => p.lat && p.lng);
-    if (pkgsWithCoords.length < 2) {
+    const withCoords = packages.filter(p => p.lat && p.lng);
+    if (withCoords.length < 2) {
       return res.status(400).json({ error: 'Se necesitan al menos 2 paquetes con coordenadas. Usa "Geocodificar ruta" primero.' });
     }
 
-    const startPoint = route.startPoint?.lat && route.startPoint?.lng ? route.startPoint : null;
+    // Use start point if available, otherwise centroid of all packages
+    const start = (route.startPoint?.lat && route.startPoint?.lng)
+      ? route.startPoint
+      : { lat: withCoords.reduce((s, p) => s + p.lat, 0) / withCoords.length, lng: withCoords.reduce((s, p) => s + p.lng, 0) / withCoords.length };
 
-    // Build coordinate list: optional start point + packages with coords (max 100 for OSRM)
-    const batch = pkgsWithCoords.slice(0, startPoint ? 99 : 100);
-    const coordParts = [
-      ...(startPoint ? [`${startPoint.lng},${startPoint.lat}`] : []),
-      ...batch.map(p => `${p.lng},${p.lat}`)
-    ];
+    // Run TSP on packages with coordinates
+    const sorted = tspOptimize(start, withCoords);
 
-    const osrmUrl = `https://router.project-osrm.org/trip/v1/driving/${coordParts.join(';')}?source=first&roundtrip=false&annotations=false`;
-
-    const osrmRes = await fetch(osrmUrl, {
-      headers: { 'User-Agent': 'Routiflow/1.0' },
-      signal: AbortSignal.timeout(15000)
-    });
-
-    if (!osrmRes.ok) throw new Error(`OSRM error HTTP ${osrmRes.status}`);
-    const osrmData = await osrmRes.json();
-    if (osrmData.code !== 'Ok') throw new Error('OSRM: ' + (osrmData.message || osrmData.code));
-
-    // OSRM waypoints are in INPUT order; each has .waypoint_index = position in optimal trip
-    const startOffset = startPoint ? 1 : 0;
-    const sorted = [...osrmData.waypoints]
-      .map((wp, inputIdx) => ({ inputIdx, waypointIdx: wp.waypoint_index }))
-      .sort((a, b) => a.waypointIdx - b.waypointIdx)
-      .filter(x => x.inputIdx >= startOffset)
-      .map(x => batch[x.inputIdx - startOffset]);
-
-    // Update order for optimized packages
+    // Save new order
     await Promise.all(sorted.map((pkg, i) => Package.findByIdAndUpdate(pkg._id, { order: i })));
 
-    // Packages without coords (or beyond batch limit) go at the end
-    const remainder = packages.filter(p => !p.lat || !p.lng || pkgsWithCoords.indexOf(p) >= 100);
-    await Promise.all(remainder.map((p, i) => Package.findByIdAndUpdate(p._id, { order: sorted.length + i })));
+    // Packages without coords go at the end
+    const noCoords = packages.filter(p => !p.lat || !p.lng);
+    await Promise.all(noCoords.map((p, i) => Package.findByIdAndUpdate(p._id, { order: sorted.length + i })));
+
+    // Get actual road distance from OSRM (best-effort)
+    let distanceKm = null;
+    try {
+      const pts = [start, ...sorted].map(p => `${p.lng},${p.lat}`).join(';');
+      const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${pts}?overview=false`, {
+        headers: { 'User-Agent': 'Routiflow/1.0' }, signal: AbortSignal.timeout(8000)
+      });
+      const d = await r.json();
+      if (d.routes?.[0]?.distance) distanceKm = parseFloat((d.routes[0].distance / 1000).toFixed(1));
+    } catch {}
+
+    // Persist distanceKm on the route so driver can see it
+    await Route.findByIdAndUpdate(req.params.id, { distanceKm: distanceKm || undefined });
 
     const updatedPackages = await Package.find({ routeId: req.params.id }).sort({ order: 1 }).lean();
-    const distanceKm = osrmData.trips?.[0]?.distance ? (osrmData.trips[0].distance / 1000).toFixed(1) : null;
     res.json({ optimized: true, packages: updatedPackages, distanceKm });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -186,6 +266,31 @@ router.post('/:id/geocode', requireRole('admin'), async (req, res) => {
       if (pkgs.length > 1) await sleep(1200);
     }
     res.json({ geocoded, skipped: pkgs.length - geocoded, total: pkgs.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/routes/:id/share — generate (or return existing) public share token
+router.post('/:id/share', requireRole('admin'), async (req, res) => {
+  try {
+    const route = await Route.findById(req.params.id);
+    if (!route) return res.status(404).json({ error: 'Ruta no encontrada' });
+    if (!route.shareToken) {
+      route.shareToken = nanoid(20);
+      await route.save();
+    }
+    res.json({ shareToken: route.shareToken });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/routes/:id/share — revoke public share token
+router.delete('/:id/share', requireRole('admin'), async (req, res) => {
+  try {
+    await Route.findByIdAndUpdate(req.params.id, { $unset: { shareToken: 1 } });
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -187,7 +187,7 @@ export default function CompanyView() {
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
         {/* Map */}
         <div style={{ display: tab === 'm' ? 'block' : 'none', height: '100%' }}>
-          <RouteMap packages={packages} onPkgClick={setViewPkg} readOnly visible={tab === 'm'} />
+          <RouteMap packages={packages} onPkgClick={setViewPkg} startPoint={selectedRoute?.startPoint} readOnly visible={tab === 'm'} />
         </div>
 
         {/* Packages list */}
