@@ -5,7 +5,7 @@ nixPkgs = ["nodejs_20"]
 cmds = ["cd server && npm install"]
 
 [phases.build]
-cmds = ["cd client && npm install && npm run build"]
+cmds = ["cd client && npm install --include=dev && npm run build"]
 
 [start]
 cmd = "NODE_ENV=production node --dns-result-order=ipv4first server/index.js"
