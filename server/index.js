@@ -19,16 +19,12 @@ import { runCleanup } from './utils/cleanup.js';
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// CORS — allow frontend origins
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000',
-  process.env.FRONTEND_URL
-].filter(Boolean);
-
+// CORS — en producción el frontend y backend son el mismo servidor, se permite todo
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin || allowedOrigins.includes(origin)) cb(null, true);
+    if (process.env.NODE_ENV === 'production') return cb(null, true);
+    const allowed = ['http://localhost:5173', 'http://localhost:3000', process.env.FRONTEND_URL].filter(Boolean);
+    if (!origin || allowed.includes(origin)) cb(null, true);
     else cb(new Error('Not allowed by CORS'));
   },
   credentials: true
