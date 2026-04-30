@@ -77,8 +77,19 @@ export default function DriverView() {
         stats={selectedRoute ? stats : null}
       />
 
+      {/* Ruta finalizada banner */}
+      {selectedRoute?.status === 'completed' && (
+        <div style={{ background: 'linear-gradient(90deg, #0077aa14, #0077aa22)', borderBottom: '1px solid #0077aa30', padding: '10px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 18 }}>🔒</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#0077aa' }}>Ruta finalizada</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>El administrador cerró esta ruta. No puedes hacer más cambios.</div>
+          </div>
+        </div>
+      )}
+
       {/* Route summary banner */}
-      {selectedRoute && (
+      {selectedRoute && selectedRoute.status !== 'completed' && (
         <div style={{ background: 'linear-gradient(90deg, #00885508, #00885514)', borderBottom: '1px solid #00885522', padding: '7px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ fontSize: 15 }}>📦</span>
@@ -200,6 +211,8 @@ export default function DriverView() {
                   onEdit={setEditPkg}
                   onStatusChange={handleStatusChange}
                   hidePrice
+                  lockDelivered
+                  readOnly={selectedRoute?.status === 'completed'}
                 />
               ))
             )}

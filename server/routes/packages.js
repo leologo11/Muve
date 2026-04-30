@@ -144,8 +144,14 @@ router.patch('/:id', async (req, res) => {
       if (String(route?.driverId) !== String(req.user._id)) {
         return res.status(403).json({ error: 'Sin acceso a este paquete' });
       }
+      if (route.status === 'completed') {
+        return res.status(403).json({ error: 'La ruta ya fue finalizada por el administrador' });
+      }
       const { status, note, failReason } = req.body;
       if (status) {
+        if (pkg.status === 'entregado' && status !== 'entregado') {
+          return res.status(403).json({ error: 'No puedes cambiar el estado de un paquete ya entregado' });
+        }
         pkg.status = status;
         if (status === 'entregado') {
           pkg.deliveredAt = new Date();

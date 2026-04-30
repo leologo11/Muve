@@ -7,7 +7,7 @@ const STATUS = {
   eliminado:      { color: '#c04a1a', label: 'ELIMINADO',    icon: '✕'  },
 };
 
-export default function PackageCard({ pkg, index, onEdit, onStatusChange, onDelete, onRestore, readOnly, hidePrice }) {
+export default function PackageCard({ pkg, index, onEdit, onStatusChange, onDelete, onRestore, readOnly, hidePrice, lockDelivered }) {
   const [hovered, setHovered] = useState(false);
   const st  = pkg.status;
   const s   = STATUS[st] || STATUS.pendiente;
@@ -146,6 +146,9 @@ export default function PackageCard({ pkg, index, onEdit, onStatusChange, onDele
         }}>
           {isElim ? (
             <ActionBtn color="#008855" onClick={() => onRestore?.(pkg)}>↩ Restaurar</ActionBtn>
+          ) : lockDelivered && st === 'entregado' ? (
+            /* Entregado bloqueado — solo foto */
+            <ActionBtn color="#d4650a" onClick={() => onEdit?.(pkg)}>📷 Foto</ActionBtn>
           ) : (
             <>
               <ActionBtn color="#008855" solid onClick={() => onStatusChange?.(pkg, 'entregado')}>✅ Entregado</ActionBtn>
@@ -154,7 +157,7 @@ export default function PackageCard({ pkg, index, onEdit, onStatusChange, onDele
               {st !== 'pendiente' && (
                 <ActionBtn color="#777" onClick={() => onStatusChange?.(pkg, 'pendiente')}>↩ Deshacer</ActionBtn>
               )}
-              <ActionBtn color="#c04a1a" onClick={() => onDelete?.(pkg)}>🗑️</ActionBtn>
+              {onDelete && <ActionBtn color="#c04a1a" onClick={() => onDelete?.(pkg)}>🗑️</ActionBtn>}
             </>
           )}
         </div>
