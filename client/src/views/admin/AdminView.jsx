@@ -731,6 +731,7 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
   const [saving, setSaving] = useState(false);
   const [tariffs, setTariffs] = React.useState([]);
   const [drivers, setDrivers] = React.useState([]);
+  const [clientCompanies, setClientCompanies] = React.useState([]);
   const [geocodingStart, setGeocodingStart] = useState(false);
   const [shareToken, setShareToken] = useState(null);
   const [shareLoading, setShareLoading] = useState(false);
@@ -778,6 +779,7 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
   useEffect(() => {
     api.getTariffs().then(setTariffs).catch(() => {});
     api.getUsers().then(u => setDrivers(u.filter(x => x.role === 'driver' && x.active))).catch(() => {});
+    api.getCompanies().then(list => setClientCompanies(list.filter(c => c.active !== false))).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -913,13 +915,37 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
               {tariffs.map(t => <option key={t._id} value={t._id}>{t.name}{t.description ? ` — ${t.description}` : ''}</option>)}
             </select>
 
-            <div style={{ margin: '14px 0 4px', fontSize: 11, fontWeight: 700, color: '#005078', letterSpacing: 1 }}>🏢 EMPRESA CLIENTE</div>
-            <Label>Nombre empresa</Label>
-            <input value={form.clientCompany.name} onChange={e => setCompany('name', e.target.value)} placeholder="Importadora ABC" style={inp} />
-            <Label>Responsable / Contacto</Label>
-            <input value={form.clientCompany.contactPerson} onChange={e => setCompany('contactPerson', e.target.value)} placeholder="Nombre contacto" style={inp} />
-            <Label>Teléfono WhatsApp</Label>
-            <input value={form.clientCompany.contactPhone} onChange={e => setCompany('contactPhone', e.target.value)} placeholder="+56 9 xxxx xxxx" style={inp} />
+            <div style={{ margin: '14px 0 6px', padding: '11px 13px', background: '#00507808', border: '1px solid #00507820', borderRadius: 11 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#005078', marginBottom: 10 }}>🏢 EMPRESA CLIENTE</div>
+
+              {/* Selector de empresas registradas — auto-llena los campos */}
+              {clientCompanies.length > 0 && (
+                <>
+                  <Label>Seleccionar empresa registrada</Label>
+                  <select
+                    value={clientCompanies.find(c => c.name === form.clientCompany.name)?._id || ''}
+                    onChange={e => {
+                      const c = clientCompanies.find(x => x._id === e.target.value);
+                      if (c) setForm(f => ({ ...f, clientCompany: { name: c.name, contactPerson: c.contactPerson || '', contactPhone: c.contactPhone || '' } }));
+                      else setForm(f => ({ ...f, clientCompany: { name: '', contactPerson: '', contactPhone: '' } }));
+                    }}
+                    style={{ ...inp, marginBottom: 10 }}
+                  >
+                    <option value="">— Elegir empresa registrada —</option>
+                    {clientCompanies.map(c => (
+                      <option key={c._id} value={c._id}>{c.name}{c.contactPerson ? ` · ${c.contactPerson}` : ''}</option>
+                    ))}
+                  </select>
+                </>
+              )}
+
+              <Label>Nombre empresa</Label>
+              <input value={form.clientCompany.name} onChange={e => setCompany('name', e.target.value)} placeholder="Importadora ABC" style={inp} />
+              <Label>Responsable / Contacto</Label>
+              <input value={form.clientCompany.contactPerson} onChange={e => setCompany('contactPerson', e.target.value)} placeholder="Nombre y apellido" style={inp} />
+              <Label>Teléfono WhatsApp</Label>
+              <input value={form.clientCompany.contactPhone} onChange={e => setCompany('contactPhone', e.target.value)} placeholder="+56 9 xxxx xxxx" style={inp} />
+            </div>
 
             <div style={{ margin: '14px 0 4px', fontSize: 11, fontWeight: 700, color: '#f57c00', letterSpacing: 1 }}>💳 FACTURA / PAGO</div>
             <Label>Estado de pago</Label>
