@@ -764,24 +764,57 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onD
   const inv = route?.invoice;
   const dueDate = inv?.dueDate ? new Date(inv.dueDate) : null;
   const daysLeft = dueDate ? Math.ceil((dueDate - Date.now()) / 86400000) : null;
-  const noCoords = active.filter(p => !p.lat || !p.lng).length;
+  const noCoordsPackages = active.filter(p => !p.lat || !p.lng);
+  const noCoords = noCoordsPackages.length;
 
   if (!form) return null;
 
   return (
     <div style={{ padding: '14px 10px calc(80px + env(safe-area-inset-bottom))', overflowY: 'auto', height: '100%' }}>
 
-      {/* Geocode alert */}
+      {/* Geocode alert — shows exactly which packages need fixing */}
       {noCoords > 0 && (
-        <div style={{ background: '#fff8e1', border: '1px solid #f57c0033', borderRadius: 12, padding: '11px 14px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 12, color: '#f57c00', fontWeight: 600 }}>⚠️ {noCoords} paquete{noCoords > 1 ? 's' : ''} sin coordenadas (no aparece{noCoords > 1 ? 'n' : ''} en el mapa)</span>
-          <button
-            onClick={onGeocode}
-            disabled={geocoding}
-            style={{ padding: '6px 12px', borderRadius: 20, border: 'none', background: '#f57c00', color: '#fff', fontSize: 11, fontWeight: 700, cursor: geocoding ? 'not-allowed' : 'pointer', flexShrink: 0, marginLeft: 8 }}
-          >
-            {geocoding ? '⏳…' : '🗺️ Geocodificar'}
-          </button>
+        <div style={{ background: '#fff8e1', border: '1px solid #f57c0040', borderRadius: 13, padding: '12px 14px', marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <span style={{ fontSize: 13, color: '#d4650a', fontWeight: 700 }}>
+              📍 {noCoords} paquete{noCoords > 1 ? 's' : ''} sin coordenadas
+            </span>
+            <button
+              onClick={onGeocode}
+              disabled={geocoding}
+              style={{ padding: '7px 14px', borderRadius: 20, border: 'none', background: geocoding ? 'var(--border)' : '#f57c00', color: '#fff', fontSize: 12, fontWeight: 700, cursor: geocoding ? 'not-allowed' : 'pointer', flexShrink: 0 }}
+            >
+              {geocoding ? '⏳ Geocodificando…' : '🗺️ Geocodificar ruta'}
+            </button>
+          </div>
+          <div style={{ fontSize: 11, color: '#b34a00', marginBottom: 8, lineHeight: 1.4 }}>
+            Estos paquetes no aparecen en el mapa. Corrígelos en la pestaña TABLA (clic en la dirección) o llama al cliente:
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {noCoordsPackages.map((p, i) => (
+              <div key={p._id} style={{ background: '#fff', border: '1px solid #f57c0030', borderRadius: 9, padding: '8px 11px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#f57c00', minWidth: 18 }}>{i + 1}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+                    {p.customerName} {p.customerLastName}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#b34a00', marginTop: 2, fontWeight: 600 }}>
+                    {p.address || '—'}{p.commune ? `, ${p.commune}` : ''}{p.aptFloor ? ` · ${p.aptFloor}` : ''}
+                    {p.address && !/\d/.test(p.address.trim()) && (
+                      <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: '#cc2244', background: '#cc224412', border: '1px solid #cc224428', borderRadius: 20, padding: '1px 5px' }}>
+                        ⚠ Falta número
+                      </span>
+                    )}
+                  </div>
+                  {p.customerPhone && (
+                    <a href={`tel:${p.customerPhone}`} style={{ fontSize: 11, color: '#008855', fontWeight: 600, textDecoration: 'none', marginTop: 2, display: 'block' }}>
+                      📞 {p.customerPhone}
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
