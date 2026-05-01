@@ -18,7 +18,17 @@ const userSchema = new mongoose.Schema({
   licensePlate: { type: String, trim: true },
   // Company-specific
   companyName: { type: String, trim: true },
-  rut: { type: String, trim: true }
+  rut: { type: String, trim: true },
+
+  // Real-time GPS location (drivers only — updated by watchPosition)
+  location: {
+    lat:       { type: Number },
+    lng:       { type: Number },
+    heading:   { type: Number },   // degrees from true north (0–360)
+    speed:     { type: Number },   // m/s
+    accuracy:  { type: Number },   // meters
+    updatedAt: { type: Date }
+  }
 }, { timestamps: true });
 
 userSchema.pre('save', async function (next) {

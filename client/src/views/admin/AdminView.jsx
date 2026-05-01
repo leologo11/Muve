@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../api/index.js';
 import Header from '../../components/Header.jsx';
 import RouteMap from '../../components/RouteMap.jsx';
@@ -16,6 +16,7 @@ import PriceSettings from '../../components/PriceSettings.jsx';
 import SectorMap from './SectorMap.jsx';
 import AllPackagesView from './AllPackagesView.jsx';
 import QuotesView from './QuotesView.jsx';
+import CompaniesView from './CompaniesView.jsx';
 
 const STATUS_META = {
   draft:      { label: 'Borrador',   color: 'var(--muted)',   bg: 'var(--card2)' },
@@ -44,8 +45,24 @@ export default function AdminView() {
   const [loading, setLoading] = useState(true);
   const [editingName, setEditingName] = useState(false);
   const [routeName, setRouteName] = useState('');
+  const [driverLocation, setDriverLocation] = useState(null);
 
   useEffect(() => { loadRoutes(); }, []);
+
+  // Poll driver location every 20s while viewing an active route with a driver assigned
+  useEffect(() => {
+    if (!selectedRoute?._id || !selectedRoute?.driverId || selectedRoute.status !== 'active') {
+      setDriverLocation(null);
+      return;
+    }
+    const poll = () =>
+      api.getDriverLocation(selectedRoute._id)
+        .then(d => setDriverLocation(d.location ? { ...d.location, driverName: d.driverName } : null))
+        .catch(() => {});
+    poll();
+    const timer = setInterval(poll, 20000);
+    return () => clearInterval(timer);
+  }, [selectedRoute?._id, selectedRoute?.driverId, selectedRoute?.status]);
 
   const loadRoutes = async () => {
     try { setRoutes(await api.getRoutes()); }
@@ -166,35 +183,49 @@ export default function AdminView() {
     } catch (err) { toast('❌ ' + err.message); }
   };
 
-  const activePackages = packages.filter(p => p.status !== 'eliminado');
-  const allDone = activePackages.length > 0 && activePackages.every(p => p.status !== 'pendiente') && selectedRoute?.status === 'active';
+  const activePackages = useMemo(
+    () => packages.filter(p => p.status !== 'eliminado'),
+    [packages]
+  );
 
-  const addrCountMap = (() => {
+  const allDone = useMemo(
+    () => activePackages.length > 0 && activePackages.every(p => p.status !== 'pendiente') && selectedRoute?.status === 'active',
+    [activePackages, selectedRoute?.status]
+  );
+
+  const addrCountMap = useMemo(() => {
     const map = {};
     activePackages.forEach(p => {
       const key = (p.address || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
       if (key) map[key] = (map[key] || 0) + 1;
     });
     return map;
-  })();
+  }, [activePackages]);
 
-  const noGeoCount = activePackages.filter(p => (!p.lat || !p.lng) && p.status === 'pendiente').length;
+  const noGeoCount = useMemo(
+    () => activePackages.filter(p => (!p.lat || !p.lng) && p.status === 'pendiente').length,
+    [activePackages]
+  );
 
-  const visible = packages.filter(p => {
+  const visible = useMemo(() => {
     const q = search.toLowerCase();
-    const matchQ = !q || [p.customerName, p.customerLastName, p.address, p.commune, p.customerPhone, p.trackingId].join(' ').toLowerCase().includes(q);
-    const matchF = filter === 'sin-mapa'
-      ? (!p.lat || !p.lng) && p.status === 'pendiente'
-      : filter === 'todos' || p.status === filter;
-    return matchQ && matchF;
-  });
+    return packages.filter(p => {
+      const matchQ = !q || [p.customerName, p.customerLastName, p.address, p.commune, p.customerPhone, p.trackingId].join(' ').toLowerCase().includes(q);
+      const matchF = filter === 'sin-mapa'
+        ? (!p.lat || !p.lng) && p.status === 'pendiente'
+        : filter === 'todos' || p.status === filter;
+      return matchQ && matchF;
+    });
+  }, [packages, search, filter]);
 
-  const filteredRoutes = routes.filter(r => {
+  const filteredRoutes = useMemo(() => {
     const q = routeSearch.toLowerCase();
-    const matchQ = !q || [r.routeCode, r.name, r.clientCompany?.name, r.driverId?.name].filter(Boolean).join(' ').toLowerCase().includes(q);
-    const matchF = routeFilter === 'all' || r.status === routeFilter;
-    return matchQ && matchF;
-  });
+    return routes.filter(r => {
+      const matchQ = !q || [r.routeCode, r.name, r.clientCompany?.name, r.driverId?.name].filter(Boolean).join(' ').toLowerCase().includes(q);
+      const matchF = routeFilter === 'all' || r.status === routeFilter;
+      return matchQ && matchF;
+    });
+  }, [routes, routeSearch, routeFilter]);
 
   const invBadge = (() => {
     const inv = selectedRoute?.invoice;
@@ -220,6 +251,17 @@ export default function AdminView() {
   ] : null;
 
   if (loading) return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>Cargando…</div>;
+
+  // ── COMPANIES VIEW ──
+  if (view === 'companies') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Header title="🏢 Empresas y Proveedores" onBack={() => setView('routes')} />
+        <CompaniesView />
+        <Toast />
+      </div>
+    );
+  }
 
   // ── QUOTES VIEW ──
   if (view === 'quotes') {
@@ -297,6 +339,9 @@ export default function AdminView() {
               </button>
               <button onClick={() => setView('invoices')} style={{ background: '#fff3e0', border: '1px solid #f57c0030', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#f57c00', cursor: 'pointer' }}>
                 💳 Cobros
+              </button>
+              <button onClick={() => setView('companies')} style={{ background: '#0050780e', border: '1px solid #00507820', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#005078', cursor: 'pointer' }}>
+                🏢 Empresas
               </button>
               <button onClick={() => setView('users')} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', cursor: 'pointer' }}>
                 👥 Usuarios
@@ -476,6 +521,7 @@ export default function AdminView() {
             onPkgRestore={handleRestore}
             startPoint={selectedRoute?.startPoint}
             visible={tab === 'm'}
+            driverLocation={driverLocation}
           />
         </div>
 
@@ -518,6 +564,7 @@ export default function AdminView() {
             route={selectedRoute}
             geocoding={geocoding}
             onGeocode={handleGeocode}
+            onRefresh={refreshRoute}
             onRouteUpdate={updated => setSelectedRoute(prev => ({ ...prev, ...updated }))}
             onReopen={async () => {
               try {
@@ -678,11 +725,12 @@ function actBtn(color) {
 }
 
 // ── Info / Report tab ──
-function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onReopen, onDelete }) {
+function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onReopen, onDelete, onRefresh }) {
   const [editingRoute, setEditingRoute] = useState(false);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [tariffs, setTariffs] = React.useState([]);
+  const [drivers, setDrivers] = React.useState([]);
   const [geocodingStart, setGeocodingStart] = useState(false);
   const [shareToken, setShareToken] = useState(null);
   const [shareLoading, setShareLoading] = useState(false);
@@ -729,11 +777,13 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
 
   useEffect(() => {
     api.getTariffs().then(setTariffs).catch(() => {});
+    api.getUsers().then(u => setDrivers(u.filter(x => x.role === 'driver' && x.active))).catch(() => {});
   }, []);
 
   useEffect(() => {
     setForm({
       name: route?.name || '',
+      driverId: route?.driverId?._id || (typeof route?.driverId === 'string' ? route.driverId : '') || '',
       tariffId: route?.tariffId?._id || route?.tariffId || '',
       clientCompany: { name: route?.clientCompany?.name || '', contactPerson: route?.clientCompany?.contactPerson || '', contactPhone: route?.clientCompany?.contactPhone || '' },
       invoice: {
@@ -753,9 +803,12 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
 
   const saveRoute = async () => {
     setSaving(true);
+    const prevDriverId = route?.driverId?._id || (typeof route?.driverId === 'string' ? route.driverId : '') || '';
+    const driverChanged = form.driverId !== prevDriverId;
     try {
       const updated = await api.updateRoute(route._id, {
         name: form.name,
+        driverId: form.driverId || null,
         tariffId: form.tariffId || null,
         clientCompany: form.clientCompany,
         invoice: { ...form.invoice, amount: form.invoice.amount !== '' ? Number(form.invoice.amount) : undefined, invoiceDate: form.invoice.invoiceDate || undefined },
@@ -764,6 +817,8 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
       onRouteUpdate(updated);
       setEditingRoute(false);
       toast('✅ Ruta actualizada');
+      // Refresh fully when driver changes so banner populates name/phone correctly
+      if (driverChanged && onRefresh) onRefresh();
     } catch (err) { toast('❌ ' + err.message); }
     finally { setSaving(false); }
   };
@@ -844,6 +899,14 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
             <Label>Nombre de ruta</Label>
             <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="Ej: Ruta Lunes Norte" style={inp} />
 
+            <Label>Driver asignado</Label>
+            <select value={form.driverId} onChange={e => set('driverId', e.target.value)} style={inp}>
+              <option value="">Sin driver</option>
+              {drivers.map(d => (
+                <option key={d._id} value={d._id}>{d.name}{d.phone ? ` · ${d.phone}` : ''}</option>
+              ))}
+            </select>
+
             <Label>Configuración de precios</Label>
             <select value={form.tariffId} onChange={e => set('tariffId', e.target.value)} style={inp}>
               <option value="">Sin configuración de precios</option>
@@ -895,6 +958,30 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
           </div>
         ) : (
           <div>
+            {/* Driver — always shown; "Asignar" button opens edit form */}
+            {route?.driverId ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, padding: '9px 12px', background: '#0077aa08', border: '1px solid #0077aa20', borderRadius: 10 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0077aa' }}>🚗 {route.driverId.name}</div>
+                  {route.driverId.phone && (
+                    <a href={`tel:${route.driverId.phone}`} style={{ fontSize: 11, color: '#008855', fontWeight: 600, textDecoration: 'none', marginTop: 2, display: 'block' }}>
+                      📞 {route.driverId.phone}
+                    </a>
+                  )}
+                </div>
+                <button onClick={() => setEditingRoute(true)} style={{ fontSize: 10, padding: '4px 10px', borderRadius: 20, border: '1px solid var(--border)', background: 'var(--card2)', color: 'var(--muted)', cursor: 'pointer', fontWeight: 700 }}>
+                  Cambiar
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, padding: '9px 12px', background: '#f57c0008', border: '1px solid #f57c0028', borderRadius: 10 }}>
+                <span style={{ fontSize: 12, color: '#f57c00', fontWeight: 600 }}>⚠ Sin driver asignado</span>
+                <button onClick={() => setEditingRoute(true)} style={{ fontSize: 11, padding: '5px 12px', borderRadius: 20, border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontWeight: 700 }}>
+                  + Asignar driver
+                </button>
+              </div>
+            )}
+
             {route?.name && <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{route.name}</div>}
             {route?.tariffId && (
               <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600, marginBottom: 6 }}>

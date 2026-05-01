@@ -129,6 +129,10 @@ export const api = {
   updateCompany: (id, data) => request('PATCH', `/companies/${id}`, data),
   deleteCompany: (id) => request('DELETE', `/companies/${id}`),
 
+  // Driver real-time location
+  updateDriverLocation: (data) => request('PATCH', '/users/me/location', data),
+  getDriverLocation: (routeId) => request('GET', `/routes/${routeId}/driver-location`),
+
   // Admin reset
   resetAllData: () => request('POST', '/admin/reset-data'),
 };

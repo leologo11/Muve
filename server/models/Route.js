@@ -69,6 +69,11 @@ const routeSchema = new mongoose.Schema({
   notes: { type: String, trim: true }
 }, { timestamps: true });
 
+routeSchema.index({ date: -1 });
+routeSchema.index({ driverId: 1 });
+routeSchema.index({ status: 1 });
+routeSchema.index({ companyId: 1 });
+
 routeSchema.pre('save', function (next) {
   if (!this.routeCode) {
     const d = new Date(this.date);

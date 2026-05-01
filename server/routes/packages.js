@@ -46,39 +46,65 @@ router.use(requireAuth);
 router.get('/all', requireRole('admin'), async (req, res) => {
   try {
     const { search, status, routeId, driverId, companyName, page = 1, limit = 60 } = req.query;
+    const pageNum  = Number(page);
+    const limitNum = Number(limit);
 
-    const filter = {};
-    if (status && status !== 'todos') filter.status = status;
-    if (routeId) filter.routeId = routeId;
+    const pkgFilter = {};
+    if (status && status !== 'todos') pkgFilter.status = status;
+    if (routeId) pkgFilter.routeId = routeId;
 
-    let pkgs = await Package.find(filter)
-      .populate({
-        path: 'routeId',
-        select: 'routeCode name date driverId status clientCompany',
-        populate: { path: 'driverId', select: 'name phone' }
-      })
+    // Push driverId filter to DB by resolving matching route IDs first
+    if (driverId) {
+      const routeIds = await Route.find({ driverId }).select('_id').lean();
+      pkgFilter.routeId = { $in: routeIds.map(r => r._id) };
+    }
+
+    // companyName filters on an embedded field — resolve matching route IDs first
+    if (companyName) {
+      const q = companyName.toLowerCase();
+      const matchingRoutes = await Route
+        .find({ 'clientCompany.name': { $regex: q, $options: 'i' } })
+        .select('_id').lean();
+      const ids = matchingRoutes.map(r => r._id);
+      pkgFilter.routeId = pkgFilter.routeId
+        ? { $in: pkgFilter.routeId.$in.filter(id => ids.some(i => String(i) === String(id))) }
+        : { $in: ids };
+    }
+
+    const populate = {
+      path: 'routeId',
+      select: 'routeCode name date driverId status clientCompany',
+      populate: { path: 'driverId', select: 'name phone' }
+    };
+
+    // Fast path: no text search → paginate at DB level
+    if (!search) {
+      const [total, pkgs] = await Promise.all([
+        Package.countDocuments(pkgFilter),
+        Package.find(pkgFilter)
+          .populate(populate)
+          .sort({ createdAt: -1 })
+          .skip((pageNum - 1) * limitNum)
+          .limit(limitNum)
+          .lean()
+      ]);
+      return res.json({ packages: pkgs, total, page: pageNum, limit: limitNum });
+    }
+
+    // Slow path: text search requires loading the filtered set, then paginate in memory
+    let pkgs = await Package.find(pkgFilter)
+      .populate(populate)
       .sort({ createdAt: -1 })
       .lean();
 
-    if (driverId) {
-      pkgs = pkgs.filter(p => String(p.routeId?.driverId?._id) === driverId);
-    }
-    if (companyName) {
-      const q = companyName.toLowerCase();
-      pkgs = pkgs.filter(p => (p.routeId?.clientCompany?.name || '').toLowerCase().includes(q));
-    }
-
-    if (search) {
-      const q = search.toLowerCase();
-      pkgs = pkgs.filter(p =>
-        [p.customerName, p.customerLastName, p.address, p.commune, p.trackingId, p.customerPhone]
-          .filter(Boolean).join(' ').toLowerCase().includes(q)
-      );
-    }
+    const q = search.toLowerCase();
+    pkgs = pkgs.filter(p =>
+      [p.customerName, p.customerLastName, p.address, p.commune, p.trackingId, p.customerPhone]
+        .filter(Boolean).join(' ').toLowerCase().includes(q)
+    );
 
     const total = pkgs.length;
-    const skip = (Number(page) - 1) * Number(limit);
-    res.json({ packages: pkgs.slice(skip, skip + Number(limit)), total, page: Number(page), limit: Number(limit) });
+    res.json({ packages: pkgs.slice((pageNum - 1) * limitNum, pageNum * limitNum), total, page: pageNum, limit: limitNum });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

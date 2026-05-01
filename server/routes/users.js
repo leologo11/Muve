@@ -41,6 +41,21 @@ router.patch('/:id', requireRole('admin'), async (req, res) => {
   }
 });
 
+// PATCH /api/users/me/location — driver sends their GPS position
+router.patch('/me/location', requireAuth, async (req, res) => {
+  try {
+    if (req.user.role !== 'driver') return res.status(403).json({ error: 'Solo drivers' });
+    const { lat, lng, heading, speed, accuracy } = req.body;
+    if (lat == null || lng == null) return res.status(400).json({ error: 'lat/lng requeridos' });
+    await User.findByIdAndUpdate(req.user._id, {
+      location: { lat, lng, heading: heading ?? null, speed: speed ?? null, accuracy: accuracy ?? null, updatedAt: new Date() }
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE /api/users/:id — admin deactivates user
 router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {

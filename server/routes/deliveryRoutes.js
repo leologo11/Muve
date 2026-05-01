@@ -221,12 +221,12 @@ router.post('/:id/optimize', requireRole('admin'), async (req, res) => {
     // Run TSP on packages with coordinates
     const sorted = tspOptimize(start, withCoords);
 
-    // Save new order
-    await Promise.all(sorted.map((pkg, i) => Package.findByIdAndUpdate(pkg._id, { order: i })));
-
-    // Packages without coords go at the end
+    // Save new order — one bulkWrite instead of N individual queries
     const noCoords = packages.filter(p => !p.lat || !p.lng);
-    await Promise.all(noCoords.map((p, i) => Package.findByIdAndUpdate(p._id, { order: sorted.length + i })));
+    await Package.bulkWrite([
+      ...sorted.map((pkg, i) => ({ updateOne: { filter: { _id: pkg._id }, update: { $set: { order: i } } } })),
+      ...noCoords.map((p, i) => ({ updateOne: { filter: { _id: p._id }, update: { $set: { order: sorted.length + i } } } }))
+    ]);
 
     // Get actual road distance from OSRM (best-effort)
     let distanceKm = null;
@@ -312,6 +312,21 @@ router.post('/osrm-path', async (req, res) => {
     res.json({ geometry: d.routes?.[0]?.geometry || null });
   } catch {
     res.json({ geometry: null });
+  }
+});
+
+// GET /api/routes/:id/driver-location — admin polls the assigned driver's GPS (only admin can call this)
+router.get('/:id/driver-location', requireRole('admin'), async (req, res) => {
+  try {
+    const route = await Route.findById(req.params.id)
+      .populate('driverId', 'name location')
+      .lean();
+    if (!route) return res.status(404).json({ error: 'Ruta no encontrada' });
+    const loc = route.driverId?.location;
+    if (!loc?.lat || !loc?.lng) return res.json({ location: null, driverName: route.driverId?.name || null });
+    res.json({ location: loc, driverName: route.driverId.name });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

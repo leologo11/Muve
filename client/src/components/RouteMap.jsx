@@ -1,6 +1,50 @@
 import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 
+function ensureGpsStyles() {
+  if (document.getElementById('rf-gps-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'rf-gps-styles';
+  s.textContent = `@keyframes rfGpsPulse{0%,100%{transform:scale(1);opacity:.45}50%{transform:scale(2.2);opacity:.1}}`;
+  document.head.appendChild(s);
+}
+
+function makeMyLocationIcon(heading) {
+  ensureGpsStyles();
+  // Triangle pointing in the direction of travel (or straight up if no heading)
+  const deg = (heading != null && !isNaN(heading)) ? heading : null;
+  const arrowHtml = deg != null
+    ? `<div style="position:absolute;top:-13px;left:50%;transform:translateX(-50%) rotate(${deg}deg);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:11px solid #1a73e8;filter:drop-shadow(0 1px 2px #0003)"></div>`
+    : '';
+  return L.divIcon({
+    className: '',
+    html: `<div style="position:relative;width:22px;height:22px">
+      <div style="position:absolute;inset:-10px;border-radius:50%;background:#1a73e820;animation:rfGpsPulse 2s ease-in-out infinite;pointer-events:none"></div>
+      <div style="width:22px;height:22px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 2px 10px #1a73e870;position:relative;z-index:1"></div>
+      ${arrowHtml}
+    </div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11]
+  });
+}
+
+function makeDriverTrackerIcon() {
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      width:38px;height:38px;border-radius:50%;
+      background:linear-gradient(135deg,#0077aa,#005080);
+      border:3px solid #fff;
+      box-shadow:0 3px 14px #0077aa70;
+      display:flex;align-items:center;justify-content:center;
+      font-size:19px;
+    ">🚗</div>`,
+    iconSize: [38, 38],
+    iconAnchor: [19, 19],
+    popupAnchor: [0, -24]
+  });
+}
+
 const ZONE_COLORS = {
   Providencia: '#e8740a',
   'Las Condes': '#2288cc',
@@ -90,12 +134,15 @@ function btnStyle(color) {
     white-space:nowrap;`;
 }
 
-export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgRestore, onVerifyLoad, readOnly, startPoint, visible = true }) {
+export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgRestore, onVerifyLoad, readOnly, startPoint, visible = true, myLocation = null, driverLocation = null }) {
   const mapRef = useRef(null);
   const instanceRef = useRef(null);
   const markersRef = useRef({});
   const lineRef = useRef(null);
   const startRef = useRef(null);
+  const myLocationRef = useRef(null);
+  const myAccuracyRef = useRef(null);
+  const driverTrackerRef = useRef(null);
 
   // Init map once
   useEffect(() => {
@@ -232,6 +279,61 @@ export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgResto
       map.fitBounds(allPts, { padding: [50, 50], maxZoom: 15 });
     }
   }, [packages, startPoint, readOnly]);
+
+  // "You are here" — driver's own GPS position (blue pulsing dot + heading arrow)
+  useEffect(() => {
+    const map = instanceRef.current;
+    if (!map) return;
+
+    if (myAccuracyRef.current) { myAccuracyRef.current.remove(); myAccuracyRef.current = null; }
+    if (myLocationRef.current) { myLocationRef.current.remove(); myLocationRef.current = null; }
+
+    if (!myLocation?.lat || !myLocation?.lng) return;
+
+    if (myLocation.accuracy && myLocation.accuracy < 500) {
+      myAccuracyRef.current = L.circle([myLocation.lat, myLocation.lng], {
+        radius: myLocation.accuracy,
+        color: '#1a73e8', fillColor: '#1a73e8', fillOpacity: 0.08, weight: 1, opacity: 0.3
+      }).addTo(map);
+    }
+
+    myLocationRef.current = L.marker([myLocation.lat, myLocation.lng], {
+      icon: makeMyLocationIcon(myLocation.heading),
+      zIndexOffset: 1000
+    }).addTo(map);
+  }, [myLocation]);
+
+  // Driver tracker — admin-only view of the assigned driver's last known position
+  useEffect(() => {
+    const map = instanceRef.current;
+    if (!map) return;
+
+    if (driverTrackerRef.current) { driverTrackerRef.current.remove(); driverTrackerRef.current = null; }
+    if (!driverLocation?.lat || !driverLocation?.lng) return;
+
+    const updatedAt = driverLocation.updatedAt ? new Date(driverLocation.updatedAt) : null;
+    const minsAgo = updatedAt ? Math.round((Date.now() - updatedAt.getTime()) / 60000) : null;
+    const freshness = minsAgo == null ? '…' : minsAgo < 1 ? 'hace un momento' : `hace ${minsAgo} min`;
+    const isStale = minsAgo != null && minsAgo > 15;
+
+    driverTrackerRef.current = L.marker([driverLocation.lat, driverLocation.lng], {
+      icon: makeDriverTrackerIcon(),
+      zIndexOffset: 1100
+    }).addTo(map);
+
+    driverTrackerRef.current.bindPopup(
+      `<div style="font-family:'Space Grotesk',sans-serif;min-width:170px">
+        <div style="font-size:13px;font-weight:700;color:#0077aa;margin-bottom:4px">
+          🚗 ${driverLocation.driverName || 'Driver'}
+        </div>
+        <div style="font-size:11px;color:${isStale ? '#cc2244' : '#666'}">
+          ${isStale ? '⚠ ' : '📡 '}Ubicación ${freshness}
+        </div>
+        ${driverLocation.speed != null ? `<div style="font-size:11px;color:#666;margin-top:2px">⚡ ${Math.round((driverLocation.speed || 0) * 3.6)} km/h</div>` : ''}
+      </div>`,
+      { maxWidth: 200 }
+    );
+  }, [driverLocation]);
 
   const noCoords = (packages || []).filter(p => p.status !== 'eliminado' && (!p.lat || !p.lng)).length;
   const total = (packages || []).filter(p => p.status !== 'eliminado').length;

@@ -53,4 +53,9 @@ const packageSchema = new mongoose.Schema({
   deliveredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
+packageSchema.index({ routeId: 1 });
+packageSchema.index({ routeId: 1, status: 1 });
+packageSchema.index({ routeId: 1, order: 1 });
+packageSchema.index({ createdAt: -1 });
+
 export default mongoose.model('Package', packageSchema);

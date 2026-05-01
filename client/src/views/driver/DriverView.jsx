@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../api/index.js';
 import Header from '../../components/Header.jsx';
 import RouteMap from '../../components/RouteMap.jsx';
@@ -17,13 +17,48 @@ export default function DriverView() {
   const [showLoadCheck, setShowLoadCheck] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // GPS tracking — only the driver uses this; location is sent to server for admin visibility
+  const [myLocation, setMyLocation] = useState(null);
+  const [gpsState, setGpsState] = useState('pending'); // 'pending' | 'active' | 'denied' | 'unavailable'
+  const watchIdRef = useRef(null);
+  const lastSentRef = useRef(0);
+
   useEffect(() => {
     api.getRoutes().then(r => {
       setRoutes(r);
-      // Auto-select the most recent active route
       const active = r.find(x => x.status === 'active') || r[0];
       if (active) loadRoute(active._id);
     }).catch(e => toast('❌ ' + e.message)).finally(() => setLoading(false));
+  }, []);
+
+  // Start GPS tracking on mount — send updates to server so admin can see driver location
+  useEffect(() => {
+    if (!navigator.geolocation) { setGpsState('unavailable'); return; }
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lng, accuracy, heading, speed } = pos.coords;
+        setMyLocation({ lat, lng, accuracy, heading: heading ?? null, speed: speed ?? null });
+        setGpsState('active');
+
+        // Send to server at most every 15 seconds
+        const now = Date.now();
+        if (now - lastSentRef.current > 15000) {
+          lastSentRef.current = now;
+          api.updateDriverLocation({ lat, lng, accuracy, heading: heading ?? null, speed: speed ?? null }).catch(() => {});
+        }
+      },
+      (err) => {
+        setGpsState(err.code === 1 ? 'denied' : 'unavailable');
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
+    );
+
+    return () => {
+      if (watchIdRef.current != null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
   }, []);
 
   const loadRoute = async (id) => {
@@ -90,6 +125,25 @@ export default function DriverView() {
         title={selectedRoute ? `🚗 ${selectedRoute.routeCode}` : '🚚 Routiflow'}
         stats={selectedRoute ? stats : null}
       />
+
+      {/* GPS status indicator */}
+      {gpsState === 'denied' && (
+        <div style={{ background: '#fff3e0', borderBottom: '1px solid #f57c0030', padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 16 }}>📍</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#e65100' }}>Ubicación desactivada</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>Activa la ubicación en tu navegador para aparecer en el mapa del admin</div>
+          </div>
+        </div>
+      )}
+      {gpsState === 'active' && myLocation && (
+        <div style={{ background: '#e8f5e9', borderBottom: '1px solid #00885520', padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 13 }}>📡</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)' }}>
+            GPS activo · precisión {myLocation.accuracy ? `±${Math.round(myLocation.accuracy)}m` : '…'}
+          </span>
+        </div>
+      )}
 
       {/* Ruta finalizada banner */}
       {selectedRoute?.status === 'completed' && (
@@ -208,6 +262,7 @@ export default function DriverView() {
             startPoint={selectedRoute?.startPoint}
             onVerifyLoad={() => setShowLoadCheck(true)}
             visible={tab === 'm'}
+            myLocation={myLocation}
           />
         </div>
 
