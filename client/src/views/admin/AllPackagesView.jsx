@@ -27,6 +27,7 @@ export default function AllPackagesView() {
   const [statusF, setStatusF]     = useState('todos');
   const [routeF, setRouteF]       = useState('');
   const [driverF, setDriverF]     = useState('');
+  const [companyF, setCompanyF]   = useState('');
   const [moveTarget, setMoveTarget] = useState(null); // { pkg, targetRouteId }
 
   const LIMIT = 50;
@@ -39,6 +40,7 @@ export default function AllPackagesView() {
         status: statusF !== 'todos' ? statusF : undefined,
         routeId: routeF || undefined,
         driverId: driverF || undefined,
+        companyName: companyF || undefined,
         page: p,
         limit: LIMIT,
       });
@@ -50,7 +52,7 @@ export default function AllPackagesView() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusF, routeF, driverF]);
+  }, [search, statusF, routeF, driverF, companyF]);
 
   useEffect(() => {
     api.getRoutes().then(setRoutes).catch(() => {});
@@ -84,6 +86,11 @@ export default function AllPackagesView() {
   const drivers = users;
   const pages = Math.ceil(total / LIMIT);
 
+  // Extract unique client company names from loaded routes
+  const clientCompanies = [...new Set(
+    routes.map(r => r.clientCompany?.name).filter(Boolean)
+  )].sort();
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
 
@@ -110,12 +117,12 @@ export default function AllPackagesView() {
           ))}
         </div>
 
-        {/* Route + Driver selectors */}
-        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+        {/* Route + Driver + Company selectors */}
+        <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
           <select
             value={routeF}
             onChange={e => setRouteF(e.target.value)}
-            style={{ flex: 1, background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 10, padding: '7px 10px', fontSize: 12, outline: 'none', color: routeF ? 'var(--text)' : 'var(--muted)', WebkitAppearance: 'none' }}
+            style={selStyle(!!routeF)}
           >
             <option value="">Todas las rutas</option>
             {routes.map(r => (
@@ -127,13 +134,25 @@ export default function AllPackagesView() {
           <select
             value={driverF}
             onChange={e => setDriverF(e.target.value)}
-            style={{ flex: 1, background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 10, padding: '7px 10px', fontSize: 12, outline: 'none', color: driverF ? 'var(--text)' : 'var(--muted)', WebkitAppearance: 'none' }}
+            style={selStyle(!!driverF)}
           >
             <option value="">Todos los drivers</option>
             {drivers.map(d => (
               <option key={d._id} value={d._id}>{d.name}</option>
             ))}
           </select>
+          {clientCompanies.length > 0 && (
+            <select
+              value={companyF}
+              onChange={e => setCompanyF(e.target.value)}
+              style={selStyle(!!companyF)}
+            >
+              <option value="">🏢 Todas las empresas</option>
+              {clientCompanies.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Results count */}
@@ -366,5 +385,17 @@ function pageBtn(active) {
     background: active ? 'var(--accent)' : 'var(--card2)',
     color: active ? '#fff' : 'var(--muted)',
     fontSize: 11, fontWeight: 700, cursor: active ? 'pointer' : 'not-allowed'
+  };
+}
+
+function selStyle(hasValue) {
+  return {
+    flex: 1, minWidth: 130,
+    background: hasValue ? '#00885510' : 'var(--card2)',
+    border: `1px solid ${hasValue ? 'var(--accent)' : 'var(--border)'}`,
+    borderRadius: 10, padding: '7px 10px', fontSize: 12, outline: 'none',
+    color: hasValue ? 'var(--accent)' : 'var(--muted)',
+    fontWeight: hasValue ? 700 : 400,
+    WebkitAppearance: 'none'
   };
 }

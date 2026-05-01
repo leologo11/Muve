@@ -519,6 +519,14 @@ export default function AdminView() {
             geocoding={geocoding}
             onGeocode={handleGeocode}
             onRouteUpdate={updated => setSelectedRoute(prev => ({ ...prev, ...updated }))}
+            onReopen={async () => {
+              try {
+                await api.updateRoute(selectedRoute._id, { status: 'active' });
+                const { route } = await api.getRoute(selectedRoute._id);
+                setSelectedRoute(route);
+                toast('🔓 Ruta reabierta como activa');
+              } catch (err) { toast('❌ ' + err.message); }
+            }}
             onDelete={async () => {
               const code = window.prompt(`⚠️ ELIMINAR RUTA ${selectedRoute.routeCode}\n\nSe eliminarán la ruta y TODOS sus paquetes permanentemente.\n\nEscribe CONFIRMAR para continuar:`);
               if (code !== 'CONFIRMAR') return;
@@ -600,6 +608,7 @@ function RouteCard({ route, onClick, onStatusChange, onCancel, onDelete }) {
 
   const nextStatus = { draft: 'active', active: 'paused', paused: 'active', completed: null, cancelled: null }[route.status];
   const nextLabel = { draft: '▶ Activar', active: '⏸ Pausar', paused: '▶ Reactivar' }[route.status];
+  const canReopen = route.status === 'completed' || route.status === 'cancelled';
 
   return (
     <div style={{ background: '#fff', borderRadius: 14, border: '1px solid var(--border)', padding: '13px 14px', marginBottom: 10, boxShadow: '0 1px 4px #0000000a' }}>
@@ -655,6 +664,9 @@ function RouteCard({ route, onClick, onStatusChange, onCancel, onDelete }) {
         {!['completed'].includes(route.status) && (
           <button onClick={e => { e.stopPropagation(); onCancel(route); }} style={actBtn('#f57c00')}>✗ Cancelar</button>
         )}
+        {canReopen && (
+          <button onClick={e => { e.stopPropagation(); onStatusChange(route, 'active'); }} style={actBtn('var(--accent)')}>🔓 Reabrir</button>
+        )}
         <button onClick={e => { e.stopPropagation(); onDelete(route); }} style={actBtn('var(--danger)')}>🗑️ Eliminar</button>
       </div>
     </div>
@@ -666,7 +678,7 @@ function actBtn(color) {
 }
 
 // ── Info / Report tab ──
-function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onDelete }) {
+function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onReopen, onDelete }) {
   const [editingRoute, setEditingRoute] = useState(false);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -1021,9 +1033,25 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onD
         </div>
       ))}
 
+      {/* Reopen completed / cancelled route */}
+      {(route?.status === 'completed' || route?.status === 'cancelled') && onReopen && (
+        <div style={{ marginTop: 16, padding: '13px 14px', background: '#00885508', border: '1px solid #00885530', borderRadius: 13 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', marginBottom: 6, letterSpacing: 1 }}>🔓 REABRIR RUTA</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+            Vuelve la ruta a estado "Activa" para poder editarla, agregar paquetes o corregir datos.
+          </div>
+          <button
+            onClick={onReopen}
+            style={{ width: '100%', padding: '11px', borderRadius: 10, border: '1px solid #00885550', background: '#00885512', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+          >
+            🔓 Reabrir como activa
+          </button>
+        </div>
+      )}
+
       {/* Delete route zone */}
       {onDelete && (
-        <div style={{ marginTop: 24, padding: '14px', background: '#cc224408', border: '1px solid #cc224430', borderRadius: 13 }}>
+        <div style={{ marginTop: 16, padding: '14px', background: '#cc224408', border: '1px solid #cc224430', borderRadius: 13 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#cc2244', marginBottom: 8, letterSpacing: 1 }}>⚠️ ZONA PELIGROSA</div>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
             Eliminar la ruta borrará permanentemente todos los datos. Esta acción no se puede deshacer.

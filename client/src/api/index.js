@@ -47,7 +47,7 @@ export const api = {
   // Packages
   getAllPackages: (params = {}) => {
     const q = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => v != null && v !== '' && q.set(k, v));
+    Object.entries(params).forEach(([k, v]) => v != null && v !== '' && q.set(k, String(v)));
     return request('GET', `/packages/all?${q}`);
   },
   getPackages: (routeId) => request('GET', `/packages?routeId=${routeId}`),

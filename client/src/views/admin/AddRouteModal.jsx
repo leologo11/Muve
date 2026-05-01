@@ -15,16 +15,47 @@ export default function AddRouteModal({ onClose, onCreated }) {
     invoice: { status: 'none', amount: '', invoiceDate: '' },
     startPoint: { address: '', lat: '', lng: '' }
   });
-  const [drivers, setDrivers] = useState([]);
-  const [companies, setCompanies] = useState([]);
-  const [tariffs, setTariffs] = useState([]);
-  const [saving, setSaving] = useState(false);
+  const [drivers, setDrivers]           = useState([]);
+  const [companies, setCompanies]       = useState([]);
+  const [clientCompanies, setClientCompanies] = useState([]); // registered client companies
+  const [tariffs, setTariffs]           = useState([]);
+  const [saving, setSaving]             = useState(false);
+  const [showNewCompany, setShowNewCompany] = useState(false);
+  const [newCompany, setNewCompany]     = useState({ name: '', contactPerson: '', contactPhone: '' });
+  const [savingCompany, setSavingCompany] = useState(false);
+
+  const loadClientCompanies = () =>
+    api.getCompanies().then(list => setClientCompanies(list.filter(c => c.active !== false))).catch(() => {});
 
   useEffect(() => {
     api.getUsers().then(users => setDrivers(users.filter(u => u.role === 'driver' && u.active))).catch(() => {});
     api.getCompanies().then(setCompanies).catch(() => {});
     api.getTariffs().then(setTariffs).catch(() => {});
+    loadClientCompanies();
   }, []);
+
+  const handleSelectClientCompany = (id) => {
+    const c = clientCompanies.find(x => x._id === id);
+    if (!c) { set('clientCompany', { name: '', contactPerson: '', contactPhone: '' }); return; }
+    setForm(f => ({ ...f, clientCompany: { name: c.name, contactPerson: c.contactPerson || '', contactPhone: c.contactPhone || '' } }));
+  };
+
+  const handleSaveNewCompany = async () => {
+    if (!newCompany.name.trim()) return toast('⚠️ Nombre requerido');
+    setSavingCompany(true);
+    try {
+      const created = await api.createCompany(newCompany);
+      await loadClientCompanies();
+      setForm(f => ({ ...f, clientCompany: { name: created.name, contactPerson: created.contactPerson || '', contactPhone: created.contactPhone || '' } }));
+      setShowNewCompany(false);
+      setNewCompany({ name: '', contactPerson: '', contactPhone: '' });
+      toast('✅ Empresa registrada');
+    } catch (err) {
+      toast('❌ ' + err.message);
+    } finally {
+      setSavingCompany(false);
+    }
+  };
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setCompany = (k, v) => setForm(f => ({ ...f, clientCompany: { ...f.clientCompany, [k]: v } }));
@@ -104,7 +135,55 @@ export default function AddRouteModal({ onClose, onCreated }) {
 
         {/* Client company */}
         <div style={{ margin: '16px 0 5px', padding: '12px 14px', background: '#00507808', border: '1px solid #00507820', borderRadius: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#005078', marginBottom: 10 }}>🏢 Empresa cliente (quien contrata el servicio)</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#005078' }}>🏢 Empresa cliente</div>
+            <button
+              type="button"
+              onClick={() => setShowNewCompany(v => !v)}
+              style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', background: 'none', border: '1px solid var(--accent)', borderRadius: 20, padding: '2px 9px', cursor: 'pointer' }}
+            >
+              {showNewCompany ? '✕ Cerrar' : '✚ Registrar empresa'}
+            </button>
+          </div>
+
+          {/* Register new company inline */}
+          {showNewCompany && (
+            <div style={{ background: '#fff', border: '1px solid var(--accent)', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', marginBottom: 8 }}>Nueva empresa</div>
+              <Label>Nombre empresa *</Label>
+              <input value={newCompany.name} onChange={e => setNewCompany(n => ({ ...n, name: e.target.value }))} placeholder="Importadora ABC" style={inp} />
+              <Label>Responsable / Contacto</Label>
+              <input value={newCompany.contactPerson} onChange={e => setNewCompany(n => ({ ...n, contactPerson: e.target.value }))} placeholder="Nombre y apellido" style={inp} />
+              <Label>Teléfono</Label>
+              <input value={newCompany.contactPhone} onChange={e => setNewCompany(n => ({ ...n, contactPhone: e.target.value }))} placeholder="+56 9 xxxx xxxx" style={inp} />
+              <button
+                type="button"
+                onClick={handleSaveNewCompany}
+                disabled={savingCompany}
+                style={{ width: '100%', marginTop: 9, padding: '9px', borderRadius: 9, border: 'none', background: savingCompany ? 'var(--border)' : 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: savingCompany ? 'not-allowed' : 'pointer' }}
+              >
+                {savingCompany ? 'Guardando…' : '✓ Guardar empresa'}
+              </button>
+            </div>
+          )}
+
+          {/* Select from registered companies */}
+          {clientCompanies.length > 0 && !showNewCompany && (
+            <>
+              <Label>Seleccionar empresa registrada</Label>
+              <select
+                onChange={e => handleSelectClientCompany(e.target.value)}
+                defaultValue=""
+                style={{ ...inp, marginBottom: 10, color: 'var(--muted)' }}
+              >
+                <option value="">— Elegir empresa registrada —</option>
+                {clientCompanies.map(c => (
+                  <option key={c._id} value={c._id}>{c.name}{c.contactPerson ? ` · ${c.contactPerson}` : ''}</option>
+                ))}
+              </select>
+            </>
+          )}
+
           <Label>Nombre empresa</Label>
           <input value={form.clientCompany.name} onChange={e => setCompany('name', e.target.value)} placeholder="Ej: Importadora ABC" style={inp} />
           <Label>Responsable / Contacto</Label>

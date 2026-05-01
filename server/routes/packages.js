@@ -45,7 +45,7 @@ router.use(requireAuth);
 // GET /api/packages/all — admin: all packages across all routes
 router.get('/all', requireRole('admin'), async (req, res) => {
   try {
-    const { search, status, routeId, driverId, page = 1, limit = 60 } = req.query;
+    const { search, status, routeId, driverId, companyName, page = 1, limit = 60 } = req.query;
 
     const filter = {};
     if (status && status !== 'todos') filter.status = status;
@@ -54,7 +54,7 @@ router.get('/all', requireRole('admin'), async (req, res) => {
     let pkgs = await Package.find(filter)
       .populate({
         path: 'routeId',
-        select: 'routeCode name date driverId status',
+        select: 'routeCode name date driverId status clientCompany',
         populate: { path: 'driverId', select: 'name phone' }
       })
       .sort({ createdAt: -1 })
@@ -62,6 +62,10 @@ router.get('/all', requireRole('admin'), async (req, res) => {
 
     if (driverId) {
       pkgs = pkgs.filter(p => String(p.routeId?.driverId?._id) === driverId);
+    }
+    if (companyName) {
+      const q = companyName.toLowerCase();
+      pkgs = pkgs.filter(p => (p.routeId?.clientCompany?.name || '').toLowerCase().includes(q));
     }
 
     if (search) {
