@@ -40,7 +40,8 @@ export default function DriverView() {
     try {
       const updated = await api.updatePackage(pkg._id, { status: newStatus });
       setPackages(prev => prev.map(p => p._id === pkg._id ? { ...p, ...updated } : p));
-      toast(newStatus === 'entregado' ? '✅ Entregado' : newStatus === 'no-entregado' ? '❌ No entregado' : '↩ Deshecho');
+      const msgs = { entregado: '✅ Entregado', 'no-entregado': '❌ No entregado', devuelto: '📦 Marcado para devolución', pendiente: '↩ Deshecho' };
+      toast(msgs[newStatus] || '↩ Actualizado');
     } catch (err) {
       toast('❌ ' + err.message);
     }
@@ -54,11 +55,24 @@ export default function DriverView() {
   });
 
   const active = packages.filter(p => p.status !== 'eliminado');
+
+  const addrCountMap = (() => {
+    const map = {};
+    active.forEach(p => {
+      const key = (p.address || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
+      if (key) map[key] = (map[key] || 0) + 1;
+    });
+    return map;
+  })();
+
   const stats = [
     { label: 'Total', value: active.length },
     { label: 'Entregadas', value: packages.filter(p => p.status === 'entregado').length, color: 'var(--accent)' },
     { label: 'No entregadas', value: packages.filter(p => p.status === 'no-entregado').length, color: 'var(--danger)' },
     { label: 'Pendientes', value: packages.filter(p => p.status === 'pendiente').length },
+    ...(packages.filter(p => p.status === 'devuelto').length > 0
+      ? [{ label: 'Devueltos', value: packages.filter(p => p.status === 'devuelto').length, color: '#7b1fa2' }]
+      : []),
     ...(selectedRoute?.driverPayout
       ? [{ label: 'Mi pago', value: '$' + Number(selectedRoute.driverPayout).toLocaleString('es-CL'), color: 'var(--accent)' }]
       : [])
@@ -170,14 +184,14 @@ export default function DriverView() {
             style={{ width: '100%', background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 22, padding: '8px 14px', fontSize: 14, outline: 'none' }}
           />
           <div style={{ display: 'flex', gap: 6, marginTop: 7, overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 4 }}>
-            {['todos', 'pendiente', 'entregado', 'no-entregado'].map(f => (
+            {['todos', 'pendiente', 'entregado', 'no-entregado', 'devuelto'].map(f => (
               <button key={f} onClick={() => setFilter(f)} style={{
                 flexShrink: 0, padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
                 cursor: 'pointer', border: '1px solid var(--border)',
-                background: filter === f ? 'var(--accent)' : 'var(--card2)',
+                background: filter === f ? (f === 'devuelto' ? '#7b1fa2' : 'var(--accent)') : 'var(--card2)',
                 color: filter === f ? '#fff' : 'var(--muted)'
               }}>
-                {{ todos: 'Todos', pendiente: '⏳ Pendientes', entregado: '✅ Entregados', 'no-entregado': '❌ No entregados' }[f]}
+                {{ todos: 'Todos', pendiente: '⏳ Pendientes', entregado: '✅ Entregados', 'no-entregado': '❌ No entregados', devuelto: '📦 Devueltos' }[f]}
               </button>
             ))}
           </div>
@@ -213,6 +227,7 @@ export default function DriverView() {
                   hidePrice
                   lockDelivered
                   readOnly={selectedRoute?.status === 'completed'}
+                  sameAddressCount={addrCountMap[(pkg.address || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ')] || 1}
                 />
               ))
             )}
@@ -249,6 +264,7 @@ function DriverReport({ packages, route }) {
   const active = packages.filter(p => p.status !== 'eliminado');
   const delivered = active.filter(p => p.status === 'entregado');
   const failed = active.filter(p => p.status === 'no-entregado');
+  const returned = active.filter(p => p.status === 'devuelto');
   const pending = active.filter(p => p.status === 'pendiente');
 
   return (
@@ -258,12 +274,13 @@ function DriverReport({ packages, route }) {
           ['Total paradas', active.length],
           ['Entregados', delivered.length],
           ['No entregados', failed.length],
+          ...(returned.length > 0 ? [['Devueltos', returned.length]] : []),
           ['Pendientes', pending.length],
           ...(route?.driverPayout ? [['Mi pago', '$' + Number(route.driverPayout).toLocaleString('es-CL')]] : [])
         ].map(([label, val]) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 13, borderBottom: '1px solid var(--border)' }}>
             <span>{label}</span>
-            <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{val}</span>
+            <span style={{ color: label === 'Devueltos' ? '#7b1fa2' : 'var(--accent)', fontWeight: 700 }}>{val}</span>
           </div>
         ))}
       </div>
@@ -285,14 +302,24 @@ function DriverReport({ packages, route }) {
           {failed.map(p => <ReportCard key={p._id} pkg={p} type="no-entregado" />)}
         </>
       )}
+
+      {returned.length > 0 && (
+        <>
+          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, color: '#7b1fa2', padding: '14px 0 7px', textTransform: 'uppercase' }}>
+            DEVUELTOS ({returned.length})
+          </div>
+          {returned.map(p => <ReportCard key={p._id} pkg={p} type="devuelto" />)}
+        </>
+      )}
     </div>
   );
 }
 
 function ReportCard({ pkg, type }) {
-  const color = type === 'entregado' ? 'var(--accent)' : 'var(--danger)';
+  const color = type === 'entregado' ? 'var(--accent)' : type === 'devuelto' ? '#7b1fa2' : 'var(--danger)';
+  const borderColor = type === 'entregado' ? '#00885528' : type === 'devuelto' ? '#7b1fa228' : '#cc224428';
   return (
-    <div style={{ background: '#fff', border: `1px solid ${type === 'entregado' ? '#00885528' : '#cc224428'}`, borderRadius: 12, padding: '12px 14px', marginBottom: 8 }}>
+    <div style={{ background: '#fff', border: `1px solid ${borderColor}`, borderRadius: 12, padding: '12px 14px', marginBottom: 8 }}>
       <div style={{ fontWeight: 700, fontSize: 14 }}>{pkg.customerName} {pkg.customerLastName}</div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{pkg.address}{pkg.commune ? `, ${pkg.commune}` : ''}</div>
       <div style={{ fontSize: 11, fontWeight: 700, color, marginTop: 5 }}>

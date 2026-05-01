@@ -47,6 +47,7 @@ router.get('/:id', async (req, res) => {
     const route = await Route.findById(req.params.id)
       .populate('driverId', 'name email phone vehicle licensePlate')
       .populate('companyId', 'name')
+      .populate('tariffId', 'name defaultPrice items')
       .lean();
     if (!route) return res.status(404).json({ error: 'Ruta no encontrada' });
 
@@ -131,11 +132,22 @@ router.post('/:id/invoice-file', requireRole('admin'), upload.single('file'), as
   }
 });
 
-// DELETE /api/routes/:id — admin cancels route
+// DELETE /api/routes/:id — admin cancels route (status change only)
 router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {
     await Route.findByIdAndUpdate(req.params.id, { status: 'cancelled' });
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/routes/:id/permanent — permanently deletes route + all its packages
+router.delete('/:id/permanent', requireRole('admin'), async (req, res) => {
+  try {
+    const deleted = await Package.deleteMany({ routeId: req.params.id });
+    await Route.findByIdAndDelete(req.params.id);
+    res.json({ ok: true, packagesDeleted: deleted.deletedCount });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

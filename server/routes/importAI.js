@@ -28,14 +28,16 @@ Para cada entrega devuelve un objeto JSON con estos campos exactos (null si no e
 - zone: string o null (zona o sector si aparece)
 - lat: number o null
 - lng: number o null
+- _flags: array de strings con los nombres de campos donde los datos eran ilegibles, incompletos, ambiguos o tuviste que adivinar (ej: ["customerName","address"]). Array vacío [] si todos los datos son claros.
 
 REGLAS:
 - Si el nombre está completo en un campo, separa en customerName y customerLastName
 - Normaliza teléfonos chilenos: si empieza con 9 agrégale +569, si con 56 agrégale +
+- Usa _flags para marcar: texto ilegible en foto, columna vacía, valor ambiguo, dato que dedujiste sin certeza
 - Devuelve SOLO el array JSON válido, sin texto adicional, sin markdown
 
 Ejemplo de respuesta:
-[{"customerName":"María","customerLastName":"González","customerPhone":"+56912345678","address":"Av. Providencia 1100","commune":"Providencia","aptFloor":"Dpto 202","price":null,"zone":null,"lat":null,"lng":null}]`;
+[{"customerName":"María","customerLastName":"González","customerPhone":"+56912345678","address":"Av. Providencia 1100","commune":"Providencia","aptFloor":"Dpto 202","price":null,"zone":null,"lat":null,"lng":null,"_flags":[]},{"customerName":"J.","customerLastName":"Pérez","customerPhone":null,"address":"Calle ilegible 123","commune":"Santiago","aptFloor":null,"price":null,"zone":null,"lat":null,"lng":null,"_flags":["customerName","address","customerPhone"]}]`;
 
 async function parseWithClaude(client, content) {
   const message = await client.messages.create({
@@ -141,8 +143,9 @@ router.post('/:routeId/confirm', requireAuth, requireRole('admin'), async (req, 
     // Geocode packages that have no coordinates
     const docs = [];
     for (let i = 0; i < packages.length; i++) {
-      const { _preview, _suggestedPrice, ...p } = packages[i];
+      const { _preview, _suggestedPrice, _flags, ...p } = packages[i];
       const doc = { ...p, routeId: req.params.routeId, order: existing + i };
+      if (_flags?.length) doc.aiFlags = _flags;
 
       if ((!doc.lat || !doc.lng) && doc.address) {
         const geo = await geocodeAddress(doc.address, doc.commune);

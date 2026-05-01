@@ -132,42 +132,60 @@ export default function ImportModal({ routeId, onClose, onImported }) {
               🤖 Claude detectó <b>{preview.length} paquetes</b>. Revisa y edita antes de confirmar.
             </div>
 
-            {preview.map((pkg, idx) => (
-              <div key={idx} style={{
-                background: '#fff', border: '1px solid var(--border)', borderRadius: 12,
-                padding: '12px', marginBottom: 10, position: 'relative'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>PAQUETE {idx + 1}</span>
-                  <button onClick={() => removePkg(idx)} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: 16, cursor: 'pointer' }}>✕</button>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
-                  <PreviewField label="Nombre" value={pkg.customerName || ''} onChange={v => updatePkg(idx, 'customerName', v)} />
-                  <PreviewField label="Apellido" value={pkg.customerLastName || ''} onChange={v => updatePkg(idx, 'customerLastName', v)} />
-                  <div style={{ gridColumn: '1/-1' }}>
-                    <PreviewField label="Dirección" value={pkg.address || ''} onChange={v => updatePkg(idx, 'address', v)} />
-                  </div>
-                  <PreviewField label="Comuna" value={pkg.commune || ''} onChange={v => updatePkg(idx, 'commune', v)} />
-                  <PreviewField label="Depto/Casa" value={pkg.aptFloor || ''} onChange={v => updatePkg(idx, 'aptFloor', v)} />
-                  <PreviewField label="Teléfono" value={pkg.customerPhone || ''} onChange={v => updatePkg(idx, 'customerPhone', v)} />
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: 1, marginBottom: 3, textTransform: 'uppercase' }}>
-                      Precio CLP {pkg._suggestedPrice && <span style={{ color: '#d4650a' }}>(sugerido)</span>}
+            {preview.map((pkg, idx) => {
+              const flags = pkg._flags || [];
+              const hasFlags = flags.length > 0;
+              return (
+                <div key={idx} style={{
+                  background: '#fff',
+                  border: `1px solid ${hasFlags ? '#d4650a50' : 'var(--border)'}`,
+                  borderRadius: 12, padding: '12px', marginBottom: 10, position: 'relative'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>PAQUETE {idx + 1}</span>
+                      {hasFlags && (
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#d4650a', background: '#d4650a12', border: '1px solid #d4650a30', borderRadius: 20, padding: '1px 8px' }}>
+                          ⚠ Revisar {flags.length} campo{flags.length > 1 ? 's' : ''}
+                        </span>
+                      )}
                     </div>
-                    <select
-                      value={pkg.price || 3500}
-                      onChange={e => updatePkg(idx, 'price', Number(e.target.value))}
-                      style={{ width: '100%', background: pkg._suggestedPrice ? '#d4650a08' : 'var(--card2)', border: `1px solid ${pkg._suggestedPrice ? '#d4650a30' : 'var(--border)'}`, borderRadius: 8, padding: '7px 10px', fontSize: 13, outline: 'none' }}
-                    >
-                      {[2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000, 7000, 8000, 10000, 11500].map(p => (
-                        <option key={p} value={p}>${p.toLocaleString('es-CL')}</option>
-                      ))}
-                    </select>
+                    <button onClick={() => removePkg(idx)} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: 16, cursor: 'pointer' }}>✕</button>
+                  </div>
+
+                  {hasFlags && (
+                    <div style={{ fontSize: 11, color: '#d4650a', background: '#fff8f0', border: '1px solid #d4650a20', borderRadius: 8, padding: '6px 10px', marginBottom: 8 }}>
+                      La IA no estaba segura de: <b>{flags.join(', ')}</b>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
+                    <PreviewField label="Nombre" value={pkg.customerName || ''} onChange={v => updatePkg(idx, 'customerName', v)} flagged={flags.includes('customerName')} />
+                    <PreviewField label="Apellido" value={pkg.customerLastName || ''} onChange={v => updatePkg(idx, 'customerLastName', v)} flagged={flags.includes('customerLastName')} />
+                    <div style={{ gridColumn: '1/-1' }}>
+                      <PreviewField label="Dirección" value={pkg.address || ''} onChange={v => updatePkg(idx, 'address', v)} flagged={flags.includes('address')} />
+                    </div>
+                    <PreviewField label="Comuna" value={pkg.commune || ''} onChange={v => updatePkg(idx, 'commune', v)} flagged={flags.includes('commune')} />
+                    <PreviewField label="Depto/Casa" value={pkg.aptFloor || ''} onChange={v => updatePkg(idx, 'aptFloor', v)} flagged={flags.includes('aptFloor')} />
+                    <PreviewField label="Teléfono" value={pkg.customerPhone || ''} onChange={v => updatePkg(idx, 'customerPhone', v)} flagged={flags.includes('customerPhone')} />
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: 1, marginBottom: 3, textTransform: 'uppercase' }}>
+                        Precio CLP {pkg._suggestedPrice && <span style={{ color: '#d4650a' }}>(sugerido)</span>}
+                      </div>
+                      <select
+                        value={pkg.price || 3500}
+                        onChange={e => updatePkg(idx, 'price', Number(e.target.value))}
+                        style={{ width: '100%', background: pkg._suggestedPrice ? '#d4650a08' : 'var(--card2)', border: `1px solid ${pkg._suggestedPrice ? '#d4650a30' : 'var(--border)'}`, borderRadius: 8, padding: '7px 10px', fontSize: 13, outline: 'none' }}
+                      >
+                        {[2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000, 7000, 8000, 10000, 11500].map(p => (
+                          <option key={p} value={p}>${p.toLocaleString('es-CL')}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             <div style={{ position: 'sticky', bottom: 0, background: '#fff', paddingTop: 10 }}>
               <button onClick={handleConfirm} disabled={saving || !preview.length} style={{
@@ -191,14 +209,16 @@ export default function ImportModal({ routeId, onClose, onImported }) {
   );
 }
 
-function PreviewField({ label, value, onChange }) {
+function PreviewField({ label, value, onChange, flagged }) {
   return (
     <div>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: 1, marginBottom: 3, textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: flagged ? '#d4650a' : 'var(--muted)', letterSpacing: 1, marginBottom: 3, textTransform: 'uppercase' }}>
+        {label}{flagged && ' ⚠'}
+      </div>
       <input
         value={value}
         onChange={e => onChange(e.target.value)}
-        style={{ width: '100%', background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 10px', fontSize: 13, outline: 'none' }}
+        style={{ width: '100%', background: flagged ? '#fff8f0' : 'var(--card2)', border: `1px solid ${flagged ? '#d4650a60' : 'var(--border)'}`, borderRadius: 8, padding: '7px 10px', fontSize: 13, outline: 'none' }}
       />
     </div>
   );

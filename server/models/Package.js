@@ -31,7 +31,7 @@ const packageSchema = new mongoose.Schema({
   // Delivery status
   status: {
     type: String,
-    enum: ['pendiente', 'entregado', 'no-entregado', 'eliminado'],
+    enum: ['pendiente', 'entregado', 'no-entregado', 'devuelto', 'eliminado'],
     default: 'pendiente'
   },
   failReason: { type: String, trim: true },
@@ -44,6 +44,9 @@ const packageSchema = new mongoose.Schema({
   photo2Url: { type: String },
   photo2PublicId: { type: String },
   photo2UploadedAt: { type: Date },
+
+  // AI import flags — field names Claude flagged as uncertain/unreadable
+  aiFlags: { type: [String], default: [] },
 
   // Timestamps for delivery events
   deliveredAt: { type: Date },

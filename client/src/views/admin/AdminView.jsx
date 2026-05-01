@@ -15,6 +15,7 @@ import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
 import PriceSettings from '../../components/PriceSettings.jsx';
 import SectorMap from './SectorMap.jsx';
 import AllPackagesView from './AllPackagesView.jsx';
+import QuotesView from './QuotesView.jsx';
 
 const STATUS_META = {
   draft:      { label: 'Borrador',   color: 'var(--muted)',   bg: 'var(--card2)' },
@@ -136,7 +137,19 @@ export default function AdminView() {
   };
 
   const handleDeleteRoute = async (route) => {
-    if (!confirm(`¿Cancelar la ruta ${route.routeCode}?`)) return;
+    const code = window.prompt(
+      `⚠️ ELIMINAR RUTA ${route.routeCode}\n\nEsto eliminará la ruta y TODOS sus paquetes permanentemente.\n\nEscribe CONFIRMAR para continuar:`
+    );
+    if (code !== 'CONFIRMAR') return;
+    try {
+      await api.permanentDeleteRoute(route._id);
+      await loadRoutes();
+      toast('🗑️ Ruta eliminada permanentemente');
+    } catch (err) { toast('❌ ' + err.message); }
+  };
+
+  const handleCancelRoute = async (route) => {
+    if (!confirm(`¿Cancelar la ruta ${route.routeCode}? (solo cambia el estado, no elimina los datos)`)) return;
     try {
       await api.deleteRoute(route._id);
       await loadRoutes();
@@ -155,6 +168,15 @@ export default function AdminView() {
 
   const activePackages = packages.filter(p => p.status !== 'eliminado');
   const allDone = activePackages.length > 0 && activePackages.every(p => p.status !== 'pendiente') && selectedRoute?.status === 'active';
+
+  const addrCountMap = (() => {
+    const map = {};
+    activePackages.forEach(p => {
+      const key = (p.address || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
+      if (key) map[key] = (map[key] || 0) + 1;
+    });
+    return map;
+  })();
 
   const visible = packages.filter(p => {
     const q = search.toLowerCase();
@@ -195,6 +217,17 @@ export default function AdminView() {
 
   if (loading) return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>Cargando…</div>;
 
+  // ── QUOTES VIEW ──
+  if (view === 'quotes') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Header title="💼 Cotizaciones" onBack={() => setView('routes')} />
+        <QuotesView />
+        <Toast />
+      </div>
+    );
+  }
+
   // ── ALL PACKAGES VIEW ──
   if (view === 'allPackages') {
     return (
@@ -208,16 +241,10 @@ export default function AdminView() {
 
   // ── SECTOR MAP VIEW ──
   if (view === 'zones') {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <Header title="🗺 Mapa de zonas y precios" onBack={() => setView('routes')} />
-        <SectorMap />
-        <Toast />
-      </div>
-    );
+    return <ZonesView onBack={() => setView('routes')} />;
   }
 
-  // ── PRICES VIEW ──
+  // ── PRICES VIEW (legacy) ──
   if (view === 'prices') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -260,11 +287,9 @@ export default function AdminView() {
               <button onClick={() => setView('allPackages')} style={{ background: '#00885514', border: '1px solid #00885530', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', cursor: 'pointer' }}>
                 📦 Paquetes
               </button>
+              <QuotesBadgeBtn onClick={() => setView('quotes')} />
               <button onClick={() => setView('zones')} style={{ background: '#5c35cc14', border: '1px solid #5c35cc30', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#5c35cc', cursor: 'pointer' }}>
                 🗺 Zonas
-              </button>
-              <button onClick={() => setView('prices')} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', cursor: 'pointer' }}>
-                💰 Precios
               </button>
               <button onClick={() => setView('invoices')} style={{ background: '#fff3e0', border: '1px solid #f57c0030', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#f57c00', cursor: 'pointer' }}>
                 💳 Cobros
@@ -272,6 +297,7 @@ export default function AdminView() {
               <button onClick={() => setView('users')} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', cursor: 'pointer' }}>
                 👥 Usuarios
               </button>
+              <ResetDataBtn onDone={() => { setRoutes([]); setSelectedRoute(null); }} />
             </div>
           }
         />
@@ -309,6 +335,7 @@ export default function AdminView() {
                 route={route}
                 onClick={() => loadRoute(route._id)}
                 onStatusChange={handleRouteStatus}
+                onCancel={handleCancelRoute}
                 onDelete={handleDeleteRoute}
               />
             ))
@@ -450,6 +477,7 @@ export default function AdminView() {
                 onStatusChange={handleStatusChange}
                 onDelete={handleDelete}
                 onRestore={handleRestore}
+                sameAddressCount={addrCountMap[(pkg.address || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ')] || 1}
               />
             ))}
           </div>
@@ -464,6 +492,18 @@ export default function AdminView() {
             geocoding={geocoding}
             onGeocode={handleGeocode}
             onRouteUpdate={updated => setSelectedRoute(prev => ({ ...prev, ...updated }))}
+            onDelete={async () => {
+              const code = window.prompt(`⚠️ ELIMINAR RUTA ${selectedRoute.routeCode}\n\nSe eliminarán la ruta y TODOS sus paquetes permanentemente.\n\nEscribe CONFIRMAR para continuar:`);
+              if (code !== 'CONFIRMAR') return;
+              try {
+                await api.permanentDeleteRoute(selectedRoute._id);
+                toast('🗑️ Ruta eliminada');
+                setView('routes');
+                setSelectedRoute(null);
+                setPackages([]);
+                await loadRoutes();
+              } catch (err) { toast('❌ ' + err.message); }
+            }}
           />
         )}
       </div>
@@ -486,12 +526,10 @@ export default function AdminView() {
         </div>
       )}
 
-      {tab !== 'm' && (
-        <div style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16, display: 'flex', flexDirection: 'column', gap: 10, zIndex: 400 }}>
-          <button onClick={() => setShowImport(true)} style={{ width: 52, height: 52, borderRadius: '50%', background: '#9c27b0', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', boxShadow: '0 4px 16px #9c27b040', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🤖</button>
-          <button onClick={() => setShowAddPkg(true)} style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', boxShadow: '0 4px 16px #00885540', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>＋</button>
-        </div>
-      )}
+      <div style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16, display: 'flex', flexDirection: 'column', gap: 10, zIndex: 400 }}>
+        <button onClick={() => setShowImport(true)} title="Importar paquetes con IA (Excel, CSV, foto)" style={{ width: 52, height: 52, borderRadius: '50%', background: '#9c27b0', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', boxShadow: '0 4px 16px #9c27b040', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🤖</button>
+        {tab !== 'm' && <button onClick={() => setShowAddPkg(true)} style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', boxShadow: '0 4px 16px #00885540', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>＋</button>}
+      </div>
 
       {editPkg && <DeliveryModal pkg={editPkg} route={selectedRoute} onClose={() => setEditPkg(null)} onSaved={refreshRoute} />}
       {showAddPkg && <AddPackageModal routeId={selectedRoute._id} onClose={() => setShowAddPkg(false)} onCreated={() => { setShowAddPkg(false); refreshRoute(); }} />}
@@ -501,8 +539,28 @@ export default function AdminView() {
   );
 }
 
+// ── Quotes button with live "submitted" badge ──
+function QuotesBadgeBtn({ onClick }) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    api.getQuotes()
+      .then(qs => setCount(qs.filter(q => q.status === 'submitted').length))
+      .catch(() => {});
+  }, []);
+  return (
+    <button onClick={onClick} style={{ position: 'relative', background: '#f57c0014', border: '1px solid #f57c0030', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#f57c00', cursor: 'pointer' }}>
+      💼 Cotizaciones
+      {count > 0 && (
+        <span style={{ position: 'absolute', top: -5, right: -5, width: 16, height: 16, borderRadius: '50%', background: '#cc2244', color: '#fff', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff' }}>
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
 // ── Route card in list ──
-function RouteCard({ route, onClick, onStatusChange, onDelete }) {
+function RouteCard({ route, onClick, onStatusChange, onCancel, onDelete }) {
   const inv = route.invoice;
   const daysLeft = inv?.status === 'net30' && inv?.dueDate
     ? Math.ceil((new Date(inv.dueDate) - Date.now()) / 86400000) : null;
@@ -567,7 +625,10 @@ function RouteCard({ route, onClick, onStatusChange, onDelete }) {
         {route.status === 'active' && (
           <button onClick={e => { e.stopPropagation(); onStatusChange(route, 'completed'); }} style={actBtn('#0077aa')}>✓ Cerrar ruta</button>
         )}
-        <button onClick={e => { e.stopPropagation(); onDelete(route); }} style={actBtn('var(--danger)')}>🗑️ Cancelar</button>
+        {!['completed'].includes(route.status) && (
+          <button onClick={e => { e.stopPropagation(); onCancel(route); }} style={actBtn('#f57c00')}>✗ Cancelar</button>
+        )}
+        <button onClick={e => { e.stopPropagation(); onDelete(route); }} style={actBtn('var(--danger)')}>🗑️ Eliminar</button>
       </div>
     </div>
   );
@@ -578,10 +639,11 @@ function actBtn(color) {
 }
 
 // ── Info / Report tab ──
-function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate }) {
+function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onDelete }) {
   const [editingRoute, setEditingRoute] = useState(false);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [tariffs, setTariffs] = React.useState([]);
   const [geocodingStart, setGeocodingStart] = useState(false);
   const [shareToken, setShareToken] = useState(null);
   const [shareLoading, setShareLoading] = useState(false);
@@ -627,8 +689,13 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate }) {
   };
 
   useEffect(() => {
+    api.getTariffs().then(setTariffs).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     setForm({
       name: route?.name || '',
+      tariffId: route?.tariffId?._id || route?.tariffId || '',
       clientCompany: { name: route?.clientCompany?.name || '', contactPerson: route?.clientCompany?.contactPerson || '', contactPhone: route?.clientCompany?.contactPhone || '' },
       invoice: {
         status: route?.invoice?.status || 'none',
@@ -650,6 +717,7 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate }) {
     try {
       const updated = await api.updateRoute(route._id, {
         name: form.name,
+        tariffId: form.tariffId || null,
         clientCompany: form.clientCompany,
         invoice: { ...form.invoice, amount: form.invoice.amount !== '' ? Number(form.invoice.amount) : undefined, invoiceDate: form.invoice.invoiceDate || undefined },
         startPoint: { address: form.startPoint.address || undefined, lat: form.startPoint.lat !== '' ? Number(form.startPoint.lat) : undefined, lng: form.startPoint.lng !== '' ? Number(form.startPoint.lng) : undefined }
@@ -704,6 +772,12 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate }) {
             <Label>Nombre de ruta</Label>
             <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="Ej: Ruta Lunes Norte" style={inp} />
 
+            <Label>Configuración de precios</Label>
+            <select value={form.tariffId} onChange={e => set('tariffId', e.target.value)} style={inp}>
+              <option value="">Sin configuración de precios</option>
+              {tariffs.map(t => <option key={t._id} value={t._id}>{t.name}{t.description ? ` — ${t.description}` : ''}</option>)}
+            </select>
+
             <div style={{ margin: '14px 0 4px', fontSize: 11, fontWeight: 700, color: '#005078', letterSpacing: 1 }}>🏢 EMPRESA CLIENTE</div>
             <Label>Nombre empresa</Label>
             <input value={form.clientCompany.name} onChange={e => setCompany('name', e.target.value)} placeholder="Importadora ABC" style={inp} />
@@ -750,6 +824,11 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate }) {
         ) : (
           <div>
             {route?.name && <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{route.name}</div>}
+            {route?.tariffId && (
+              <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600, marginBottom: 6 }}>
+                💰 Config: {route.tariffId?.name || route.tariffId}
+              </div>
+            )}
             {route?.clientCompany?.name ? (
               <div style={{ marginBottom: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 700 }}>🏢 {route.clientCompany.name}</div>
@@ -881,6 +960,22 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate }) {
           ))}
         </div>
       ))}
+
+      {/* Delete route zone */}
+      {onDelete && (
+        <div style={{ marginTop: 24, padding: '14px', background: '#cc224408', border: '1px solid #cc224430', borderRadius: 13 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#cc2244', marginBottom: 8, letterSpacing: 1 }}>⚠️ ZONA PELIGROSA</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+            Eliminar la ruta borrará permanentemente todos los datos. Esta acción no se puede deshacer.
+          </div>
+          <button
+            onClick={onDelete}
+            style={{ width: '100%', padding: '11px', borderRadius: 10, border: '1px solid #cc224450', background: '#cc224412', color: '#cc2244', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+          >
+            🗑️ Eliminar ruta permanentemente
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -890,3 +985,51 @@ function Label({ children }) {
 }
 
 const inp = { width: '100%', background: '#fff', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)', fontSize: 13, padding: '9px 12px', outline: 'none', display: 'block', WebkitAppearance: 'none', boxSizing: 'border-box' };
+
+// ── ResetDataBtn ──────────────────────────────────────────────────────────────
+function ResetDataBtn({ onDone }) {
+  const [busy, setBusy] = React.useState(false);
+
+  const handleReset = async () => {
+    const confirmed = window.confirm(
+      '⚠️ BORRAR TODO\n\nEsto eliminará:\n• Todas las rutas\n• Todos los paquetes\n• Cotizaciones\n• Tarifas\n• Zonas y precios\n\nLos usuarios NO se borran.\n\n¿Confirmar?'
+    );
+    if (!confirmed) return;
+    const reconfirm = window.confirm('¿Estás seguro? Esta acción no se puede deshacer.');
+    if (!reconfirm) return;
+
+    setBusy(true);
+    try {
+      const result = await api.resetAllData();
+      toast(`🗑️ Listo — ${result.deleted.routes} rutas, ${result.deleted.packages} paquetes eliminados`);
+      onDone?.();
+    } catch (err) {
+      toast('❌ ' + err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleReset}
+      disabled={busy}
+      style={{ background: '#cc224408', border: '1px solid #cc224430', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#cc2244', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}
+    >
+      {busy ? '⏳…' : '🗑️ Reset DB'}
+    </button>
+  );
+}
+
+// ── ZonesView ─────────────────────────────────────────────────────────────────
+function ZonesView({ onBack }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Header title="🗺 Zonas y precios" onBack={onBack} />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <SectorMap />
+      </div>
+      <Toast />
+    </div>
+  );
+}

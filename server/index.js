@@ -14,6 +14,8 @@ import importRoutes from './routes/importAI.js';
 import priceRoutes from './routes/priceRoutes.js';
 import publicRoutes from './routes/publicRoutes.js';
 import zoneRoutes from './routes/zoneRoutes.js';
+import tariffRoutes from './routes/tariffRoutes.js';
+import quoteRoutes from './routes/quoteRoutes.js';
 import { runCleanup } from './utils/cleanup.js';
 
 const app = express();
@@ -43,8 +45,55 @@ app.use('/api/packages', packageRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/prices', priceRoutes);
 app.use('/api/zones', zoneRoutes);
+app.use('/api/tariffs', tariffRoutes);
+app.use('/api/quotes', quoteRoutes);
 
 app.get('/api/health', (_, res) => res.json({ ok: true, ts: Date.now() }));
+
+// Reset completo — elimina rutas, paquetes, cotizaciones, tarifas y precios
+// Solo ejecutable por admin autenticado
+app.post('/api/admin/reset-data', async (req, res) => {
+  try {
+    const { requireAuth, requireRole } = await import('./middleware/auth.js');
+    await new Promise((resolve, reject) => requireAuth(req, res, err => err ? reject(err) : resolve()));
+    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Solo admins' });
+
+    const [Route, Package, Quote, Tariff, Price, Zone] = await Promise.all([
+      import('./models/Route.js').then(m => m.default),
+      import('./models/Package.js').then(m => m.default),
+      import('./models/Quote.js').then(m => m.default).catch(() => null),
+      import('./models/Tariff.js').then(m => m.default).catch(() => null),
+      import('./models/Price.js').then(m => m.default).catch(() => null),
+      import('./models/Zone.js').then(m => m.default).catch(() => null),
+    ]);
+
+    const results = await Promise.all([
+      Route.deleteMany({}),
+      Package.deleteMany({}),
+      Quote   ? Quote.deleteMany({})   : { deletedCount: 0 },
+      Tariff  ? Tariff.deleteMany({})  : { deletedCount: 0 },
+      Price   ? Price.deleteMany({})   : { deletedCount: 0 },
+      Zone    ? Zone.deleteMany({})    : { deletedCount: 0 },
+    ]);
+
+    console.log('🗑️ Reset completo ejecutado por', req.user.email);
+    res.json({
+      ok: true,
+      deleted: {
+        routes:   results[0].deletedCount,
+        packages: results[1].deletedCount,
+        quotes:   results[2].deletedCount,
+        tariffs:  results[3].deletedCount,
+        prices:   results[4].deletedCount,
+        zones:    results[5].deletedCount,
+      }
+    });
+  } catch (err) {
+    console.error('Reset error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/admin/cleanup', async (req, res) => {
   try {
     const result = await runCleanup();

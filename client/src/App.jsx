@@ -7,6 +7,7 @@ import DriverView from './views/driver/DriverView.jsx';
 import CompanyView from './views/company/CompanyView.jsx';
 import CustomerView from './views/customer/CustomerView.jsx';
 import PublicRouteView from './views/PublicRouteView.jsx';
+import QuoteView from './views/public/QuoteView.jsx';
 
 function RoleRouter() {
   const { user, loading } = useAuth();
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/track/:trackingId" element={<CustomerView />} />
           <Route path="/route/:shareToken" element={<PublicRouteView />} />
+          <Route path="/quote/:shareToken" element={<QuoteView />} />
           <Route path="/*" element={<RoleRouter />} />
         </Routes>
       </BrowserRouter>

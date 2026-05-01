@@ -9,6 +9,7 @@ export default function AddRouteModal({ onClose, onCreated }) {
     date: new Date().toISOString().slice(0, 10),
     driverId: '',
     companyId: '',
+    tariffId: '',
     status: 'active',
     clientCompany: { name: '', contactPerson: '', contactPhone: '' },
     invoice: { status: 'none', amount: '', invoiceDate: '' },
@@ -16,11 +17,13 @@ export default function AddRouteModal({ onClose, onCreated }) {
   });
   const [drivers, setDrivers] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const [tariffs, setTariffs] = useState([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     api.getUsers().then(users => setDrivers(users.filter(u => u.role === 'driver' && u.active))).catch(() => {});
     api.getCompanies().then(setCompanies).catch(() => {});
+    api.getTariffs().then(setTariffs).catch(() => {});
   }, []);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -37,6 +40,7 @@ export default function AddRouteModal({ onClose, onCreated }) {
         status: form.status,
         driverId: form.driverId || undefined,
         companyId: form.companyId || undefined,
+        tariffId: form.tariffId || undefined,
         clientCompany: form.clientCompany,
         invoice: {
           status: form.invoice.status,
@@ -90,6 +94,12 @@ export default function AddRouteModal({ onClose, onCreated }) {
         <select value={form.companyId} onChange={e => set('companyId', e.target.value)} style={inp}>
           <option value="">Sin empresa</option>
           {companies.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+        </select>
+
+        <Label>Configuración de precios (opcional)</Label>
+        <select value={form.tariffId} onChange={e => set('tariffId', e.target.value)} style={inp}>
+          <option value="">Sin configuración de precios</option>
+          {tariffs.map(t => <option key={t._id} value={t._id}>{t.name}{t.description ? ` — ${t.description}` : ''}</option>)}
         </select>
 
         {/* Client company */}

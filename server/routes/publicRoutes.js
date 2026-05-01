@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import Route from '../models/Route.js';
 import Package from '../models/Package.js';
+import Quote from '../models/Quote.js';
+import Zone from '../models/Zone.js';
 
 const router = Router();
 
@@ -59,6 +61,73 @@ router.get('/route/:shareToken', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/public/quote/:token — client opens quote view
+router.get('/quote/:token', async (req, res) => {
+  try {
+    const quote = await Quote.findOne({ shareToken: req.params.token })
+      .populate('tariffId', 'name defaultPrice items')
+      .lean();
+    if (!quote) return res.status(404).json({ error: 'Enlace de cotización no válido o expirado' });
+
+    const zones = await Zone.find().select('name price color source polygon').lean();
+
+    res.json({
+      quote: {
+        _id: quote._id,
+        quoteCode: quote.quoteCode,
+        status: quote.status,
+        clientCompany: quote.clientCompany,
+        contactPerson: quote.contactPerson,
+        contactEmail: quote.contactEmail,
+        deliveryDate: quote.deliveryDate,
+        adminNotes: quote.adminNotes,
+        items: quote.items,
+      },
+      tariff: quote.tariffId || null,
+      zones,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/public/quote/:token — client updates items (saves draft)
+router.patch('/quote/:token', async (req, res) => {
+  try {
+    const quote = await Quote.findOne({ shareToken: req.params.token });
+    if (!quote) return res.status(404).json({ error: 'Cotización no encontrada' });
+    if (['approved', 'rejected', 'submitted'].includes(quote.status)) {
+      return res.status(403).json({ error: 'Esta cotización ya no puede modificarse' });
+    }
+    const { items, clientNotes } = req.body;
+    if (items !== undefined) quote.items = items;
+    if (clientNotes !== undefined) quote.clientNotes = clientNotes;
+    await quote.save();
+    res.json({ ok: true, items: quote.items });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/public/quote/:token/submit — client submits for admin review
+router.post('/quote/:token/submit', async (req, res) => {
+  try {
+    const quote = await Quote.findOne({ shareToken: req.params.token });
+    if (!quote) return res.status(404).json({ error: 'Cotización no encontrada' });
+    if (['approved', 'rejected', 'submitted'].includes(quote.status)) {
+      return res.status(403).json({ error: 'Esta cotización ya fue enviada' });
+    }
+    const { items, clientNotes } = req.body;
+    if (items !== undefined) quote.items = items;
+    if (clientNotes !== undefined) quote.clientNotes = clientNotes;
+    quote.status = 'submitted';
+    await quote.save();
+    res.json({ ok: true, status: quote.status });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 

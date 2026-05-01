@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import Package from '../models/Package.js';
 import Route from '../models/Route.js';
+
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { upload, uploadToCloudinary, deletePhoto } from '../utils/cloudinary.js';
 import { syncRouteStats } from './deliveryRoutes.js';
@@ -94,11 +95,23 @@ router.get('/', async (req, res) => {
   }
 });
 
+const normStr = s => (s || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
 // POST /api/packages — admin adds package to route
 router.post('/', requireRole('admin'), async (req, res) => {
   try {
     const count = await Package.countDocuments({ routeId: req.body.routeId });
     const data = { ...req.body, order: count };
+
+    // Auto-price from route's tariff when no price sent
+    if ((data.price == null || data.price === '') && data.routeId) {
+      const route = await Route.findById(data.routeId).populate('tariffId').lean();
+      if (route?.tariffId) {
+        const tariff = route.tariffId;
+        const item = tariff.items?.find(i => normStr(i.commune) === normStr(data.commune));
+        data.price = item ? item.price : tariff.defaultPrice;
+      }
+    }
 
     // Auto-geocode if no coordinates provided
     if ((!data.lat || !data.lng) && data.address) {

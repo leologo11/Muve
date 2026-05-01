@@ -37,6 +37,7 @@ export const api = {
   createRoute: (data) => request('POST', '/routes', data),
   updateRoute: (id, data) => request('PATCH', `/routes/${id}`, data),
   deleteRoute: (id) => request('DELETE', `/routes/${id}`),
+  permanentDeleteRoute: (id) => request('DELETE', `/routes/${id}/permanent`),
   optimizeRoute: (id) => request('POST', `/routes/${id}/optimize`),
   geocodeRoute: (id) => request('POST', `/routes/${id}/geocode`),
   generateShareLink: (id) => request('POST', `/routes/${id}/share`),
@@ -101,9 +102,33 @@ export const api = {
   seedCommunes: (features) => request('POST', '/zones/seed-communes', features ? { features } : undefined),
   deleteAllCommunes: () => request('DELETE', '/zones/communes/all'),
 
+  // Quotes
+  getQuotes: () => request('GET', '/quotes'),
+  getQuote: (id) => request('GET', `/quotes/${id}`),
+  createQuote: (data) => request('POST', '/quotes', data),
+  updateQuote: (id, data) => request('PATCH', `/quotes/${id}`, data),
+  deleteQuote: (id) => request('DELETE', `/quotes/${id}`),
+  sendQuote: (id) => request('POST', `/quotes/${id}/send`),
+  approveQuote: (id, data) => request('POST', `/quotes/${id}/approve`, data),
+  rejectQuote: (id) => request('POST', `/quotes/${id}/reject`),
+  // Public quote (no auth)
+  getPublicQuote: (token) => request('GET', `/public/quote/${token}`),
+  savePublicQuote: (token, data) => request('PATCH', `/public/quote/${token}`, data),
+  submitPublicQuote: (token, data) => request('POST', `/public/quote/${token}/submit`, data),
+
+  // Tariffs
+  getTariffs: () => request('GET', '/tariffs'),
+  createTariff: (data) => request('POST', '/tariffs', data),
+  updateTariff: (id, data) => request('PATCH', `/tariffs/${id}`, data),
+  deleteTariff: (id) => request('DELETE', `/tariffs/${id}`),
+  duplicateTariff: (id) => request('POST', `/tariffs/${id}/duplicate`),
+
   // Companies
   getCompanies: () => request('GET', '/companies'),
   createCompany: (data) => request('POST', '/companies', data),
   updateCompany: (id, data) => request('PATCH', `/companies/${id}`, data),
-  deleteCompany: (id) => request('DELETE', `/companies/${id}`)
+  deleteCompany: (id) => request('DELETE', `/companies/${id}`),
+
+  // Admin reset
+  resetAllData: () => request('POST', '/admin/reset-data'),
 };

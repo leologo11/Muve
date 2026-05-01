@@ -8,6 +8,7 @@ const routeSchema = new mongoose.Schema({
 
   driverId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company' },
+  tariffId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tariff' },
 
   status: {
     type: String,

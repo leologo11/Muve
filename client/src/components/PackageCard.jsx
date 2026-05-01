@@ -4,10 +4,15 @@ const STATUS = {
   pendiente:      { color: '#888',    label: 'PENDIENTE',    icon: '⏳' },
   entregado:      { color: '#008855', label: 'ENTREGADO',    icon: '✓'  },
   'no-entregado': { color: '#cc2244', label: 'NO ENTREGADO', icon: '✗'  },
+  devuelto:       { color: '#7b1fa2', label: 'DEVUELTO',     icon: '↩'  },
   eliminado:      { color: '#c04a1a', label: 'ELIMINADO',    icon: '✕'  },
 };
 
-export default function PackageCard({ pkg, index, onEdit, onStatusChange, onDelete, onRestore, readOnly, hidePrice, lockDelivered }) {
+function normalizeAddr(str) {
+  return (str || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
+}
+
+export default function PackageCard({ pkg, index, onEdit, onStatusChange, onDelete, onRestore, readOnly, hidePrice, lockDelivered, sameAddressCount }) {
   const [hovered, setHovered] = useState(false);
   const st  = pkg.status;
   const s   = STATUS[st] || STATUS.pendiente;
@@ -91,6 +96,26 @@ export default function PackageCard({ pkg, index, onEdit, onStatusChange, onDele
             </div>
           )}
 
+          {/* AI address flag warning */}
+          {pkg.aiFlags?.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '3px 7px', borderRadius: 6, background: '#d4650a10', border: '1px solid #d4650a28', width: 'fit-content' }}>
+              <span style={{ fontSize: 10 }}>⚠️</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#d4650a' }}>
+                Revisar: {pkg.aiFlags.join(', ')}
+              </span>
+            </div>
+          )}
+
+          {/* Same address warning */}
+          {sameAddressCount > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '3px 7px', borderRadius: 6, background: '#0077aa10', border: '1px solid #0077aa28', width: 'fit-content' }}>
+              <span style={{ fontSize: 10 }}>📍</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#0077aa' }}>
+                {sameAddressCount} paquetes en este edificio
+              </span>
+            </div>
+          )}
+
           {!hidePrice && (
             <div style={{
               fontSize: 13, fontWeight: 700,
@@ -151,10 +176,16 @@ export default function PackageCard({ pkg, index, onEdit, onStatusChange, onDele
             <ActionBtn color="#d4650a" onClick={() => onEdit?.(pkg)}>📷 Foto</ActionBtn>
           ) : (
             <>
-              <ActionBtn color="#008855" solid onClick={() => onStatusChange?.(pkg, 'entregado')}>✅ Entregado</ActionBtn>
-              <ActionBtn color="#cc2244" solid onClick={() => onStatusChange?.(pkg, 'no-entregado')}>❌ No entregado</ActionBtn>
+              {st !== 'devuelto' && <ActionBtn color="#008855" solid onClick={() => onStatusChange?.(pkg, 'entregado')}>✅ Entregado</ActionBtn>}
+              {st !== 'devuelto' && <ActionBtn color="#cc2244" solid onClick={() => onStatusChange?.(pkg, 'no-entregado')}>❌ No entregado</ActionBtn>}
+              {st === 'no-entregado' && (
+                <ActionBtn color="#7b1fa2" solid onClick={() => onStatusChange?.(pkg, 'devuelto')}>📦 Devolver</ActionBtn>
+              )}
+              {st === 'devuelto' && (
+                <ActionBtn color="#777" onClick={() => onStatusChange?.(pkg, 'no-entregado')}>↩ Deshacer devolución</ActionBtn>
+              )}
               <ActionBtn color="#d4650a" onClick={() => onEdit?.(pkg)}>📷 Foto</ActionBtn>
-              {st !== 'pendiente' && (
+              {st !== 'pendiente' && st !== 'devuelto' && (
                 <ActionBtn color="#777" onClick={() => onStatusChange?.(pkg, 'pendiente')}>↩ Deshacer</ActionBtn>
               )}
               {onDelete && <ActionBtn color="#c04a1a" onClick={() => onDelete?.(pkg)}>🗑️</ActionBtn>}
