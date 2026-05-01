@@ -36,7 +36,109 @@ function makePin(num, status) {
   });
 }
 
-// ── Public map (Leaflet) ────────────────────────────────────────────────────────
+// ── PDF generator ──────────────────────────────────────────────────────────────
+function generatePdf(route, packages) {
+  const active    = packages.filter(p => p.status !== 'eliminado');
+  const delivered = active.filter(p => p.status === 'entregado');
+  const failed    = active.filter(p => p.status === 'no-entregado');
+  const pending   = active.filter(p => p.status === 'pendiente');
+  const dateStr   = new Date(route.date).toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const totalAmt  = route.stats?.totalAmount || route.invoiceAmount || 0;
+
+  const rowsHtml = active.map((p, i) => {
+    const status = p.status === 'entregado' ? '✅ Entregado' : p.status === 'no-entregado' ? '❌ No entregado' : '⏳ Pendiente';
+    const time   = p.deliveredAt ? new Date(p.deliveredAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '—';
+    return `<tr>
+      <td style="text-align:center">${i + 1}</td>
+      <td>${p.customerName} ${p.customerLastName || ''}</td>
+      <td>${p.address || ''}${p.commune ? ', ' + p.commune : ''}${p.aptFloor ? ' · ' + p.aptFloor : ''}</td>
+      <td>${status}</td>
+      <td>${time}</td>
+      <td>${p.note || p.failReason || ''}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>${route.name || route.routeCode} — Detalle de entrega</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #222; padding: 28px 32px; }
+    h1 { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+    h2 { font-size: 13px; font-weight: 700; margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 1px; color: #555; }
+    .meta { font-size: 11px; color: #777; margin-bottom: 14px; }
+    .cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 10px 14px; flex: 1; min-width: 180px; }
+    .card-title { font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+    .card-val { font-size: 14px; font-weight: 800; }
+    .stat-row { display: flex; gap: 20px; margin-bottom: 16px; }
+    .stat { text-align: center; }
+    .stat .num { font-size: 22px; font-weight: 800; }
+    .stat .lbl { font-size: 10px; color: #888; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th { background: #f5f7fa; border: 1px solid #e0e0e0; padding: 7px 8px; text-align: left; font-size: 11px; font-weight: 700; }
+    td { border: 1px solid #eee; padding: 7px 8px; font-size: 11px; vertical-align: top; }
+    tr:nth-child(even) td { background: #fafafa; }
+    .footer { margin-top: 24px; font-size: 10px; color: #bbb; text-align: center; }
+    @media print { button { display: none; } body { padding: 12px 16px; } }
+  </style>
+</head>
+<body>
+  <h1>📦 ${route.name || route.routeCode}</h1>
+  <div class="meta">${dateStr}${route.routeCode !== route.name ? ' · ' + route.routeCode : ''}</div>
+
+  <div class="cards">
+    ${route.driverName ? `<div class="card">
+      <div class="card-title">🚗 Driver</div>
+      <div class="card-val">${route.driverName}</div>
+      ${route.driverPhone ? `<div style="font-size:11px;color:#555;margin-top:3px">${route.driverPhone}</div>` : ''}
+    </div>` : ''}
+    ${route.clientCompany?.name ? `<div class="card">
+      <div class="card-title">🏢 Empresa cliente</div>
+      <div class="card-val">${route.clientCompany.name}</div>
+      ${route.clientCompany.contactPerson ? `<div style="font-size:11px;color:#555;margin-top:3px">👤 ${route.clientCompany.contactPerson}</div>` : ''}
+      ${route.clientCompany.contactPhone ? `<div style="font-size:11px;color:#555;margin-top:2px">${route.clientCompany.contactPhone}</div>` : ''}
+    </div>` : ''}
+    ${totalAmt > 0 ? `<div class="card">
+      <div class="card-title">💰 Total ruta</div>
+      <div class="card-val" style="color:#008855">$${totalAmt.toLocaleString('es-CL')}</div>
+    </div>` : ''}
+  </div>
+
+  <div class="stat-row">
+    <div class="stat"><div class="num">${active.length}</div><div class="lbl">Total</div></div>
+    <div class="stat"><div class="num" style="color:#008855">${delivered.length}</div><div class="lbl">✅ Entregados</div></div>
+    <div class="stat"><div class="num" style="color:#cc2244">${failed.length}</div><div class="lbl">❌ No entregados</div></div>
+    <div class="stat"><div class="num" style="color:#f57c00">${pending.length}</div><div class="lbl">⏳ Pendientes</div></div>
+  </div>
+
+  <h2>Detalle de paquetes</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:32px">#</th>
+        <th>Destinatario</th>
+        <th>Dirección</th>
+        <th>Estado</th>
+        <th>Hora</th>
+        <th>Nota</th>
+      </tr>
+    </thead>
+    <tbody>${rowsHtml}</tbody>
+  </table>
+
+  <div class="footer">Generado por Routiflow · ${new Date().toLocaleString('es-CL')}</div>
+  <script>window.onload = () => { window.print(); }</script>
+</body>
+</html>`;
+
+  const w = window.open('', '_blank');
+  if (w) { w.document.write(html); w.document.close(); }
+}
+
+// ── Public map ─────────────────────────────────────────────────────────────────
 function PublicMap({ packages }) {
   const mapRef  = useRef(null);
   const mapInst = useRef(null);
@@ -57,10 +159,8 @@ function PublicMap({ packages }) {
     if (!map) return;
     mksRef.current.forEach(m => map.removeLayer(m));
     mksRef.current = [];
-
     const active = packages.filter(p => p.status !== 'eliminado');
     const withCoords = active.filter(p => p.lat && p.lng);
-
     withCoords.forEach((pkg, i) => {
       const mk = L.marker([pkg.lat, pkg.lng], { icon: makePin(i + 1, pkg.status) }).addTo(map);
       mk.bindPopup(
@@ -73,12 +173,9 @@ function PublicMap({ packages }) {
       );
       mksRef.current.push(mk);
     });
-
     if (withCoords.length > 0) {
-      const bounds = L.latLngBounds(withCoords.map(p => [p.lat, p.lng]));
-      map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
+      map.fitBounds(L.latLngBounds(withCoords.map(p => [p.lat, p.lng])), { padding: [30, 30], maxZoom: 14 });
     }
-
     setTimeout(() => map.invalidateSize(), 80);
   }, [packages]);
 
@@ -89,7 +186,7 @@ function PublicMap({ packages }) {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {withCoords < total && (
         <div style={{ background: '#fff8e1', borderBottom: '1px solid #f57c0033', padding: '6px 14px', fontSize: 11, color: '#f57c00', fontWeight: 600, flexShrink: 0 }}>
-          ⚠ {total - withCoords} paquete{total - withCoords !== 1 ? 's' : ''} sin coordenadas no aparece{total - withCoords !== 1 ? 'n' : ''} en el mapa
+          ⚠ {total - withCoords} paquete{total - withCoords !== 1 ? 's' : ''} sin coordenadas
         </div>
       )}
       <div ref={mapRef} style={{ flex: 1 }} />
@@ -98,7 +195,7 @@ function PublicMap({ packages }) {
 }
 
 // ── Package card ───────────────────────────────────────────────────────────────
-function PkgCard({ pkg, idx, expanded, onToggle }) {
+function PkgCard({ pkg, expanded, onToggle }) {
   const meta = STATUS_META[pkg.status] || STATUS_META.pendiente;
   return (
     <div
@@ -112,7 +209,7 @@ function PkgCard({ pkg, idx, expanded, onToggle }) {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 12, fontWeight: 800, color: pkg.status === 'pendiente' ? '#888' : '#fff'
         }}>
-          {pkg.status === 'entregado' ? '✓' : pkg.status === 'no-entregado' ? '✗' : idx + 1}
+          {pkg.status === 'entregado' ? '✓' : pkg.status === 'no-entregado' ? '✗' : pkg.order + 1}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#111', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -175,12 +272,12 @@ function PkgCard({ pkg, idx, expanded, onToggle }) {
 // ── Main view ──────────────────────────────────────────────────────────────────
 export default function PublicRouteView() {
   const { shareToken } = useParams();
-  const [route, setRoute]     = useState(null);
+  const [route, setRoute]       = useState(null);
   const [packages, setPackages] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(null);
-  const [tab, setTab]         = useState('list'); // 'list' | 'map'
-  const [search, setSearch]   = useState('');
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
+  const [tab, setTab]           = useState('list');
+  const [search, setSearch]     = useState('');
   const [expandedPkg, setExpandedPkg] = useState(null);
 
   const load = useCallback(() =>
@@ -224,11 +321,14 @@ export default function PublicRouteView() {
   const total     = active.length;
   const progress  = total > 0 ? Math.round((delivered + failed) / total * 100) : 0;
   const routeMeta = ROUTE_STATUS[route.status] || ROUTE_STATUS.draft;
+  const totalAmt  = route.stats?.totalAmount || route.invoiceAmount || 0;
 
   const q = search.toLowerCase().trim();
   const visible = q
     ? active.filter(p => [p.customerName, p.customerLastName, p.address, p.commune, p.trackingId].filter(Boolean).join(' ').toLowerCase().includes(q))
     : active;
+
+  const driverWaPhone = route.driverPhone?.replace(/[^0-9]/g, '');
 
   return (
     <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', fontFamily: "'Space Grotesk', system-ui, sans-serif", background: '#f5f7fa', overflow: 'hidden' }}>
@@ -236,36 +336,95 @@ export default function PublicRouteView() {
       {/* ── Header ── */}
       <div style={{ flexShrink: 0, background: '#fff', borderBottom: '1px solid #e8e8e8', padding: '12px 16px' }}>
         <div style={{ maxWidth: 680, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+
+          {/* Title row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <span style={{ fontSize: 20 }}>📦</span>
-            <span style={{ fontSize: 15, fontWeight: 800, color: '#111' }}>{route.name || route.routeCode}</span>
-            <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: routeMeta.bg, color: routeMeta.color, border: `1px solid ${routeMeta.color}30`, flexShrink: 0 }}>
+            <span style={{ fontSize: 15, fontWeight: 800, color: '#111', flex: 1, minWidth: 0 }}>{route.name || route.routeCode}</span>
+            <button
+              onClick={() => generatePdf(route, packages)}
+              style={{ flexShrink: 0, padding: '5px 11px', borderRadius: 20, border: '1px solid #0077aa30', background: '#0077aa10', color: '#0077aa', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+            >
+              📄 PDF
+            </button>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: routeMeta.bg, color: routeMeta.color, border: `1px solid ${routeMeta.color}30`, flexShrink: 0 }}>
               {routeMeta.label}
             </span>
           </div>
+
+          {/* Date */}
           <div style={{ fontSize: 11, color: '#888', marginBottom: 10 }}>
             {new Date(route.date).toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
-            {route.driverName && ` · 🚗 ${route.driverName}`}
           </div>
 
           {/* Progress bar */}
           <div style={{ height: 6, background: '#f0f0f0', borderRadius: 6, overflow: 'hidden', marginBottom: 8 }}>
             <div style={{ height: '100%', width: `${progress}%`, background: 'linear-gradient(90deg, #008855, #00bb77)', borderRadius: 6, transition: 'width .5s' }} />
           </div>
-          <div style={{ display: 'flex', gap: 0 }}>
+
+          {/* Stats */}
+          <div style={{ display: 'flex', gap: 0, marginBottom: 12 }}>
             {[
               { label: 'Total', value: total, color: '#555' },
               { label: '✅', value: delivered, color: '#008855' },
               { label: '❌', value: failed, color: '#cc2244' },
               { label: '⏳', value: pending, color: '#f57c00' },
-              { label: `${progress}%`, value: '', color: '#111', bold: true }
+              { label: `${progress}%`, value: '', color: '#111', bold: true },
+              ...(totalAmt > 0 ? [{ label: '$' + totalAmt.toLocaleString('es-CL'), value: '', color: '#008855', bold: true }] : [])
             ].map(({ label, value, color, bold }) => (
               <div key={label} style={{ flex: 1, textAlign: 'center' }}>
-                <div style={{ fontSize: bold ? 14 : 18, fontWeight: 800, color }}>{bold ? label : value}</div>
-                <div style={{ fontSize: 9, color: '#aaa', fontWeight: 600, marginTop: 1 }}>{bold ? 'avance' : label}</div>
+                <div style={{ fontSize: bold ? 13 : 18, fontWeight: 800, color }}>{bold ? label : value}</div>
+                <div style={{ fontSize: 9, color: '#aaa', fontWeight: 600, marginTop: 1 }}>{bold ? (label.startsWith('$') ? 'total ruta' : 'avance') : label}</div>
               </div>
             ))}
           </div>
+
+          {/* Driver + Company info cards */}
+          {(route.driverName || route.clientCompany?.name) && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {route.driverName && (
+                <div style={{ flex: 1, minWidth: 160, background: '#f5f7fa', border: '1px solid #e8e8e8', borderRadius: 10, padding: '9px 12px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#0077aa', letterSpacing: 1, marginBottom: 4 }}>🚗 DRIVER</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>{route.driverName}</div>
+                  {route.driverPhone && (
+                    <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                      <a
+                        href={`tel:${route.driverPhone}`}
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '5px 8px', borderRadius: 8, background: '#0077aa12', border: '1px solid #0077aa25', color: '#0077aa', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}
+                      >
+                        📞 Llamar
+                      </a>
+                      <a
+                        href={`https://wa.me/${driverWaPhone}?text=${encodeURIComponent('Hola, te contacto por la ruta ' + (route.name || route.routeCode))}`}
+                        target="_blank" rel="noreferrer"
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '5px 8px', borderRadius: 8, background: '#00885512', border: '1px solid #00885525', color: '#008855', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}
+                      >
+                        💬 WhatsApp
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {route.clientCompany?.name && (
+                <div style={{ flex: 1, minWidth: 160, background: '#f5f7fa', border: '1px solid #e8e8e8', borderRadius: 10, padding: '9px 12px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#005078', letterSpacing: 1, marginBottom: 4 }}>🏢 EMPRESA CLIENTE</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>{route.clientCompany.name}</div>
+                  {route.clientCompany.contactPerson && (
+                    <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>👤 {route.clientCompany.contactPerson}</div>
+                  )}
+                  {route.clientCompany.contactPhone && (
+                    <a
+                      href={`tel:${route.clientCompany.contactPhone}`}
+                      style={{ display: 'block', fontSize: 11, color: '#0077aa', fontWeight: 600, marginTop: 4, textDecoration: 'none' }}
+                    >
+                      📞 {route.clientCompany.contactPhone}
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -309,19 +468,16 @@ export default function PublicRouteView() {
                 <div style={{ fontSize: 13 }}>{q ? 'Sin resultados para esa búsqueda' : 'Sin paquetes en esta ruta'}</div>
               </div>
             )}
-
-            {visible.map((pkg, i) => (
+            {visible.map(pkg => (
               <PkgCard
                 key={pkg._id}
                 pkg={pkg}
-                idx={active.indexOf(pkg)}
                 expanded={expandedPkg === pkg._id}
                 onToggle={() => setExpandedPkg(expandedPkg === pkg._id ? null : pkg._id)}
               />
             ))}
-
             <div style={{ textAlign: 'center', marginTop: 16, color: '#ccc', fontSize: 11 }}>
-              Actualización automática cada 60 s · Routiflow
+              {route.status === 'active' ? 'Actualización automática cada 60 s · ' : ''}Routiflow
             </div>
           </div>
         )}

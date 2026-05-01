@@ -658,9 +658,9 @@ function RouteCard({ route, onClick, onStatusChange, onCancel, onDelete }) {
   const canReopen = route.status === 'completed' || route.status === 'cancelled';
 
   return (
-    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid var(--border)', padding: '13px 14px', marginBottom: 10, boxShadow: '0 1px 4px #0000000a' }}>
+    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid var(--border)', padding: '13px 14px', marginBottom: 10, boxShadow: '0 1px 4px #0000000a', cursor: 'pointer' }} onClick={onClick}>
       {/* Top row */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', cursor: 'pointer' }} onClick={onClick}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 700 }}>{route.name || route.routeCode}</div>
           {route.name && <div style={{ fontSize: 10, color: 'var(--muted)' }}>{route.routeCode}</div>}
@@ -684,7 +684,7 @@ function RouteCard({ route, onClick, onStatusChange, onCancel, onDelete }) {
 
       {/* Stats */}
       {route.stats && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 9, flexWrap: 'wrap', cursor: 'pointer' }} onClick={onClick}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 9, flexWrap: 'wrap' }}>
           {[
             { label: 'Total', val: route.stats.total },
             { label: '✅', val: route.stats.delivered, color: 'var(--accent)' },
@@ -701,7 +701,7 @@ function RouteCard({ route, onClick, onStatusChange, onCancel, onDelete }) {
 
       {/* Action row */}
       <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-        <button onClick={onClick} style={actBtn('var(--accent)')}>📂 Abrir ruta</button>
+        <button onClick={e => { e.stopPropagation(); onClick(); }} style={actBtn('var(--accent)')}>📂 Abrir ruta</button>
         {nextStatus && nextLabel && (
           <button onClick={e => { e.stopPropagation(); onStatusChange(route, nextStatus); }} style={actBtn('#f57c00')}>{nextLabel}</button>
         )}

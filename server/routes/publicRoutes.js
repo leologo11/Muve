@@ -10,7 +10,7 @@ const router = Router();
 router.get('/route/:shareToken', async (req, res) => {
   try {
     const route = await Route.findOne({ shareToken: req.params.shareToken })
-      .populate('driverId', 'name')
+      .populate('driverId', 'name phone')
       .lean();
     if (!route) return res.status(404).json({ error: 'Enlace no válido o expirado' });
 
@@ -52,10 +52,16 @@ router.get('/route/:shareToken', async (req, res) => {
         status: route.status,
         statusLabel: STATUS_LABELS[route.status] || route.status,
         driverName: route.driverId?.name || null,
-        clientCompany: { name: route.clientCompany?.name || null },
+        driverPhone: route.driverId?.phone || null,
+        clientCompany: {
+          name: route.clientCompany?.name || null,
+          contactPerson: route.clientCompany?.contactPerson || null,
+          contactPhone: route.clientCompany?.contactPhone || null
+        },
         startPoint: route.startPoint,
         distanceKm: route.distanceKm,
-        stats: route.stats
+        stats: route.stats,
+        invoiceAmount: route.invoice?.amount || null
       },
       packages: publicPackages
     });
