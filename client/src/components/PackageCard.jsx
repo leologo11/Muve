@@ -8,10 +8,6 @@ const STATUS = {
   eliminado:      { color: '#c04a1a', label: 'ELIMINADO',    icon: '✕'  },
 };
 
-function normalizeAddr(str) {
-  return (str || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
-}
-
 export default function PackageCard({ pkg, index, onEdit, onStatusChange, onDelete, onRestore, readOnly, hidePrice, lockDelivered, sameAddressCount }) {
   const [hovered, setHovered] = useState(false);
   const st  = pkg.status;
@@ -96,23 +92,21 @@ export default function PackageCard({ pkg, index, onEdit, onStatusChange, onDele
             </div>
           )}
 
-          {/* AI address flag warning */}
-          {pkg.aiFlags?.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '3px 7px', borderRadius: 6, background: '#d4650a10', border: '1px solid #d4650a28', width: 'fit-content' }}>
-              <span style={{ fontSize: 10 }}>⚠️</span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#d4650a' }}>
-                Revisar: {pkg.aiFlags.join(', ')}
-              </span>
-            </div>
-          )}
-
-          {/* Same address warning */}
-          {sameAddressCount > 1 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '3px 7px', borderRadius: 6, background: '#0077aa10', border: '1px solid #0077aa28', width: 'fit-content' }}>
-              <span style={{ fontSize: 10 }}>📍</span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#0077aa' }}>
-                {sameAddressCount} paquetes en este edificio
-              </span>
+          {/* No coordinates / missing number / AI flag / same-address warnings */}
+          {((!pkg.lat || !pkg.lng) || (pkg.address && !/\d/.test(pkg.address.trim())) || pkg.aiFlags?.length > 0 || sameAddressCount > 1) && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 5 }}>
+              {(!pkg.lat || !pkg.lng) && pkg.status === 'pendiente' && (
+                <span style={warnBadge('#d4650a')}>📍 Sin geocodificar</span>
+              )}
+              {pkg.address && !/\d/.test(pkg.address.trim()) && (
+                <span style={warnBadge('#b34a00')}>⚠ Falta número</span>
+              )}
+              {pkg.aiFlags?.length > 0 && (
+                <span style={warnBadge('#d4650a')}>🤖 Revisar: {pkg.aiFlags.join(', ')}</span>
+              )}
+              {sameAddressCount > 1 && (
+                <span style={warnBadge('#0077aa')}>📍 {sameAddressCount} paquetes aquí</span>
+              )}
             </div>
           )}
 
@@ -228,6 +222,15 @@ function NavBtn({ href, color, children }) {
       {children}
     </a>
   );
+}
+
+function warnBadge(color) {
+  return {
+    display: 'inline-flex', alignItems: 'center', gap: 3,
+    fontSize: 9, fontWeight: 700,
+    color, background: `${color}10`, border: `1px solid ${color}28`,
+    borderRadius: 20, padding: '2px 7px', whiteSpace: 'nowrap',
+  };
 }
 
 function ActionBtn({ color, solid, onClick, children }) {

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
+import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
 
 const STATUS_OPTS = [
   { value: 'pendiente', label: '⏳ Pendiente', bg: '#fff8e1', color: '#f57c00' },
@@ -8,27 +9,55 @@ const STATUS_OPTS = [
   { value: 'no-entregado', label: '❌ No entregado', bg: '#fce4ec', color: '#c62828' }
 ];
 
+function hasNumber(address) {
+  return !address || /\d/.test(address.trim());
+}
+
 export default function PackageTable({ packages, onUpdate }) {
-  const [editing, setEditing] = useState(null); // { id, field }
+  const [editing, setEditing] = useState(null);
   const [val, setVal] = useState('');
   const [saving, setSaving] = useState(null);
+  const addrPickedRef = useRef(false);
 
   const active = packages.filter(p => p.status !== 'eliminado');
 
   const startEdit = (pkg, field) => {
+    addrPickedRef.current = false;
     setEditing({ id: pkg._id, field });
     setVal(String(pkg[field] ?? ''));
   };
 
   const commitEdit = async (pkg, field) => {
     if (!editing || editing.id !== pkg._id || editing.field !== field) return;
+    if (field === 'address' && addrPickedRef.current) { setEditing(null); return; }
     setEditing(null);
     const newVal = field === 'price' ? (Number(val) || 0) : val.trim();
     if (String(newVal) === String(pkg[field] ?? '')) return;
+    const updates = { [field]: newVal };
+    if (field === 'address') { updates.lat = null; updates.lng = null; }
     setSaving(pkg._id);
     try {
-      const updated = await api.updatePackage(pkg._id, { [field]: newVal });
+      const updated = await api.updatePackage(pkg._id, updates);
       onUpdate(updated);
+    } catch (err) {
+      toast('❌ ' + err.message);
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const saveFromAutocomplete = async (pkg, { address, commune, lat, lng }) => {
+    addrPickedRef.current = true;
+    setEditing(null);
+    setSaving(pkg._id);
+    try {
+      const updates = { address };
+      if (commune) updates.commune = commune;
+      if (lat)     updates.lat = lat;
+      if (lng)     updates.lng = lng;
+      const updated = await api.updatePackage(pkg._id, updates);
+      onUpdate(updated);
+      toast('📍 Dirección actualizada y geocodificada');
     } catch (err) {
       toast('❌ ' + err.message);
     } finally {
@@ -77,6 +106,65 @@ export default function PackageTable({ packages, onUpdate }) {
     );
   };
 
+  const addressCell = (pkg) => {
+    const isEditing = editing?.id === pkg._id && editing?.field === 'address';
+    const noCoords  = !pkg.lat || !pkg.lng;
+    const noNumber  = pkg.address && !hasNumber(pkg.address);
+    const aiFlag    = pkg.aiFlags?.includes('address');
+
+    if (isEditing) {
+      return (
+        <div style={{ minWidth: 220 }}>
+          <AddressAutocomplete
+            value={val}
+            onChange={v => setVal(v)}
+            onSelect={sel => saveFromAutocomplete(pkg, sel)}
+            placeholder="Dirección con número…"
+          />
+          <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 3 }}>
+            Selecciona del menú para geocodificar · Esc = cancelar
+          </div>
+        </div>
+      );
+    }
+
+    const badges = [];
+    if (noCoords) badges.push(
+      <span key="geo"
+        onClick={() => saving !== pkg._id && startEdit(pkg, 'address')}
+        style={badge('#d4650a', true)}
+      >📍 Sin mapa · clic para corregir</span>
+    );
+    if (noNumber) badges.push(
+      <span key="num" style={badge('#b34a00', false)}>⚠ Falta número</span>
+    );
+    if (aiFlag) badges.push(
+      <span key="ai" style={badge('#7b1fa2', false)}>🤖 IA incierta</span>
+    );
+
+    return (
+      <div>
+        <span
+          onClick={() => saving !== pkg._id && startEdit(pkg, 'address')}
+          title="Clic para editar dirección"
+          style={{
+            cursor: 'text', display: 'block', padding: '2px 4px', borderRadius: 4,
+            wordBreak: 'break-word', minHeight: 18,
+            color: noCoords ? '#b34a00' : 'inherit',
+            fontWeight: noCoords ? 600 : 'inherit',
+          }}
+        >
+          {pkg.address ?? '—'}
+        </span>
+        {badges.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 3 }}>
+            {badges}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (active.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)', fontSize: 14 }}>
@@ -97,14 +185,21 @@ export default function PackageTable({ packages, onUpdate }) {
         </thead>
         <tbody>
           {active.map((pkg, i) => {
-            const isSaving = saving === pkg._id;
-            const st = STATUS_OPTS.find(o => o.value === pkg.status);
+            const isSaving  = saving === pkg._id;
+            const st        = STATUS_OPTS.find(o => o.value === pkg.status);
+            const needsWork = (!pkg.lat || !pkg.lng) && pkg.status === 'pendiente';
             return (
               <tr
                 key={pkg._id}
-                style={{ background: isSaving ? '#f0f9f0' : i % 2 === 0 ? '#fff' : 'var(--card2)', borderBottom: '1px solid var(--border)', opacity: isSaving ? 0.7 : 1, transition: 'background .2s' }}
+                style={{
+                  background: isSaving ? '#f0f9f0' : needsWork ? '#fffaf3' : i % 2 === 0 ? '#fff' : 'var(--card2)',
+                  borderBottom: `1px solid ${needsWork ? '#d4650a22' : 'var(--border)'}`,
+                  borderLeft: `3px solid ${needsWork ? '#d4650a' : 'transparent'}`,
+                  opacity: isSaving ? 0.7 : 1,
+                  transition: 'background .2s'
+                }}
               >
-                <td style={{ padding: '6px 8px', color: 'var(--muted)', fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap', verticalAlign: 'top' }}>{i + 1}</td>
+                <td style={{ padding: '6px 8px', color: needsWork ? '#d4650a' : 'var(--muted)', fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap', verticalAlign: 'top' }}>{i + 1}</td>
 
                 <td style={{ padding: '4px 6px', minWidth: 120, verticalAlign: 'top' }}>
                   <div style={{ fontWeight: 600 }}>{cell(pkg, 'customerName')}</div>
@@ -112,7 +207,7 @@ export default function PackageTable({ packages, onUpdate }) {
                 </td>
 
                 <td style={{ padding: '4px 6px', minWidth: 170, verticalAlign: 'top' }}>
-                  <div>{cell(pkg, 'address')}</div>
+                  {addressCell(pkg)}
                   <div style={{ color: 'var(--muted)' }}>{cell(pkg, 'commune')}</div>
                   {pkg.aptFloor && <div style={{ color: 'var(--muted)', fontSize: 11 }}>{cell(pkg, 'aptFloor')}</div>}
                 </td>
@@ -146,4 +241,15 @@ export default function PackageTable({ packages, onUpdate }) {
       </table>
     </div>
   );
+}
+
+function badge(color, clickable) {
+  return {
+    display: 'inline-flex', alignItems: 'center', gap: 2,
+    fontSize: 9, fontWeight: 700,
+    color, background: `${color}10`, border: `1px solid ${color}28`,
+    borderRadius: 20, padding: '1px 6px',
+    whiteSpace: 'nowrap',
+    cursor: clickable ? 'pointer' : 'default',
+  };
 }
