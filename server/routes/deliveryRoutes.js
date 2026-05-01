@@ -298,6 +298,23 @@ router.post('/:id/share', requireRole('admin'), async (req, res) => {
   }
 });
 
+// POST /api/routes/osrm-path — proxy OSRM road geometry (avoids browser CORS)
+router.post('/osrm-path', async (req, res) => {
+  try {
+    const { coords } = req.body;
+    if (!coords?.length || coords.length < 2) return res.json({ geometry: null });
+    const pts = coords.map(c => `${c[0]},${c[1]}`).join(';');
+    const r = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/${pts}?overview=full&geometries=geojson`,
+      { headers: { 'User-Agent': 'Routiflow/1.0' }, signal: AbortSignal.timeout(8000) }
+    );
+    const d = await r.json();
+    res.json({ geometry: d.routes?.[0]?.geometry || null });
+  } catch {
+    res.json({ geometry: null });
+  }
+});
+
 // DELETE /api/routes/:id/share — revoke public share token
 router.delete('/:id/share', requireRole('admin'), async (req, res) => {
   try {

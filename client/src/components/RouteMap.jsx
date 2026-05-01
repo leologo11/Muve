@@ -157,16 +157,20 @@ export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgResto
         { color: '#008855', weight: 2.5, opacity: 0.35, dashArray: '6,10' }
       ).addTo(map);
 
-      // Fetch actual road route from OSRM asynchronously
-      const coordStr = routePoints.map(p => `${p.lng},${p.lat}`).join(';');
-      fetch(`https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson`, {
+      // Fetch actual road route via server proxy (avoids browser CORS on OSRM)
+      const base = import.meta.env.VITE_API_URL || '/api';
+      const token = localStorage.getItem('rf_token');
+      fetch(`${base}/routes/osrm-path`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ coords: routePoints.map(p => [p.lng, p.lat]) }),
         signal: AbortSignal.timeout(10000)
       })
         .then(r => r.json())
         .then(data => {
-          if (data.code === 'Ok' && data.routes?.[0]?.geometry) {
+          if (data.geometry?.coordinates) {
             if (lineRef.current) { lineRef.current.remove(); lineRef.current = null; }
-            const latlngs = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+            const latlngs = data.geometry.coordinates.map(c => [c[1], c[0]]);
             lineRef.current = L.polyline(latlngs, { color: '#008855', weight: 3, opacity: 0.65 }).addTo(map);
           }
         })
