@@ -121,16 +121,20 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// Connect to MongoDB and start server
-mongoose.connect(process.env.MONGODB_URI, { family: 4, serverSelectionTimeoutMS: 10000 })
-  .then(() => {
+// Connect to MongoDB and start server — retry up to 5 times before giving up
+async function startServer(attempt = 1) {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, { family: 4, serverSelectionTimeoutMS: 15000 });
     console.log('✅ MongoDB conectado');
     app.listen(PORT, () => console.log(`🚀 Routiflow API corriendo en http://localhost:${PORT}`));
-    // Run cleanup once at startup, then every 24 hours
     runCleanup().catch(err => console.error('Cleanup error:', err.message));
     setInterval(() => runCleanup().catch(err => console.error('Cleanup error:', err.message)), 24 * 60 * 60 * 1000);
-  })
-  .catch(err => {
-    console.error('❌ Error conectando MongoDB:', err.message);
-    process.exit(1);
-  });
+  } catch (err) {
+    console.error(`❌ MongoDB intento ${attempt} fallido: ${err.message}`);
+    if (attempt >= 5) { console.error('Demasiados intentos, saliendo.'); process.exit(1); }
+    const delay = Math.min(5000 * attempt, 30000);
+    console.log(`Reintentando en ${delay / 1000}s…`);
+    setTimeout(() => startServer(attempt + 1), delay);
+  }
+}
+startServer();
