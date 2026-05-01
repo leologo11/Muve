@@ -4,6 +4,7 @@ import cors from 'cors';
 import mongoose from 'mongoose';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import fs from 'fs';
 
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
@@ -109,15 +110,14 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: err.message || 'Error interno del servidor' });
 });
 
-// Serve built React app in production
-if (process.env.NODE_ENV === 'production') {
-  const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  const clientDist = path.join(__dirname, '..', 'client', 'dist');
+// Servir la app React compilada (siempre, no solo en production)
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const clientDist = path.join(__dirname, '..', 'client', 'dist');
+if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api')) {
-      res.sendFile(path.join(clientDist, 'index.html'));
-    }
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(clientDist, 'index.html'), err => { if (err) next(err); });
   });
 }
 
