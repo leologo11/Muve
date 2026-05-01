@@ -178,10 +178,14 @@ export default function AdminView() {
     return map;
   })();
 
+  const noGeoCount = activePackages.filter(p => (!p.lat || !p.lng) && p.status === 'pendiente').length;
+
   const visible = packages.filter(p => {
     const q = search.toLowerCase();
     const matchQ = !q || [p.customerName, p.customerLastName, p.address, p.commune, p.customerPhone, p.trackingId].join(' ').toLowerCase().includes(q);
-    const matchF = filter === 'todos' || p.status === filter;
+    const matchF = filter === 'sin-mapa'
+      ? (!p.lat || !p.lng) && p.status === 'pendiente'
+      : filter === 'todos' || p.status === filter;
     return matchQ && matchF;
   });
 
@@ -420,7 +424,7 @@ export default function AdminView() {
 
       <div style={{ display: 'flex', background: '#fff', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         {[['m', '🗺 MAPA'], ['l', '📋 LISTA'], ['t', '📝 TABLA'], ['r', '📊 INFO']].map(([t, label]) => (
-          <button key={t} onClick={() => setTab(t)} style={{
+          <button key={t} onClick={() => { setTab(t); if (filter === 'sin-mapa') setFilter('todos'); }} style={{
             flex: 1, padding: '10px 4px', textAlign: 'center', fontSize: 10, fontWeight: 700,
             letterSpacing: .5, border: 'none', background: 'none', cursor: 'pointer',
             color: tab === t ? 'var(--accent)' : 'var(--muted)',
@@ -448,6 +452,17 @@ export default function AdminView() {
                 {{ todos: 'Todos', pendiente: '⏳ Pendientes', entregado: '✅ Entregados', 'no-entregado': '❌ No entregados', eliminado: '🗑️ Eliminados' }[f]}
               </button>
             ))}
+            {noGeoCount > 0 && (
+              <button onClick={() => setFilter(filter === 'sin-mapa' ? 'todos' : 'sin-mapa')} style={{
+                flexShrink: 0, padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                cursor: 'pointer',
+                border: `1px solid ${filter === 'sin-mapa' ? '#d4650a' : '#d4650a50'}`,
+                background: filter === 'sin-mapa' ? '#d4650a' : '#d4650a12',
+                color: filter === 'sin-mapa' ? '#fff' : '#d4650a'
+              }}>
+                📍 Sin mapa ({noGeoCount})
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -483,7 +498,19 @@ export default function AdminView() {
           </div>
         )}
 
-        {tab === 't' && <PackageTable packages={packages} onUpdate={handlePkgUpdate} />}
+        {tab === 't' && (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {noGeoCount > 0 && (
+              <div style={{ background: '#d4650a10', borderBottom: '1px solid #d4650a28', padding: '7px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13 }}>📍</span>
+                <span style={{ fontSize: 12, color: '#d4650a', fontWeight: 600 }}>
+                  {noGeoCount} paquete{noGeoCount > 1 ? 's' : ''} sin geocodificar — borde naranja en la tabla
+                </span>
+              </div>
+            )}
+            <PackageTable packages={packages} onUpdate={handlePkgUpdate} />
+          </div>
+        )}
 
         {tab === 'r' && (
           <AdminReport
