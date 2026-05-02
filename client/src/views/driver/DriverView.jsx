@@ -74,9 +74,21 @@ export default function DriverView() {
   const handleStatusChange = async (pkg, newStatus) => {
     try {
       const updated = await api.updatePackage(pkg._id, { status: newStatus });
-      setPackages(prev => prev.map(p => p._id === pkg._id ? { ...p, ...updated } : p));
+      const nextPackages = packages.map(p => p._id === pkg._id ? { ...p, ...updated } : p);
+      setPackages(nextPackages);
       const msgs = { entregado: '✅ Entregado', 'no-entregado': '❌ No entregado', devuelto: '📦 Marcado para devolución', pendiente: '↩ Deshecho' };
       toast(msgs[newStatus] || '↩ Actualizado');
+
+      // Auto-pausar ruta cuando no quedan paquetes pendientes
+      if (selectedRoute?.status === 'active') {
+        const active = nextPackages.filter(p => p.status !== 'eliminado');
+        const stillPending = active.some(p => p.status === 'pendiente');
+        if (!stillPending && active.length > 0) {
+          await api.updateRoute(selectedRoute._id, { status: 'paused' });
+          setSelectedRoute(prev => ({ ...prev, status: 'paused' }));
+          toast('⏸ Ruta en revisión — el admin revisará los resultados');
+        }
+      }
     } catch (err) {
       toast('❌ ' + err.message);
     }
@@ -145,6 +157,16 @@ export default function DriverView() {
         </div>
       )}
 
+      {/* Ruta pausada/en revisión banner */}
+      {selectedRoute?.status === 'paused' && (
+        <div style={{ background: 'linear-gradient(90deg, #f57c0014, #f57c0022)', borderBottom: '1px solid #f57c0030', padding: '10px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 18 }}>⏸</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#f57c00' }}>Ruta en revisión</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>Todos los paquetes procesados. El admin revisará y cerrará la ruta.</div>
+          </div>
+        </div>
+      )}
       {/* Ruta finalizada banner */}
       {selectedRoute?.status === 'completed' && (
         <div style={{ background: 'linear-gradient(90deg, #0077aa14, #0077aa22)', borderBottom: '1px solid #0077aa30', padding: '10px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -281,7 +303,7 @@ export default function DriverView() {
                   onStatusChange={handleStatusChange}
                   hidePrice
                   lockDelivered
-                  readOnly={selectedRoute?.status === 'completed'}
+                  readOnly={['completed', 'paused'].includes(selectedRoute?.status)}
                   sameAddressCount={addrCountMap[(pkg.address || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ')] || 1}
                 />
               ))

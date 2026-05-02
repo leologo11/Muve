@@ -178,7 +178,7 @@ export default function PackageTable({ packages, onUpdate }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 680 }}>
         <thead>
           <tr style={{ background: 'var(--card2)', position: 'sticky', top: 0, zIndex: 1, boxShadow: '0 1px 0 var(--border)' }}>
-            {['#', 'Nombre', 'Dirección / Comuna', 'Teléfono', 'Precio', 'Estado', 'Nota'].map(h => (
+            {['#', 'Nombre', 'Dirección / Comuna', 'Teléfono', 'Precio', 'Estado', 'Nota', '📷'].map(h => (
               <th key={h} style={{ padding: '8px 8px', textAlign: 'left', fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: 'var(--muted)', whiteSpace: 'nowrap', borderBottom: '2px solid var(--border)' }}>{h.toUpperCase()}</th>
             ))}
           </tr>
@@ -233,6 +233,33 @@ export default function PackageTable({ packages, onUpdate }) {
 
                 <td style={{ padding: '4px 6px', minWidth: 120, verticalAlign: 'top' }}>
                   {cell(pkg, 'note')}
+                </td>
+
+                <td style={{ padding: '4px 6px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {pkg.photoUrl && (
+                      <img
+                        src={pkg.photoUrl}
+                        alt="foto 1"
+                        onClick={() => window.open(pkg.photoUrl, '_blank')}
+                        style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', cursor: 'pointer', transition: 'opacity .15s' }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = '.7'}
+                        onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                        title="Ver foto 1"
+                      />
+                    )}
+                    {pkg.photo2Url && (
+                      <img
+                        src={pkg.photo2Url}
+                        alt="foto 2"
+                        onClick={() => window.open(pkg.photo2Url, '_blank')}
+                        style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', cursor: 'pointer', transition: 'opacity .15s' }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = '.7'}
+                        onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                        title="Ver foto 2"
+                      />
+                    )}
+                  </div>
                 </td>
               </tr>
             );

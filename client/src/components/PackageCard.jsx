@@ -165,8 +165,8 @@ export default function PackageCard({ pkg, index, onEdit, onStatusChange, onDele
         }}>
           {isElim ? (
             <ActionBtn color="#008855" onClick={() => onRestore?.(pkg)}>↩ Restaurar</ActionBtn>
-          ) : lockDelivered && st === 'entregado' ? (
-            /* Entregado bloqueado — solo foto */
+          ) : lockDelivered && (st === 'entregado' || st === 'no-entregado') ? (
+            /* Estado final bloqueado para driver — solo foto */
             <ActionBtn color="#d4650a" onClick={() => onEdit?.(pkg)}>📷 Foto</ActionBtn>
           ) : (
             <>
