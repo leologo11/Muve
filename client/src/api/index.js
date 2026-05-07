@@ -91,6 +91,7 @@ export const api = {
   // Commune prices
   getPrices: () => request('GET', '/prices'),
   upsertPrice: (data) => request('POST', '/prices', data),
+  bulkUpsertPrices: (items) => request('POST', '/prices/bulk', items),
   updatePrice: (id, data) => request('PATCH', `/prices/${id}`, data),
   deletePrice: (id) => request('DELETE', `/prices/${id}`),
 
@@ -103,6 +104,7 @@ export const api = {
   deleteAllCommunes: () => request('DELETE', '/zones/communes/all'),
 
   // Quotes
+  createPublicQuote: (data) => request('POST', '/public/quotes', data),
   getQuotes: () => request('GET', '/quotes'),
   getQuote: (id) => request('GET', `/quotes/${id}`),
   createQuote: (data) => request('POST', '/quotes', data),
@@ -133,6 +135,20 @@ export const api = {
   updateDriverLocation: (data) => request('PATCH', '/users/me/location', data),
   getDriverLocation: (routeId) => request('GET', `/routes/${routeId}/driver-location`),
 
+  // API credentials
+  getCredentials: () => request('GET', '/credentials'),
+  createCredential: (data) => request('POST', '/credentials', data),
+  revokeCredential: (id) => request('DELETE', `/credentials/${id}`),
+
   // Admin reset
-  resetAllData: () => request('POST', '/admin/reset-data'),
+  resetAllData: (targets) => request('POST', '/admin/reset-data', targets ? { targets } : undefined),
+
+  // Vehicle configs (flete/mudanza pricing)
+  getVehicleConfigs: () => request('GET', '/vehicle-configs'),
+  updateVehicleConfig: (id, data) => request('PATCH', `/vehicle-configs/${id}`, data),
+
+  // Public pricing helpers (no auth required)
+  getPublicVehicleConfigs: () => request('GET', '/public/vehicle-configs'),
+  calculateDistance: (data) => request('POST', '/public/distance', data),
+  getQuoteEstimate: (data) => request('POST', '/public/quote-estimate', data),
 };

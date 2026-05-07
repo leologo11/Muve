@@ -56,7 +56,7 @@ const ZONE_COLORS = {
 
 function pinColor(pkg) {
   if (pkg.status === 'eliminado') return '#aaaaaa';
-  if (pkg.status === 'entregado') return '#008855';
+  if (pkg.status === 'entregado') return '#0052FF';
   if (pkg.status === 'no-entregado') return '#cc2244';
   return ZONE_COLORS[pkg.zone] || ZONE_COLORS.default;
 }
@@ -83,7 +83,7 @@ function makeIcon(pkg, i, hasStart) {
       box-shadow:0 2px 10px rgba(0,0,0,0.38);
       display:flex;align-items:center;justify-content:center;
       font-size:${num.length > 2 ? 9 : 12}px;font-weight:800;color:#fff;
-      font-family:'Space Grotesk',sans-serif;
+      font-family:'Inter',sans-serif;
       ${elim ? 'opacity:.35;filter:grayscale(1);' : ''}
       cursor:pointer;
     ">${num}</div>`,
@@ -100,7 +100,7 @@ function makePopup(pkg, i, hasStart, onPkgClick, readOnly) {
   const price = pkg.price ? ` · $${Number(pkg.price).toLocaleString('es-CL')}` : '';
   const aptHtml = pkg.aptFloor ? `<div style="font-size:12px;font-weight:700;color:#d4650a;margin-top:2px;font-style:italic">${pkg.aptFloor}</div>` : '';
   const phoneHtml = pkg.customerPhone
-    ? `<a href="tel:${pkg.customerPhone}" style="${btnStyle('#008855')}">📞 Llamar</a>`
+    ? `<a href="tel:${pkg.customerPhone}" style="${btnStyle('#0052FF')}">📞 Llamar</a>`
     : '';
   const wazeHtml = `<a href="https://waze.com/ul?q=${encodeURIComponent((pkg.address || '') + (pkg.commune ? ', ' + pkg.commune : '') + ', Chile')}&navigate=yes" target="_blank" style="${btnStyle('#0077aa')}">🔵 Waze</a>`;
   const mapsHtml = `<a href="https://maps.google.com/?daddr=${pkg.lat},${pkg.lng}&dir_action=navigate" target="_blank" style="${btnStyle('#2a9940')}">📍 Maps</a>`;
@@ -111,10 +111,10 @@ function makePopup(pkg, i, hasStart, onPkgClick, readOnly) {
     ? `<button onclick="window.__pkgDelete('${pkg._id}')" style="${btnStyle('#cc2244')}">🗑️ Eliminar</button>`
     : '';
   const restoreHtml = !readOnly && pkg.status === 'eliminado'
-    ? `<button onclick="window.__pkgRestore('${pkg._id}')" style="${btnStyle('#008855')}">↩ Restaurar</button>`
+    ? `<button onclick="window.__pkgRestore('${pkg._id}')" style="${btnStyle('#0052FF')}">↩ Restaurar</button>`
     : '';
 
-  return `<div style="font-family:'Space Grotesk',sans-serif;min-width:210px;max-width:270px">
+  return `<div style="font-family:'Inter',sans-serif;min-width:210px;max-width:270px">
     <div style="font-size:14px;font-weight:700;margin-bottom:4px">${displayNum}. ${pkg.customerName} ${pkg.customerLastName || ''}</div>
     <div style="font-size:12px;color:#666;line-height:1.4">${pkg.address || ''}</div>
     ${aptHtml}
@@ -130,7 +130,7 @@ function btnStyle(color) {
   return `display:flex;align-items:center;justify-content:center;gap:4px;
     padding:7px 6px;border-radius:8px;border:1px solid ${color}30;
     background:${color}14;color:${color};font-size:11px;font-weight:700;
-    cursor:pointer;text-decoration:none;font-family:'Space Grotesk',sans-serif;
+    cursor:pointer;text-decoration:none;font-family:'Inter',sans-serif;
     white-space:nowrap;`;
 }
 
@@ -201,7 +201,7 @@ export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgResto
     if (routePoints.length > 1) {
       lineRef.current = L.polyline(
         routePoints.map(p => [p.lat, p.lng]),
-        { color: '#008855', weight: 2.5, opacity: 0.35, dashArray: '6,10' }
+        { color: '#0052FF', weight: 2.5, opacity: 0.35, dashArray: '6,10' }
       ).addTo(map);
 
       // Fetch actual road route via server proxy (avoids browser CORS on OSRM)
@@ -218,7 +218,7 @@ export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgResto
           if (data.geometry?.coordinates) {
             if (lineRef.current) { lineRef.current.remove(); lineRef.current = null; }
             const latlngs = data.geometry.coordinates.map(c => [c[1], c[0]]);
-            lineRef.current = L.polyline(latlngs, { color: '#008855', weight: 3, opacity: 0.65 }).addTo(map);
+            lineRef.current = L.polyline(latlngs, { color: '#0052FF', weight: 3, opacity: 0.65 }).addTo(map);
           }
         })
         .catch(() => {}); // Keep straight fallback on error
@@ -235,7 +235,7 @@ export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgResto
           box-shadow:0 3px 14px rgba(92,53,204,.6);
           display:flex;align-items:center;justify-content:center;
           font-size:16px;font-weight:900;color:#fff;
-          font-family:'Space Grotesk',sans-serif;
+          font-family:'Inter',sans-serif;
           cursor:pointer;
         ">1</div>`,
         iconSize: [36, 36], iconAnchor: [18, 18], popupAnchor: [0, -22]
@@ -245,7 +245,7 @@ export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgResto
         ? `<button onclick="window.__verifyLoad()" style="${btnStyle('#5c35cc')}">📦 Verificar carga</button>`
         : '';
       startRef.current.bindPopup(
-        `<div style="font-family:'Space Grotesk',sans-serif;min-width:190px">
+        `<div style="font-family:'Inter',sans-serif;min-width:190px">
           <b style="font-size:13px;color:#5c35cc">📍 Punto de salida</b>
           <div style="font-size:12px;color:#666;margin-top:4px">${startPoint.address || ''}</div>
           ${verifyBtn ? `<div style="margin-top:10px">${verifyBtn}</div>` : ''}
@@ -322,7 +322,7 @@ export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgResto
     }).addTo(map);
 
     driverTrackerRef.current.bindPopup(
-      `<div style="font-family:'Space Grotesk',sans-serif;min-width:170px">
+      `<div style="font-family:'Inter',sans-serif;min-width:170px">
         <div style="font-size:13px;font-weight:700;color:#0077aa;margin-bottom:4px">
           🚗 ${driverLocation.driverName || 'Driver'}
         </div>

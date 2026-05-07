@@ -4,7 +4,7 @@ import { toast } from '../../components/Toast.jsx';
 
 const STATUS_COLOR = {
   pendiente:      '#888',
-  entregado:      '#008855',
+  entregado:      '#0052FF',
   'no-entregado': '#cc2244',
   eliminado:      '#c04a1a',
 };
@@ -279,7 +279,7 @@ function PkgRow({ pkg, routes, onMove, onStatusChange }) {
           {/* Actions */}
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 }}>
             {pkg.status !== 'entregado' && (
-              <ActionBtn color="#008855" onClick={() => onStatusChange(pkg, 'entregado')}>✅ Entregado</ActionBtn>
+              <ActionBtn color="#0052FF" onClick={() => onStatusChange(pkg, 'entregado')}>✅ Entregado</ActionBtn>
             )}
             {pkg.status !== 'pendiente' && (
               <ActionBtn color="#888" onClick={() => onStatusChange(pkg, 'pendiente')}>↩ Pendiente</ActionBtn>
@@ -328,7 +328,7 @@ function MoveModal({ pkg, routes, targetRouteId, onSelect, onConfirm, onClose })
                 width: '100%', textAlign: 'left', padding: '11px 13px', marginBottom: 6,
                 borderRadius: 11, cursor: 'pointer',
                 border: targetRouteId === r._id ? '2px solid var(--accent)' : '1px solid var(--border)',
-                background: targetRouteId === r._id ? '#00885510' : '#fff',
+                background: targetRouteId === r._id ? '#0052FF10' : '#fff',
                 transition: 'all .12s'
               }}
             >
@@ -391,7 +391,7 @@ function pageBtn(active) {
 function selStyle(hasValue) {
   return {
     flex: 1, minWidth: 130,
-    background: hasValue ? '#00885510' : 'var(--card2)',
+    background: hasValue ? '#0052FF10' : 'var(--card2)',
     border: `1px solid ${hasValue ? 'var(--accent)' : 'var(--border)'}`,
     borderRadius: 10, padding: '7px 10px', fontSize: 12, outline: 'none',
     color: hasValue ? 'var(--accent)' : 'var(--muted)',

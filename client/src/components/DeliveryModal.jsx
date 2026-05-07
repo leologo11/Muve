@@ -71,7 +71,7 @@ export default function DeliveryModal({ pkg, onClose, onSaved, readOnly, route }
   // WhatsApp message for driver to contact company
   const companyPhone = route?.clientCompany?.contactPhone;
   const waMsg = companyPhone ? encodeURIComponent(
-    `Hola, soy ${user?.name || 'el repartidor'} de Routiflow.\n` +
+    `Hola, soy ${user?.name || 'el repartidor'} de MUVE.\n` +
     `Tengo una consulta sobre el paquete #${pkg.trackingId}.\n` +
     `Cliente: ${pkg.customerName} ${pkg.customerLastName || ''}\n` +
     `Dirección: ${fullAddress}\n` +
@@ -137,7 +137,7 @@ export default function DeliveryModal({ pkg, onClose, onSaved, readOnly, route }
             style={{
               display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14,
               padding: '11px 14px', borderRadius: 12, textDecoration: 'none',
-              background: '#25d36615', border: '1px solid #25d36630', color: '#128c3a', fontWeight: 700, fontSize: 13
+              background: '#0052FF15', border: '1px solid #0052FF30', color: '#0052FF', fontWeight: 700, fontSize: 13
             }}
           >
             <span style={{ fontSize: 20 }}>💬</span>

@@ -1,0 +1,961 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MUVE — Cotiza tu flete o mudanza</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary: #0052ff;
+      --accent: #00daff;
+      --dark: #0f172a;
+      --muted: #64748b;
+      --gradient: linear-gradient(135deg, #0052ff 0%, #00daff 100%);
+      --carton: #c89255;
+      --carton-dark: #8a5a2b;
+    }
+
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body { font-family: 'Inter', sans-serif; background: #eef4ff; color: var(--dark); }
+
+    .navbar {
+      height: 62px;
+      position: fixed;
+      inset: 0 0 auto 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,.92);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(15,23,42,.08);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 900;
+      font-size: 1.35rem;
+      color: var(--primary);
+      letter-spacing: -.04em;
+    }
+    .brand img { width: 44px; height: 44px; object-fit: contain; }
+
+    .page {
+      height: 100vh;
+      padding-top: 62px;
+      display: grid;
+      grid-template-columns: 520px 1fr;
+    }
+
+    .form-area {
+      background: white;
+      padding: 18px 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-right: 1px solid rgba(15,23,42,.08);
+      z-index: 5;
+    }
+
+    .form-card { width: 100%; max-width: 410px; transform: scale(.98); transform-origin: center; }
+    .eyebrow {
+      display: inline-flex;
+      color: var(--primary);
+      background: rgba(0,82,255,.08);
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: .75rem;
+      font-weight: 800;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      font-family: 'Montserrat', sans-serif;
+      font-size: clamp(1.75rem, 2.5vw, 2.4rem);
+      line-height: 1.05;
+      letter-spacing: -.055em;
+      margin-bottom: 10px;
+    }
+    h1 span { background: var(--gradient); -webkit-background-clip: text; color: transparent; }
+    .subtitle { color: var(--muted); line-height: 1.45; font-size: .86rem; margin-bottom: 14px; }
+
+    .progress-wrap {
+      margin-bottom: 14px;
+      padding: 13px;
+      background: #f8fbff;
+      border: 1px solid #e5edf8;
+      border-radius: 16px;
+    }
+    .progress-top { display: flex; justify-content: space-between; font-size: .75rem; font-weight: 800; margin-bottom: 8px; }
+    .progress-bar { height: 9px; background: #e2e8f0; border-radius: 999px; overflow: hidden; }
+    .progress-fill { width: 0%; height: 100%; background: var(--gradient); border-radius: inherit; transition: width .45s ease; }
+
+    .type-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .type-btn {
+      border: 2px solid #e2e8f0;
+      background: white;
+      border-radius: 14px;
+      padding: 10px;
+      font-weight: 900;
+      font-size: .75rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: .2s;
+    }
+    .type-btn.active { color: var(--primary); border-color: var(--primary); background: rgba(0,82,255,.05); }
+
+    .fields { display: grid; gap: 8px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    label { display: block; font-size: .66rem; font-weight: 800; margin-bottom: 4px; color: #263247; }
+    input, select, textarea {
+      width: 100%;
+      border: 1.5px solid #dbe4f0;
+      background: #f6f9ff;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-family: inherit;
+      outline: none;
+      transition: .2s;
+      font-size: .8rem;
+      color: var(--dark);
+    }
+    textarea { resize: none; height: 50px; }
+    input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(0,82,255,.1); background: white; }
+
+    .submit-btn {
+      width: 100%;
+      margin-top: 4px;
+      border: none;
+      border-radius: 15px;
+      padding: 13px 18px;
+      color: white;
+      background: var(--gradient);
+      font-family: 'Montserrat', sans-serif;
+      font-size: .82rem;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow: 0 14px 30px rgba(0,82,255,.25);
+      transition: .2s;
+    }
+    .submit-btn:hover { transform: translateY(-2px); }
+
+    .scene-area {
+      position: relative;
+      overflow: hidden;
+      height: calc(100vh - 62px);
+      background: linear-gradient(180deg, #cfd8e3 0%, #e6eef7 40%, #d4dfeb 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 10px 24px 72px;
+    }
+
+    .scene-area::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 48%;
+      background: url('rascacielos.jpg') center top / cover no-repeat;
+      opacity: 0.75;
+      pointer-events: none;
+      z-index: 0;
+      filter: contrast(1.1) brightness(0.9);
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 55%, rgba(0,0,0,0.6) 75%, transparent 100%);
+    }
+
+    /* capa extra para profundidad */
+    .scene-area::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(to bottom, rgba(15,23,42,0.35) 0%, transparent 40%),
+        radial-gradient(circle at 20% 10%, rgba(0,82,255,0.12), transparent 40%),
+        radial-gradient(circle at 80% 20%, rgba(0,218,255,0.12), transparent 40%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .scene-area::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(15,23,42,.03), transparent 22%, rgba(0,82,255,.04)),
+        repeating-linear-gradient(90deg, transparent 0 72px, rgba(148,163,184,.16) 72px 75px),
+        repeating-linear-gradient(0deg, transparent 0 56px, rgba(148,163,184,.12) 56px 59px);
+      filter: blur(1.5px);
+      opacity: .45;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .skyline { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+    .building {
+      position: absolute;
+      bottom: 39%;
+      width: 115px;
+      border-radius: 18px 18px 0 0;
+      background: rgba(255,255,255,.62);
+      border: 1px solid rgba(15,23,42,.07);
+      box-shadow: 0 18px 45px rgba(15,23,42,.04);
+    }
+    .building::before {
+      content: '';
+      position: absolute;
+      inset: 20px 18px;
+      background: repeating-linear-gradient(90deg, #cfe0f3 0 13px, transparent 13px 25px);
+      opacity: .9;
+      border-radius: 8px;
+    }
+    .bld-1 { left: 4%; height: 115px; bottom: 36%; }
+    .bld-2 { left: 18%; height: 150px; bottom: 39%; }
+    .bld-3 { left: 33%; height: 105px; bottom: 37%; }
+    .bld-4 { right: 24%; height: 142px; bottom: 40%; }
+    .bld-5 { right: 9%; height: 125px; bottom: 36%; }
+    .tree {
+      position: absolute;
+      bottom: 38%;
+      width: 34px;
+      height: 58px;
+      border-radius: 20px 20px 6px 6px;
+      background: #91d6b5;
+      box-shadow: inset 0 -20px 0 rgba(31,133,90,.12);
+    }
+    .tree::after { content: ''; position: absolute; left: 14px; bottom: -20px; width: 6px; height: 26px; background: #a06a3c; border-radius: 4px; }
+    .tree.t1 { left: 13%; }
+    .tree.t2 { right: 18%; }
+
+    .parking-lines {
+      position: absolute;
+      inset: auto 0 0 0;
+      height: 43%;
+      background:
+        linear-gradient(90deg, transparent 0 9%, rgba(255,255,255,.85) 9% 9.35%, transparent 9.35% 24%, rgba(255,255,255,.85) 24% 24.35%, transparent 24.35% 39%, rgba(255,255,255,.85) 39% 39.35%, transparent 39.35% 54%, rgba(255,255,255,.85) 54% 54.35%, transparent 54.35% 69%, rgba(255,255,255,.85) 69% 69.35%, transparent 69.35% 100%);
+      opacity: .72;
+      transform: skewX(-14deg);
+      transform-origin: bottom center;
+      z-index: 1;
+    }
+
+    .status-card {
+      position: absolute;
+      right: 5%;
+      top: 8%;
+      width: 220px;
+      background: rgba(255,255,255,.92);
+      backdrop-filter: blur(12px);
+      border-radius: 22px;
+      padding: 16px;
+      box-shadow: 0 18px 40px rgba(15,23,42,.1);
+      z-index: 15;
+    }
+    .status-card strong { display: block; font-family: 'Montserrat', sans-serif; font-size: .95rem; margin-bottom: 4px; }
+    .status-card p { color: var(--muted); font-size: .76rem; line-height: 1.45; }
+
+    .truck-stage {
+      position: relative;
+      width: 60vw;
+      max-width: 700px;
+      margin-top: -8px;
+      transform: translateX(6vw);
+      animation: truckIn 1.6s cubic-bezier(.2,1,.22,1) both;
+      z-index: 8;
+      pointer-events: none;
+    }
+
+    @keyframes truckIn {
+      from { transform: translateX(-120vw); opacity: 0; }
+      60% { transform: translateX(140px); opacity: 1; }
+      100% { transform: translateX(95px); opacity: 1; }
+    }
+    .truck-stage.depart {
+      animation: truckDepart 1.35s cubic-bezier(.65,0,.35,1) forwards;
+    }
+
+    .truck-stage.depart::after {
+      content: '';
+      position: absolute;
+      bottom: 40px;
+      left: 20%;
+      width: 120px;
+      height: 40px;
+      background: radial-gradient(circle, rgba(120,120,120,0.4) 0%, transparent 70%);
+      filter: blur(8px);
+      animation: smoke 1.2s ease forwards;
+    }
+
+    @keyframes smoke {
+      0% { opacity: 0; transform: scale(0.5); }
+      30% { opacity: 1; }
+      100% { opacity: 0; transform: scale(1.5) translateX(40px); }
+    } 1.35s cubic-bezier(.65,0,.35,1) forwards; }
+    @keyframes truckDepart {
+      0% { transform: translateX(95px); opacity: 1; }
+      18% { transform: translateX(65px); opacity: 1; }
+      100% { transform: translateX(130vw); opacity: 1; }
+    }
+    .truck { width: 100%; filter: drop-shadow(0 24px 28px rgba(15,23,42,.18)); animation: idle 3s ease-in-out infinite; }
+    .truck-stage.depart .truck { animation: none; }
+    @keyframes idle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+
+    .cab-logo {
+      position: absolute;
+      right: 12.2%;
+      top: 47%;
+      width: 105px;
+      z-index: 11;
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,.16));
+      pointer-events: none;
+    }
+
+    .cargo-space {
+      position: absolute;
+      left: 10.3%;
+      top: 30.2%;
+      width: 47.7%;
+      height: 35.8%;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      gap: 10px; /* más espacio */
+      padding: 6px;
+      z-index: 10;
+      pointer-events: none;
+      align-items: end;
+    }
+
+    .cargo-space .box {
+      width: 100%;
+      height: 100%;
+      font-size: .5rem; /* más grandes */
+      padding: 6px;
+    }
+
+    .box {
+      position: relative;
+      border-radius: 4px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-start;
+      padding: 5px;
+      color: #5f3f20;
+      font-family: 'Inter', sans-serif;
+      font-size: .32rem;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-align: left;
+      transform: translateY(-12px) scale(.75);
+      opacity: 0;
+      transition: .45s cubic-bezier(.17,.84,.44,1.22);
+      background: var(--carton);
+      box-shadow: inset 0 -8px 0 rgba(92,58,27,.16), inset 9px 0 0 rgba(255,229,184,.16), 0 5px 10px rgba(15,23,42,.16);
+      border: 1.5px solid #b57a3e;
+      overflow: hidden;
+    }
+    .box::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(135deg, transparent 0 56%, rgba(255,226,177,.18) 56% 100%),
+        linear-gradient(45deg, transparent 0 62%, rgba(97,62,31,.12) 62% 100%);
+      pointer-events: none;
+    }
+    .box::after {
+      content: '';
+      position: absolute;
+      top: 7px;
+      right: 7px;
+      width: 20px;
+      height: 12px;
+      border-radius: 2px;
+      background: #f7efe4;
+      border: 1px solid rgba(95,63,32,.25);
+      box-shadow: 0 18px 0 -5px #f7efe4, 0 18px 0 -4px rgba(95,63,32,.25);
+    }
+    .box.show {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0) scale(1);
+    }
+
+    .truck-box.show {
+      animation: flyToTruck .46s cubic-bezier(.2, .9, .25, 1.15) both;
+    }
+
+    @keyframes flyToTruck {
+      from { transform: translate(-140px, 48px) scale(.72); opacity: .2; }
+      to { transform: translate(0, 0) scale(1); opacity: 1; }
+    }
+    .box span { position: relative; z-index: 2; opacity: .8; }
+
+    .cart-loader {
+    animation: cartDelay 2s ease both;
+    position: absolute;
+    left: calc(4vw - 190px);
+    bottom: -3vh;
+    width: 160px;
+    height: auto;
+    z-index: 6;
+    opacity: 1;
+    transition: opacity .35s ease, transform .35s ease;
+  }
+    @keyframes cartArrive { to { opacity: 1; transform: translateX(0); } }
+
+    @keyframes cartDelay {
+      0% { opacity: 0; transform: translateX(-40px); }
+      60% { opacity: 0; transform: translateX(-40px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+    .cart-loader.hide { opacity: 0; transform: translateX(-20px) scale(.92); pointer-events: none; }
+    .worker-svg {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 90%;
+      height: auto;
+      z-index: 3;
+    }
+
+    .cart-loader::after {
+      content: '';
+      position: absolute;
+      left: 50px;
+      bottom: 28px;
+      width: 130px;
+      height: 10px;
+      border-radius: 6px;
+      background: #2563eb;
+      z-index: 5;
+    }
+
+    
+
+    .cart-boxes {
+      position: absolute;
+      left: 52px;
+      bottom: 38px;
+      width: 130px;
+      height: 112px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 4px;
+      z-index: 6;
+      pointer-events: none;
+      align-content: end;
+      justify-content: center;
+    }
+    .cart-boxes .box {
+      position: relative;
+      left: auto !important;
+      top: auto !important;
+      width: auto !important;
+      height: auto !important;
+      font-size: .22rem;
+      padding: 3px;
+      border-width: 1px;
+      box-shadow: inset 0 -4px 0 rgba(92,58,27,.16), inset 4px 0 0 rgba(255,229,184,.14), 0 4px 7px rgba(15,23,42,.14);
+      transform: scale(1);
+      opacity: 1;
+      visibility: visible;
+      transition: none;
+    }
+
+    .cart-boxes .box:nth-child(1) { grid-column: 1; grid-row: 1; }
+    .cart-boxes .box:nth-child(2) { grid-column: 2; grid-row: 1; }
+
+    .cart-boxes .box:nth-child(3) { grid-column: 1; grid-row: 2; }
+    .cart-boxes .box:nth-child(4) { grid-column: 2; grid-row: 2; }
+    .cart-boxes .box:nth-child(5) { grid-column: 3; grid-row: 2; }
+
+    .cart-boxes .box:nth-child(6) { grid-column: 1; grid-row: 3; }
+    .cart-boxes .box:nth-child(7) { grid-column: 2; grid-row: 3; }
+    .cart-boxes .box:nth-child(8) { grid-column: 3; grid-row: 3; }
+
+    .cart-boxes .box:nth-child(1),
+    .cart-boxes .box:nth-child(2),
+    .cart-boxes .box:nth-child(3),
+    .cart-boxes .box:nth-child(4),
+    .cart-boxes .box:nth-child(5),
+    .cart-boxes .box:nth-child(6),
+    .cart-boxes .box:nth-child(7),
+    .cart-boxes .box:nth-child(8) {
+      position: relative;
+      left: auto;
+      top: auto;
+      width: auto;
+      height: auto;
+      opacity: 1;
+    }
+    .cart-boxes .box::after { top: 4px; right: 4px; width: 13px; height: 8px; box-shadow: none; }
+    .cart-boxes .box.move-out {
+      display: none;
+    }
+
+    .success {
+      position: absolute;
+      inset: 0;
+      background: rgba(238,244,255,.72);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 30;
+    }
+    .success.show { display: flex; }
+    .success-box {
+      width: min(380px, 90%);
+      text-align: center;
+      background: white;
+      border-radius: 28px;
+      padding: 30px;
+      box-shadow: 0 24px 60px rgba(15,23,42,.18);
+      animation: pop .35s ease both;
+    }
+    @keyframes pop { from { transform: translateY(20px) scale(.95); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+    .check { width: 58px; height: 58px; margin: 0 auto 12px; border-radius: 50%; background: var(--gradient); color: white; display: grid; place-items: center; font-size: 1.7rem; font-weight: 900; }
+    .success-box h2 { font-family: 'Montserrat', sans-serif; font-size: 1.35rem; margin-bottom: 8px; }
+    .success-box p { color: var(--muted); line-height: 1.5; font-size: .9rem; }
+
+    @media (max-width: 1150px) {
+      html, body { overflow: auto; }
+      body { overflow-x: hidden; }
+
+      .navbar { height: 56px; }
+
+      .page {
+        height: auto;
+        min-height: 100vh;
+        padding-top: 56px;
+        grid-template-columns: 1fr;
+      }
+
+      .form-area {
+        border-right: none;
+        border-bottom: 1px solid rgba(15,23,42,.08);
+        padding: 18px 24px;
+        align-items: flex-start;
+      }
+
+      .form-card {
+        max-width: 980px;
+        transform: none;
+      }
+
+      .form-card h1 {
+        font-size: clamp(1.45rem, 3.4vw, 2rem);
+        max-width: 620px;
+      }
+
+      .subtitle { max-width: 650px; }
+
+      .progress-wrap { max-width: 100%; }
+
+      .fields {
+        grid-template-columns: repeat(4, 1fr);
+        align-items: end;
+        gap: 10px;
+      }
+
+      .type-toggle {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .fields > div:nth-child(1) { grid-column: span 1; }
+      .fields > .row { grid-column: span 2; }
+      .fields > div:nth-child(4) { grid-column: span 1; }
+      .fields > div:nth-child(5) { grid-column: span 2; }
+      .submit-btn { grid-column: span 2; height: 44px; }
+
+      .scene-area {
+        height: 430px;
+        min-height: 430px;
+        padding: 10px 20px 20px;
+        align-items: center;
+      }
+
+      .status-card {
+        top: 18px;
+        right: 22px;
+        width: 205px;
+        padding: 14px;
+      }
+
+      .truck-stage {
+        width: min(760px, 92vw);
+        max-width: 760px;
+        margin-top: 42px;
+        transform: translateX(0);
+      }
+
+      @keyframes truckIn {
+        from { transform: translateX(-120vw); opacity: 0; }
+        82% { transform: translateX(10px); opacity: 1; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+
+      @keyframes truckDepart {
+        0% { transform: translateX(0); opacity: 1; }
+        18% { transform: translateX(-24px); opacity: 1; }
+        100% { transform: translateX(130vw); opacity: 1; }
+      }
+
+      .cart-loader {
+        left: 10%;
+        bottom: 4%;
+        width: min(210px, 26vw);
+      }
+
+      .cab-logo { width: 82px; }
+      .building { transform: scale(.82); transform-origin: bottom center; }
+    }
+
+    @media (max-width: 720px) {
+      .form-area { padding: 16px 18px; }
+      .fields { grid-template-columns: 1fr 1fr; }
+      .fields > div:nth-child(1),
+      .fields > .row,
+      .fields > div:nth-child(4),
+      .fields > div:nth-child(5),
+      .submit-btn { grid-column: span 2; }
+      .scene-area { height: 360px; min-height: 360px; }
+      .truck-stage { width: 106vw; margin-top: 46px; transform: translateX(4vw); }
+      .status-card { display: none; }
+      .cart-loader { left: 3%; width: 145px; bottom: 5%; }
+      .cab-logo { width: 64px; }
+      .box { font-size: .25rem; padding: 3px; }
+    }
+
+    @media (max-width: 520px) {
+      .row { grid-template-columns: 1fr; }
+      .scene-area { height: 410px; }
+      .status-card { display: none; }
+      .truck-stage { width: 118%; margin-top: 30px; }
+      .cart-loader { width: 120px; left: -6%; bottom: 8%; transform: scale(.8); }
+      .cargo-space { gap: 3px; }
+      .box { font-size: .28rem; border-radius: 4px; padding: 4px; }
+      .cab-logo { width: 70px; right: 12%; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="brand">
+      <img src="LOGO_SIN_FONDO_FINAl.png" alt="MUVE">
+      MUVE
+    </div>
+  </nav>
+
+  <main class="page">
+    <section class="form-area">
+      <div class="form-card">
+        <div class="eyebrow">🚚 Cotización rápida</div>
+        <h1>Completa el formulario y <span>cargamos tu camión</span></h1>
+        <p class="subtitle">Las cajas parten en la carretilla y se ordenan dentro del camión al completar los datos.</p>
+
+        <div class="progress-wrap">
+          <div class="progress-top">
+            <span>Progreso de carga</span>
+            <span id="progressText">0%</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        </div>
+
+        <div class="type-toggle">
+          <button class="type-btn" type="button" data-type="Flete">FLETE</button>
+          <button class="type-btn" type="button" data-type="Mudanza">MUDANZA</button>
+        </div>
+
+        <form id="quoteForm">
+          <input type="hidden" id="serviceType" value="">
+          <div class="fields">
+            <div>
+              <label for="date">FECHA</label>
+              <input id="date" data-load="Fecha" type="date" required>
+            </div>
+            <div class="row">
+              <div>
+                <label for="origin">DESDE</label>
+                <input id="origin" data-load="Desde" type="text" placeholder="Ej: Las Condes" required>
+              </div>
+              <div>
+                <label for="dest">HASTA</label>
+                <input id="dest" data-load="Hasta" type="text" placeholder="Ej: Providencia" required>
+              </div>
+            </div>
+            <div class="row">
+              <div>
+                <label for="name">NOMBRE</label>
+                <input id="name" data-load="Nombre" type="text" placeholder="Tu nombre" required>
+              </div>
+              <div>
+                <label for="phone">TELÉFONO</label>
+                <input id="phone" data-load="Teléfono" type="tel" placeholder="+56 9 0000 0000" required>
+              </div>
+            </div>
+            <div>
+              <label for="size">TAMAÑO DEL TRASLADO</label>
+              <select id="size" data-load="Tamaño">
+                <option value="" selected>Sin seleccionar</option>
+                <option>Pocas cosas</option>
+                <option>Medio hogar</option>
+                <option>Hogar completo</option>
+                <option>Oficina / empresa</option>
+              </select>
+            </div>
+            <div>
+              <label for="notes">NOTAS</label>
+              <textarea id="notes" data-load="Notas" placeholder="Ej: escaleras, embalaje, ascensor..."></textarea>
+            </div>
+            <button class="submit-btn" type="submit">ENVIAR COTIZACIÓN</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="scene-area">
+      <div class="skyline">
+        <div class="building bld-1"></div>
+        <div class="building bld-2"></div>
+        <div class="building bld-3"></div>
+        <div class="building bld-4"></div>
+        <div class="building bld-5"></div>
+        <div class="tree t1"></div>
+        <div class="tree t2"></div>
+      </div>
+      <div class="parking-lines"></div>
+
+      <div class="status-card">
+        <strong id="statusTitle">Cajas en carretilla</strong>
+        <p id="statusText">Completa los campos para pasar las cajas al camión.</p>
+      </div>
+
+      <div class="truck-stage" id="truckStage">
+        <svg class="truck" viewBox="0 0 900 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="430" cy="379" rx="365" ry="18" fill="#94A3B8" opacity="0.24"/>
+          <rect x="62" y="88" width="510" height="240" rx="18" fill="#FFFFFF" stroke="#D7E2F0" stroke-width="4"/>
+          <rect x="62" y="88" width="510" height="24" rx="18" fill="url(#grad)"/>
+          <rect x="88" y="124" width="222" height="180" rx="14" fill="#F8FBFF" stroke="#E2E8F0" stroke-width="3"/>
+          <rect x="325" y="124" width="222" height="180" rx="14" fill="#F8FBFF" stroke="#E2E8F0" stroke-width="3"/>
+          <line x1="318" y1="124" x2="318" y2="304" stroke="#CBD5E1" stroke-width="3"/>
+          <circle cx="300" cy="216" r="5" fill="#CBD5E1"/>
+          <circle cx="342" cy="216" r="5" fill="#CBD5E1"/>
+          <text x="318" y="226" text-anchor="middle" font-family="Montserrat, sans-serif" font-weight="900" font-size="46" fill="#0052FF" opacity=".1">MUVE</text>
+          <path d="M572 157 L720 157 C740 157 754 168 762 185 L803 265 L803 328 L572 328 Z" fill="#0F172A"/>
+          <path d="M603 177 L707 177 C720 177 729 185 734 197 L753 240 L603 240 Z" fill="#DFF7FF" stroke="#A7DDF0" stroke-width="3"/>
+          <line x1="712" y1="241" x2="712" y2="327" stroke="#26364D" stroke-width="3"/>
+          <rect x="730" y="271" width="28" height="9" rx="4" fill="#334155"/>
+          <rect x="784" y="282" width="22" height="25" rx="7" fill="#00DAFF"/>
+          <rect x="800" y="315" width="35" height="18" rx="7" fill="#1E293B"/>
+          <rect x="554" y="295" width="30" height="33" rx="8" fill="#334155"/>
+          <circle cx="166" cy="330" r="42" fill="#1E293B"/>
+          <circle cx="166" cy="330" r="19" fill="#64748B"/>
+          <circle cx="166" cy="330" r="7" fill="#CBD5E1"/>
+          <circle cx="420" cy="330" r="42" fill="#1E293B"/>
+          <circle cx="420" cy="330" r="19" fill="#64748B"/>
+          <circle cx="420" cy="330" r="7" fill="#CBD5E1"/>
+          <circle cx="715" cy="330" r="42" fill="#1E293B"/>
+          <circle cx="715" cy="330" r="19" fill="#64748B"/>
+          <circle cx="715" cy="330" r="7" fill="#CBD5E1"/>
+          <path d="M124 292 A42 42 0 0 1 208 292" stroke="#E2E8F0" stroke-width="4"/>
+          <path d="M378 292 A42 42 0 0 1 462 292" stroke="#E2E8F0" stroke-width="4"/>
+          <path d="M673 292 A42 42 0 0 1 757 292" stroke="#1E293B" stroke-width="4"/>
+          <defs>
+            <linearGradient id="grad" x1="62" y1="88" x2="572" y2="112" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#0052FF"/>
+              <stop offset="1" stop-color="#00DAFF"/>
+            </linearGradient>
+          </defs>
+        </svg>
+
+        <img class="cab-logo" src="LOGO_SIN_FONDO_FINAl.png" alt="MUVE logo">
+
+        <div class="cargo-space" id="cargoSpace">
+          <div class="box truck-box"><span>MUVE</span></div>
+          <div class="box truck-box"><span>MUVE</span></div>
+          <div class="box truck-box"><span>MUVE</span></div>
+          <div class="box truck-box"><span>MUVE</span></div>
+          <div class="box truck-box"><span>MUVE</span></div>
+          <div class="box truck-box"><span>MUVE</span></div>
+          <div class="box truck-box"><span>MUVE</span></div>
+          <div class="box truck-box"><span>MUVE</span></div>
+        </div>
+
+        <div class="cart-loader" id="cartLoader">
+          <div class="cart-boxes" id="cartBoxes">
+            <div class="box cart-box"><span>MUVE</span></div>
+            <div class="box cart-box"><span>MUVE</span></div>
+            <div class="box cart-box"><span>MUVE</span></div>
+            <div class="box cart-box"><span>MUVE</span></div>
+            <div class="box cart-box"><span>MUVE</span></div>
+            <div class="box cart-box"><span>MUVE</span></div>
+            <div class="box cart-box"><span>MUVE</span></div>
+            <div class="box cart-box"><span>MUVE</span></div>
+          </div>
+          <svg class="worker-svg" viewBox="0 0 110 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            
+            <circle cx="50" cy="103" r="6" fill="#475569"/>
+            <circle cx="100" cy="103" r="6" fill="#475569"/>
+            <line x1="30" y1="67" x2="20" y2="52" stroke="#475569" stroke-width="4" stroke-linecap="round"/>
+            <line x1="20" y1="52" x2="20" y2="34" stroke="#475569" stroke-width="4" stroke-linecap="round"/>
+            <circle cx="20" cy="22" r="13" fill="#D4A574"/>
+            <ellipse cx="20" cy="14" rx="15" ry="6" fill="#0052FF"/>
+            <rect x="8" y="36" width="25" height="34" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+            <line x1="33" y1="45" x2="42" y2="61" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+            <line x1="14" y1="70" x2="9" y2="96" stroke="#3B82F6" stroke-width="5" stroke-linecap="round"/>
+            <line x1="27" y1="70" x2="31" y2="96" stroke="#3B82F6" stroke-width="5" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="success" id="success">
+        <div class="success-box">
+          <div class="check">✓</div>
+          <h2>¡Cotización enviada!</h2>
+          <p>El camión salió con tu solicitud. Te contactaremos pronto para confirmar los detalles.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const truckBoxes = Array.from(document.querySelectorAll('.truck-box'));
+    const cartBoxes = Array.from(document.querySelectorAll('.cart-box'));
+    const fields = Array.from(document.querySelectorAll('[data-load]'));
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    const statusTitle = document.getElementById('statusTitle');
+    const statusText = document.getElementById('statusText');
+    const serviceType = document.getElementById('serviceType');
+    const typeButtons = Array.from(document.querySelectorAll('.type-btn'));
+    const success = document.getElementById('success');
+    const quoteForm = document.getElementById('quoteForm');
+    const truckStage = document.getElementById('truckStage');
+    const cartLoader = document.getElementById('cartLoader');
+    const dateInput = document.getElementById('date');
+
+    const steps = ['service', ...fields.map(field => field.id)];
+    // Matriz de apilado: empieza abajo a la izquierda, sube y luego avanza hacia la derecha.
+    // Visualmente imita cómo se llena un camión: piso primero, luego encima.
+    // izquierda → derecha y abajo → arriba
+    const truckLoadOrder = [7,6,5,4,3,2,1,0];
+    // Orden de descarga según tu esquema (de derecha hacia izquierda y de abajo hacia arriba)
+    const cartUnloadOrder = [0,1,2,3,4,5,6,7];
+    let completed = new Set();
+
+    function safeText(element, text) { if (element) element.textContent = text; }
+
+    function updateProgress() {
+      const count = steps.filter(step => completed.has(step)).length;
+      const percent = Math.round((count / steps.length) * 100);
+      if (progressFill) progressFill.style.width = percent + '%';
+      safeText(progressText, percent + '%');
+
+      truckBoxes.forEach(box => box.classList.remove('show'));
+      truckLoadOrder.slice(0, count).forEach(index => {
+        if (truckBoxes[index]) truckBoxes[index].classList.add('show');
+      });
+
+      cartBoxes.forEach(box => box.classList.remove('move-out'));
+      cartUnloadOrder.slice(0, count).forEach(index => {
+        if (cartBoxes[index]) cartBoxes[index].classList.add('move-out');
+      });
+
+      if (percent === 0) {
+        safeText(statusTitle, 'Cajas en carretilla');
+        safeText(statusText, 'Completa el formulario para pasar las cajas al camión.');
+      } else if (percent < 75) {
+        safeText(statusTitle, 'Cargando camión');
+        safeText(statusText, 'Las cajas pasan de la carretilla al camión en orden.');
+      } else if (percent < 100) {
+        safeText(statusTitle, 'Casi listo');
+        safeText(statusText, 'Faltan pocos datos para completar la carga.');
+      } else {
+        safeText(statusTitle, 'Carga completa');
+        safeText(statusText, 'El camión está listo para salir con tu cotización.');
+      }
+    }
+
+    typeButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        // toggle: si ya está activo, deselecciona
+        if (button.classList.contains('active')) {
+          button.classList.remove('active');
+          if (serviceType) serviceType.value = '';
+          completed.delete('service');
+        } else {
+          typeButtons.forEach(btn => btn.classList.remove('active'));
+          button.classList.add('active');
+          if (serviceType) serviceType.value = button.dataset.type || '';
+          if (serviceType && serviceType.value) completed.add('service');
+        }
+        updateProgress();
+      });
+    });
+
+    fields.forEach(field => {
+      const eventName = field.tagName === 'SELECT' ? 'change' : 'input';
+      field.addEventListener(eventName, () => {
+        const key = field.id;
+        const value = String(field.value || '').trim();
+
+        // si es select y vuelve a vacío → quitar caja
+        if (field.tagName === 'SELECT' && field.value === '') {
+          completed.delete(key);
+        } else if (value !== '') {
+          completed.add(key);
+        } else {
+          completed.delete(key);
+        }
+
+        updateProgress();
+      });
+    });
+
+    if (dateInput) dateInput.min = new Date().toISOString().split('T')[0];
+
+    if (quoteForm) {
+      quoteForm.addEventListener('submit', event => {
+        event.preventDefault();
+        if (!serviceType || !serviceType.value) {s
+          safeText(statusTitle, 'Selecciona el servicio');
+          safeText(statusText, 'Elige Flete o Mudanza para cargar la primera caja.');
+          typeButtons.forEach(btn => {
+            if (btn.animate) {
+              btn.animate([
+                { transform: 'translateX(0)' },
+                { transform: 'translateX(-4px)' },
+                { transform: 'translateX(4px)' },
+                { transform: 'translateX(0)' }
+              ], { duration: 260 });
+            }
+          });
+          return;
+        }
+        if (!quoteForm.checkValidity()) {
+          quoteForm.reportValidity();
+          return;
+        }
+        completed = new Set(steps);
+        updateProgress();
+        setTimeout(() => { if (cartLoader) cartLoader.classList.add('hide'); }, 250);
+        setTimeout(() => { if (truckStage) truckStage.classList.add('depart'); }, 700);
+        setTimeout(() => { if (success) success.classList.add('show'); }, 2000);
+      });
+    }
+    updateProgress();
+  </script>
+</body>
+</html>

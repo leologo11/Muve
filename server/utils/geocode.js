@@ -8,7 +8,7 @@ export async function geocodeAddress(address, commune) {
   try {
     const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=3&lang=es&lat=-33.45&lon=-70.65`;
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'Routiflow/1.0' },
+      headers: { 'User-Agent': 'MUVE/1.0' },
       signal: AbortSignal.timeout(7000)
     });
     if (res.ok) {
@@ -27,7 +27,7 @@ export async function geocodeAddress(address, commune) {
     const fullQuery = [address, commune, 'Chile'].filter(Boolean).join(', ');
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fullQuery)}&format=json&limit=1&countrycodes=cl`;
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'Routiflow/1.0 (delivery management)' },
+      headers: { 'User-Agent': 'MUVE/1.0 (delivery management)' },
       signal: AbortSignal.timeout(8000)
     });
     if (res.ok) {

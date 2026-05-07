@@ -5,9 +5,9 @@ import RouteMap from '../../components/RouteMap.jsx';
 import DeliveryModal from '../../components/DeliveryModal.jsx';
 import Toast, { toast } from '../../components/Toast.jsx';
 
-const STATUS_COLOR = { entregado: '#008855', 'no-entregado': '#cc2244', pendiente: '#f57c00' };
+const STATUS_COLOR = { entregado: '#0052FF', 'no-entregado': '#cc2244', pendiente: '#f57c00' };
 const STATUS_LABEL = { entregado: '✅ Entregado', 'no-entregado': '❌ No entregado', pendiente: '⏳ Pendiente' };
-const STATUS_BG = { entregado: '#00885512', 'no-entregado': '#cc224412', pendiente: '#f57c0012' };
+const STATUS_BG = { entregado: '#0052FF12', 'no-entregado': '#cc224412', pendiente: '#f57c0012' };
 
 export default function CompanyView() {
   const [routes, setRoutes] = useState([]);
@@ -105,9 +105,9 @@ export default function CompanyView() {
   });
 
   const stats = [
-    { label: 'Entregadas', value: delivered.length, color: '#008855' },
+    { label: 'Entregadas', value: delivered.length, color: '#0052FF' },
     { label: 'Pendientes', value: active.filter(p => p.status === 'pendiente').length, color: '#f57c00' },
-    { label: '% Listo', value: `${progress}%`, color: progress === 100 ? '#008855' : 'var(--text)' }
+    { label: '% Listo', value: `${progress}%`, color: progress === 100 ? '#0052FF' : 'var(--text)' }
   ];
 
   const downloadCSV = () => {
@@ -221,7 +221,7 @@ export default function CompanyView() {
 function RouteCard({ route, onClick }) {
   const s = route.stats || {};
   const progress = s.total ? Math.round((s.delivered / s.total) * 100) : 0;
-  const statusColor = { active: '#008855', paused: '#f57c00', completed: '#0077aa', draft: '#999', cancelled: '#cc2244' }[route.status] || '#999';
+  const statusColor = { active: '#0052FF', paused: '#f57c00', completed: '#0077aa', draft: '#999', cancelled: '#cc2244' }[route.status] || '#999';
   const statusLabel = { active: '● Activa', paused: '⏸ Pausada', completed: '✓ Completada', draft: 'Borrador', cancelled: 'Cancelada' }[route.status] || route.status;
 
   return (
@@ -253,7 +253,7 @@ function RouteCard({ route, onClick }) {
       {s.total > 0 && (
         <>
           <div style={{ display: 'flex', gap: 12, fontSize: 12, marginBottom: 8 }}>
-            <span style={{ color: '#008855', fontWeight: 700 }}>✅ {s.delivered}</span>
+            <span style={{ color: '#0052FF', fontWeight: 700 }}>✅ {s.delivered}</span>
             <span style={{ color: '#cc2244', fontWeight: 700 }}>❌ {s.failed}</span>
             <span style={{ color: '#f57c00', fontWeight: 700 }}>⏳ {s.pending}</span>
             <span style={{ color: 'var(--muted)' }}>/ {s.total} total</span>
@@ -350,7 +350,7 @@ function CompanyReport({ packages, route, onDownload }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
         {[
           { label: 'Total', val: active.length, color: 'var(--text)' },
-          { label: 'Entregados', val: delivered.length, color: '#008855' },
+          { label: 'Entregados', val: delivered.length, color: '#0052FF' },
           { label: 'No entregados', val: failed.length, color: '#cc2244' },
           { label: 'Pendientes', val: pending.length, color: '#f57c00' }
         ].map(({ label, val, color }) => (
@@ -373,7 +373,7 @@ function CompanyReport({ packages, route, onDownload }) {
 
       {/* Package list */}
       {[
-        { list: delivered, label: `✅ Entregados (${delivered.length})`, color: '#008855' },
+        { list: delivered, label: `✅ Entregados (${delivered.length})`, color: '#0052FF' },
         { list: failed, label: `❌ No entregados (${failed.length})`, color: '#cc2244' },
         { list: pending, label: `⏳ Pendientes (${pending.length})`, color: '#f57c00' }
       ].filter(s => s.list.length > 0).map(({ list, label, color }) => (

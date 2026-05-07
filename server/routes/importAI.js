@@ -10,6 +10,7 @@ import { getDbPricesMap } from './priceRoutes.js';
 import { geocodeAddress, sleep } from '../utils/geocode.js';
 import Zone from '../models/Zone.js';
 import { pointInPolygon } from '../utils/zones.js';
+import { isSupabaseEnabled, qs, supabaseRequest } from '../utils/supabase.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -53,7 +54,7 @@ async function parseWithClaude(client, content) {
 }
 
 function normalize(str) {
-  return (str || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return (str || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 function applyPrices(packages, dbPricesMap = {}, zones = []) {
@@ -65,7 +66,10 @@ function applyPrices(packages, dbPricesMap = {}, zones = []) {
     if (!price) {
       // Custom zone takes priority over commune price (more specific area)
       if (p.lat && p.lng && zones.length) {
-        const zone = zones.find(z => pointInPolygon([p.lng, p.lat], z.polygon.coordinates[0]));
+        const zone = zones.find(z => {
+          const ring = z.polygon?.coordinates?.[0] || z.polygon?.geometry?.coordinates?.[0];
+          return ring && pointInPolygon([p.lng, p.lat], ring);
+        });
         if (zone) price = zone.price;
       }
       if (!price) price = dbPrice || suggestPrice(p.commune);
@@ -121,7 +125,9 @@ router.post('/:routeId/preview', requireAuth, requireRole('admin'), upload.singl
 
     const [dbPricesMap, zones] = await Promise.all([
       getDbPricesMap().catch(() => ({})),
-      Zone.find().lean().catch(() => [])
+      isSupabaseEnabled()
+        ? supabaseRequest(`/zones${qs({ select: 'name,price,polygon' })}`).catch(() => [])
+        : Zone.find().lean().catch(() => [])
     ]);
     const withPrices = applyPrices(packages, dbPricesMap, zones);
     res.json({ count: withPrices.length, packages: withPrices });
@@ -137,6 +143,48 @@ router.post('/:routeId/confirm', requireAuth, requireRole('admin'), async (req, 
   try {
     const { packages } = req.body;
     if (!packages?.length) return res.status(400).json({ error: 'No hay paquetes para guardar' });
+
+    if (isSupabaseEnabled()) {
+      const existingRows = await supabaseRequest(`/packages${qs({ route_id: `eq.${req.params.routeId}`, select: 'id' })}`);
+      const existing = existingRows.length;
+      const docs = [];
+      for (let i = 0; i < packages.length; i++) {
+        const { _preview, _suggestedPrice, _flags, ...p } = packages[i];
+        const doc = { ...p };
+
+        if ((!doc.lat || !doc.lng) && doc.address) {
+          const geo = await geocodeAddress(doc.address, doc.commune);
+          if (geo) { doc.lat = geo.lat; doc.lng = geo.lng; }
+          await sleep(1100);
+        }
+
+        docs.push({
+          tracking_id: doc.trackingId || `MUVE${Date.now().toString(36).toUpperCase()}${String(existing + i + 1).padStart(3, '0')}`,
+          route_id: req.params.routeId,
+          customer_name: doc.customerName || '',
+          customer_last_name: doc.customerLastName || '',
+          customer_phone: doc.customerPhone || '',
+          address: doc.address || '',
+          commune: doc.commune || '',
+          apt_floor: doc.aptFloor || '',
+          zone: doc.zone || '',
+          price: Number(doc.price || 0),
+          lat: doc.lat || null,
+          lng: doc.lng || null,
+          stop_order: existing + i,
+          status: doc.status || 'pendiente',
+          note: doc.note || '',
+          ai_flags: _flags || [],
+        });
+      }
+
+      const created = await supabaseRequest('/packages', {
+        method: 'POST',
+        body: JSON.stringify(docs),
+      });
+      await syncRouteStats(req.params.routeId);
+      return res.status(201).json({ count: created.length, packages: created });
+    }
 
     const existing = await Package.countDocuments({ routeId: req.params.routeId });
 

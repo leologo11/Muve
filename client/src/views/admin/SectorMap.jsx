@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
+import ImportPricesModal from './ImportPricesModal.jsx';
 
 // GeoJSON bundled in /public — no external dependency
 const LOCAL_GEO = '/comunas_rm.json';
@@ -84,6 +85,8 @@ export default function SectorMap() {
   const [loadingTariffs, setLoadingTariffs]     = useState(false);
   const [editingTariff, setEditingTariff]       = useState(null);
   const [editTariffName, setEditTariffName]     = useState('');
+
+  const [showImport, setShowImport] = useState(false);
 
   useEffect(() => { dmRef.current = drawMode; }, [drawMode]);
   useEffect(() => { rmRef.current = reshapeMode; }, [reshapeMode]);
@@ -183,7 +186,7 @@ export default function SectorMap() {
 
       const priceStr = `$${Number(z.price).toLocaleString('es-CL')}`;
       poly.bindTooltip(
-        `<div style="font-family:'Space Grotesk',sans-serif;font-size:13px;line-height:1.5">
+        `<div style="font-family:'Inter',sans-serif;font-size:13px;line-height:1.5">
           ${isCommune ? '' : '<b style="font-size:10px;color:#5c35cc">ZONA CUSTOM · </b>'}
           <b>${z.name}</b><br>
           <span style="font-weight:800;color:${isCommune ? tierColor(z.price) : z.color || '#5c35cc'}">${priceStr}</span>
@@ -510,6 +513,12 @@ export default function SectorMap() {
               🔄 Recargar
             </button>
             <button
+              onClick={() => setShowImport(true)}
+              style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid #22863a40', background: '#22863a10', color: '#22863a', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+            >
+              📥 Importar precios
+            </button>
+            <button
               onClick={openTariffPanel}
               style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid #5c35cc30', background: '#5c35cc0c', color: '#5c35cc', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
             >
@@ -518,7 +527,7 @@ export default function SectorMap() {
             {!showSaveConfig ? (
               <button
                 onClick={() => setShowSaveConfig(true)}
-                style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid #00885530', background: '#00885510', color: 'var(--accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid #0052FF30', background: '#0052FF10', color: 'var(--accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
               >
                 💾 Guardar config
               </button>
@@ -616,7 +625,7 @@ export default function SectorMap() {
                         <button
                           onClick={() => saveSidebarPrice(z)}
                           disabled={saving}
-                          style={{ padding: '3px 7px', borderRadius: 7, border: 'none', background: saving ? 'var(--border)' : '#008855', color: '#fff', fontSize: 10, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', flexShrink: 0 }}
+                          style={{ padding: '3px 7px', borderRadius: 7, border: 'none', background: saving ? 'var(--border)' : '#0052FF', color: '#fff', fontSize: 10, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', flexShrink: 0 }}
                         >
                           {saving ? '…' : '✓'}
                         </button>
@@ -806,6 +815,13 @@ export default function SectorMap() {
             </div>
           </div>
         </div>
+      )}
+
+      {showImport && (
+        <ImportPricesModal
+          onClose={() => setShowImport(false)}
+          onImported={() => { setShowImport(false); loadZones(); }}
+        />
       )}
     </div>
   );

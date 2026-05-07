@@ -71,6 +71,25 @@ export default function DriverView() {
     }
   };
 
+  const handleModalSaved = async () => {
+    try {
+      const { route, packages: newPkgs } = await api.getRoute(selectedRoute._id);
+      setSelectedRoute(route);
+      setPackages(newPkgs);
+      if (route.status === 'active') {
+        const activePkgs = newPkgs.filter(p => p.status !== 'eliminado');
+        const stillPending = activePkgs.some(p => p.status === 'pendiente');
+        if (!stillPending && activePkgs.length > 0) {
+          await api.updateRoute(selectedRoute._id, { status: 'paused' });
+          setSelectedRoute(prev => ({ ...prev, status: 'paused' }));
+          toast('⏸ Ruta en revisión — el admin revisará los resultados');
+        }
+      }
+    } catch (err) {
+      toast('❌ ' + err.message);
+    }
+  };
+
   const handleStatusChange = async (pkg, newStatus) => {
     try {
       const updated = await api.updatePackage(pkg._id, { status: newStatus });
@@ -134,7 +153,7 @@ export default function DriverView() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Header
-        title={selectedRoute ? `🚗 ${selectedRoute.routeCode}` : '🚚 Routiflow'}
+        title={selectedRoute ? `🚗 ${selectedRoute.routeCode}` : '🚚 MUVE'}
         stats={selectedRoute ? stats : null}
       />
 
@@ -149,7 +168,7 @@ export default function DriverView() {
         </div>
       )}
       {gpsState === 'active' && myLocation && (
-        <div style={{ background: '#e8f5e9', borderBottom: '1px solid #00885520', padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ background: '#f4f7ff', borderBottom: '1px solid #0052FF20', padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <span style={{ fontSize: 13 }}>📡</span>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)' }}>
             GPS activo · precisión {myLocation.accuracy ? `±${Math.round(myLocation.accuracy)}m` : '…'}
@@ -180,7 +199,7 @@ export default function DriverView() {
 
       {/* Route summary banner */}
       {selectedRoute && selectedRoute.status !== 'completed' && (
-        <div style={{ background: 'linear-gradient(90deg, #00885508, #00885514)', borderBottom: '1px solid #00885522', padding: '7px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ background: 'linear-gradient(90deg, #0052FF08, #0052FF14)', borderBottom: '1px solid #0052FF22', padding: '7px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ fontSize: 15 }}>📦</span>
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>{active.length}</span>
@@ -319,8 +338,13 @@ export default function DriverView() {
         <DeliveryModal
           pkg={editPkg}
           route={selectedRoute}
+          readOnly={
+            ['completed', 'paused'].includes(selectedRoute?.status) ||
+            editPkg.status === 'entregado' ||
+            editPkg.status === 'no-entregado'
+          }
           onClose={() => setEditPkg(null)}
-          onSaved={() => loadRoute(selectedRoute._id)}
+          onSaved={handleModalSaved}
         />
       )}
 
@@ -394,7 +418,7 @@ function DriverReport({ packages, route }) {
 
 function ReportCard({ pkg, type }) {
   const color = type === 'entregado' ? 'var(--accent)' : type === 'devuelto' ? '#7b1fa2' : 'var(--danger)';
-  const borderColor = type === 'entregado' ? '#00885528' : type === 'devuelto' ? '#7b1fa228' : '#cc224428';
+  const borderColor = type === 'entregado' ? '#0052FF28' : type === 'devuelto' ? '#7b1fa228' : '#cc224428';
   return (
     <div style={{ background: '#fff', border: `1px solid ${borderColor}`, borderRadius: 12, padding: '12px 14px', marginBottom: 8 }}>
       <div style={{ fontWeight: 700, fontSize: 14 }}>{pkg.customerName} {pkg.customerLastName}</div>
@@ -482,7 +506,7 @@ function LoadCheckModal({ packages, onClose, onUpdated }) {
             return (
               <div key={pkg._id} style={{
                 borderRadius: 13, marginBottom: 8, overflow: 'hidden',
-                border: `1px solid ${st === 'ok' ? '#00885530' : st === 'missing' ? '#cc224430' : 'var(--border)'}`,
+                border: `1px solid ${st === 'ok' ? '#0052FF30' : st === 'missing' ? '#cc224430' : 'var(--border)'}`,
                 background: st === 'ok' ? '#edfff5' : st === 'missing' ? '#fff0f3' : '#fff',
                 transition: 'all .15s'
               }}>
@@ -511,7 +535,7 @@ function LoadCheckModal({ packages, onClose, onUpdated }) {
                     <button
                       onClick={() => setpState(pkg._id, st === 'ok' ? null : 'ok')}
                       style={{ padding: '6px 11px', borderRadius: 20, border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                        background: st === 'ok' ? 'var(--accent)' : '#00885514', color: st === 'ok' ? '#fff' : 'var(--accent)' }}
+                        background: st === 'ok' ? 'var(--accent)' : '#0052FF14', color: st === 'ok' ? '#fff' : 'var(--accent)' }}
                     >✓ Tengo</button>
                     <button
                       onClick={() => setpState(pkg._id, st === 'missing' ? null : 'missing')}

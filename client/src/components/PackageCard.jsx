@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 
 const STATUS = {
   pendiente:      { color: '#888',    label: 'PENDIENTE',    icon: '⏳' },
-  entregado:      { color: '#008855', label: 'ENTREGADO',    icon: '✓'  },
+  entregado:      { color: '#0052FF', label: 'ENTREGADO',    icon: '✓'  },
   'no-entregado': { color: '#cc2244', label: 'NO ENTREGADO', icon: '✗'  },
   devuelto:       { color: '#7b1fa2', label: 'DEVUELTO',     icon: '↩'  },
   eliminado:      { color: '#c04a1a', label: 'ELIMINADO',    icon: '✕'  },
@@ -140,7 +140,7 @@ export default function PackageCard({ pkg, index, onEdit, onStatusChange, onDele
         {/* Nav buttons */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0, paddingLeft: 7 }}>
           {pkg.customerPhone && (
-            <NavBtn href={`tel:${pkg.customerPhone}`} color="#008855">📞</NavBtn>
+            <NavBtn href={`tel:${pkg.customerPhone}`} color="#0052FF">📞</NavBtn>
           )}
           <NavBtn
             href={`https://waze.com/ul?q=${encodeURIComponent(pkg.address + ', ' + (pkg.commune || '') + ', Chile')}&navigate=yes`}
@@ -164,13 +164,15 @@ export default function PackageCard({ pkg, index, onEdit, onStatusChange, onDele
           overflowX: 'auto', scrollbarWidth: 'none'
         }}>
           {isElim ? (
-            <ActionBtn color="#008855" onClick={() => onRestore?.(pkg)}>↩ Restaurar</ActionBtn>
-          ) : lockDelivered && (st === 'entregado' || st === 'no-entregado') ? (
-            /* Estado final bloqueado para driver — solo foto */
-            <ActionBtn color="#d4650a" onClick={() => onEdit?.(pkg)}>📷 Foto</ActionBtn>
+            <ActionBtn color="#0052FF" onClick={() => onRestore?.(pkg)}>↩ Restaurar</ActionBtn>
+          ) : lockDelivered ? (
+            /* Modo driver — un solo botón que abre el formulario */
+            (st === 'entregado' || st === 'no-entregado')
+              ? <ActionBtn color="#0077aa" onClick={() => onEdit?.(pkg)}>👁 Ver entrega</ActionBtn>
+              : <ActionBtn color="#d4650a" solid onClick={() => onEdit?.(pkg)}>📦 Entregar</ActionBtn>
           ) : (
             <>
-              {st !== 'devuelto' && <ActionBtn color="#008855" solid onClick={() => onStatusChange?.(pkg, 'entregado')}>✅ Entregado</ActionBtn>}
+              {st !== 'devuelto' && <ActionBtn color="#0052FF" solid onClick={() => onStatusChange?.(pkg, 'entregado')}>✅ Entregado</ActionBtn>}
               {st !== 'devuelto' && <ActionBtn color="#cc2244" solid onClick={() => onStatusChange?.(pkg, 'no-entregado')}>❌ No entregado</ActionBtn>}
               {st === 'no-entregado' && (
                 <ActionBtn color="#7b1fa2" solid onClick={() => onStatusChange?.(pkg, 'devuelto')}>📦 Devolver</ActionBtn>

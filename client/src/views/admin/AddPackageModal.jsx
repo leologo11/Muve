@@ -319,7 +319,7 @@ function ImportForm({ routeId, onClose, onCreated }) {
       </div>
 
       {/* Tips */}
-      <div style={{ background: '#00885508', border: '1px solid #00885520', borderRadius: 12, padding: '11px 13px', marginBottom: 14, fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
+      <div style={{ background: '#0052FF08', border: '1px solid #0052FF20', borderRadius: 12, padding: '11px 13px', marginBottom: 14, fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
         <b style={{ color: 'var(--accent)', display: 'block', marginBottom: 4 }}>¿Cómo funciona?</b>
         📸 <b>Screenshot / foto:</b> Captura tu planilla o lista y Claude la lee<br />
         📊 <b>Excel:</b> Sube tu .xlsx directamente<br />
@@ -329,7 +329,7 @@ function ImportForm({ routeId, onClose, onCreated }) {
       </div>
 
       {file && (
-        <div style={{ background: '#00885512', border: '1px solid #00885530', borderRadius: 10, padding: '9px 13px', marginBottom: 12, fontSize: 13 }}>
+        <div style={{ background: '#0052FF12', border: '1px solid #0052FF30', borderRadius: 10, padding: '9px 13px', marginBottom: 12, fontSize: 13 }}>
           ✅ <b>{file.name}</b> · {(file.size / 1024).toFixed(0)} KB
         </div>
       )}

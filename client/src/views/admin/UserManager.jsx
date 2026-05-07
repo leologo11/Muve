@@ -4,8 +4,9 @@ import { toast } from '../../components/Toast.jsx';
 
 const ROLES = ['admin', 'driver', 'company'];
 const ROLE_LABELS = { admin: '⚙️ Admin', driver: '🚗 Driver', company: '🏢 Empresa' };
+const VEHICLE_TYPES = ['Camión', 'Camión 3/4', 'Camión largo', 'Camioneta', 'Furgón', 'Auto', 'Moto'];
 
-const emptyForm = { name: '', email: '', password: '', role: 'driver', companyId: '', phone: '', vehicle: '', licensePlate: '', companyName: '', rut: '' };
+const emptyForm = { name: '', email: '', password: '', role: 'driver', companyId: '', phone: '', vehicles: [], companyName: '', rut: '' };
 
 export default function UserManager() {
   const [users, setUsers] = useState([]);
@@ -30,6 +31,9 @@ export default function UserManager() {
   };
 
   const openEdit = (user) => {
+    const vehicles = Array.isArray(user.vehicles) && user.vehicles.length > 0
+      ? user.vehicles
+      : (user.vehicle ? [{ type: user.vehicle, plate: user.licensePlate || '' }] : []);
     setForm({
       name: user.name || '',
       email: user.email || '',
@@ -37,8 +41,7 @@ export default function UserManager() {
       role: user.role || 'driver',
       companyId: user.companyId?._id || user.companyId || '',
       phone: user.phone || '',
-      vehicle: user.vehicle || '',
-      licensePlate: user.licensePlate || '',
+      vehicles,
       companyName: user.companyName || '',
       rut: user.rut || ''
     });
@@ -56,8 +59,7 @@ export default function UserManager() {
         role: form.role,
         phone: form.phone || undefined,
         companyId: form.companyId || undefined,
-        vehicle: form.role === 'driver' ? form.vehicle || undefined : undefined,
-        licensePlate: form.role === 'driver' ? form.licensePlate || undefined : undefined,
+        vehicles: form.role === 'driver' ? form.vehicles.filter(v => v.type) : undefined,
         companyName: form.role === 'company' ? form.companyName || undefined : undefined,
         rut: form.role === 'company' ? form.rut || undefined : undefined
       };
@@ -155,10 +157,39 @@ function UserForm({ form, set, companies, saving, isEdit, onSave }) {
       </div>
 
       {form.role === 'driver' && (
-        <>
-          {inp('vehicle', 'Vehículo', { placeholder: 'Toyota Hilux' })}
-          {inp('licensePlate', 'Patente', { placeholder: 'AB-CD-12' })}
-        </>
+        <div style={{ marginBottom: 8 }}>
+          <div style={labelStyle}>Vehículos</div>
+          {form.vehicles.map((v, i) => (
+            <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+              <select
+                value={v.type}
+                onChange={e => set('vehicles', form.vehicles.map((x, j) => j === i ? { ...x, type: e.target.value } : x))}
+                style={{ ...inputStyle, flex: 1 }}
+              >
+                <option value="">Tipo…</option>
+                {VEHICLE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <input
+                value={v.plate}
+                onChange={e => set('vehicles', form.vehicles.map((x, j) => j === i ? { ...x, plate: e.target.value } : x))}
+                placeholder="Patente"
+                style={{ ...inputStyle, width: 110 }}
+              />
+              <button
+                type="button"
+                onClick={() => set('vehicles', form.vehicles.filter((_, j) => j !== i))}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: '#fff', color: 'var(--danger)', cursor: 'pointer', fontSize: 13 }}
+              >✕</button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => set('vehicles', [...form.vehicles, { type: '', plate: '' }])}
+            style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', background: 'none', border: '1.5px dashed var(--accent)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', width: '100%', marginTop: 2 }}
+          >
+            + Agregar vehículo
+          </button>
+        </div>
       )}
 
       {form.role === 'company' && (
@@ -198,11 +229,18 @@ function UserCard({ user, companies, onEdit, onDeactivate }) {
           <div style={{ fontWeight: 700, fontSize: 14 }}>{user.name}</div>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 1 }}>{user.email}</div>
           {user.phone && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 1 }}>📞 {user.phone}</div>}
-          {user.vehicle && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 1 }}>🚘 {user.vehicle}{user.licensePlate ? ` · ${user.licensePlate}` : ''}</div>}
+          {(Array.isArray(user.vehicles) && user.vehicles.length > 0
+            ? user.vehicles
+            : user.vehicle ? [{ type: user.vehicle, plate: user.licensePlate || '' }] : []
+          ).map((v, i) => (
+            <div key={i} style={{ fontSize: 12, color: 'var(--muted)', marginTop: 1 }}>
+              🚘 {v.type}{v.plate ? ` · ${v.plate}` : ''}{i === 0 && user.vehicles?.length > 1 ? ' (principal)' : ''}
+            </div>
+          ))}
           {user.companyName && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 1 }}>🏢 {user.companyName}{user.rut ? ` · ${user.rut}` : ''}</div>}
           {company && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>Vinculado a: {company.name}</div>}
           <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: '#00885512', color: 'var(--accent)', border: '1px solid #00885528' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: '#0052FF12', color: 'var(--accent)', border: '1px solid #0052FF28' }}>
               {ROLE_LABELS[user.role] || user.role}
             </span>
             {user.active === false && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: '#cc224415', color: 'var(--danger)', border: '1px solid #cc224428' }}>Inactivo</span>}

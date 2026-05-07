@@ -10,7 +10,7 @@ export default function Login() {
   const [loading, setLoading]   = useState(false);
   const [showPass, setShowPass] = useState(false);
 
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to="/admin" replace />;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,7 +33,7 @@ export default function Login() {
 
       {/* ── Brand hero ── */}
       <div style={{
-        background: 'linear-gradient(145deg, #0a2219 0%, #003d28 45%, #006644 100%)',
+        background: 'linear-gradient(145deg, #0F172A 0%, #0B245C 45%, #003BB5 100%)',
         padding: 'calc(48px + env(safe-area-inset-top)) 24px 52px',
         textAlign: 'center',
         position: 'relative',
@@ -69,7 +69,7 @@ export default function Login() {
           fontSize: 34, fontWeight: 800, color: '#fff',
           letterSpacing: '-0.5px', lineHeight: 1
         }}>
-          Routiflow
+          MUVE
         </h1>
         <p style={{
           fontSize: 13, color: 'rgba(255,255,255,.6)',
@@ -165,7 +165,7 @@ export default function Login() {
                 color: loading ? 'var(--muted)' : '#fff',
                 fontSize: 15, fontWeight: 700,
                 cursor: loading ? 'not-allowed' : 'pointer',
-                boxShadow: loading ? 'none' : '0 4px 14px #00885530',
+                boxShadow: loading ? 'none' : '0 4px 14px #0052FF30',
                 letterSpacing: '.2px'
               }}
             >

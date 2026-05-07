@@ -8,6 +8,7 @@ import CompanyView from './views/company/CompanyView.jsx';
 import CustomerView from './views/customer/CustomerView.jsx';
 import PublicRouteView from './views/PublicRouteView.jsx';
 import QuoteView from './views/public/QuoteView.jsx';
+import LandingView from './views/public/LandingView.jsx';
 
 function RoleRouter() {
   const { user, loading } = useAuth();
@@ -20,9 +21,9 @@ function RoleRouter() {
     }}>
       <div style={{
         width: 44, height: 44, borderRadius: 14,
-        background: 'linear-gradient(135deg, #0a2219, #008855)',
+        background: 'linear-gradient(135deg, #0052FF 0%, #00DAFF 100%)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 22, boxShadow: '0 4px 16px #00885530',
+        fontSize: 22, boxShadow: '0 4px 16px #0052FF30',
         animation: 'pulse 1.4s ease infinite'
       }}>🚚</div>
       Cargando…
@@ -44,6 +45,10 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/admin/*" element={<RoleRouter />} />
+          <Route path="/app/*" element={<RoleRouter />} />
+          <Route path="/cotizar" element={<LandingView />} />
+          <Route path="/" element={<LandingView />} />
           <Route path="/track/:trackingId" element={<CustomerView />} />
           <Route path="/route/:shareToken" element={<PublicRouteView />} />
           <Route path="/quote/:shareToken" element={<QuoteView />} />

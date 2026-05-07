@@ -16,7 +16,7 @@ function classify(msg) {
 }
 
 const TYPE_STYLE = {
-  success: { bg: 'var(--accent)',  shadow: '#00885530' },
+  success: { bg: 'var(--accent)',  shadow: '#0052FF30' },
   error:   { bg: 'var(--danger)', shadow: '#cc224430' },
   warn:    { bg: 'var(--warn)',    shadow: '#d4650a30' },
   info:    { bg: 'var(--info)',    shadow: '#0077aa30' },

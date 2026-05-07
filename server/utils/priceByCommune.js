@@ -1,30 +1,58 @@
-// Rounded delivery prices by commune (CLP)
-// All values are multiples of 500
+// Precios de entrega por comuna RM (CLP) — tarifa oficial por zona
 const PRICES = {
-  // Santiago centro
-  'santiago': 3000, 'estacion central': 3000, 'san joaquin': 3000,
-  'la granja': 3000, 'pedro aguirre cerda': 3000, 'lo espejo': 3000,
-  'cerrillos': 3000, 'maipú': 3000, 'maipu': 3000,
-  // Near east
-  'providencia': 3500, 'nunoa': 3500, 'ñuñoa': 3500, 'macul': 3500,
-  'la florida': 3500, 'penalolen': 3500, 'peñalolén': 3500,
-  'san ramon': 3000, 'la cisterna': 3000,
-  // Las Condes / La Reina
-  'las condes': 3500, 'la reina': 3500, 'quilicura': 3500,
-  // Vitacura / High east
+  'alhue': 30000, 'alhué': 30000,
+  'buin': 12000,
+  'calera de tango': 10000,
+  'cerrillos': 5000,
+  'cerro navia': 4500,
+  'colina': 10000,
+  'conchali': 4500, 'conchalí': 4500,
+  'curacavi': 15000, 'curacaví': 15000,
+  'el bosque': 6000,
+  'el monte': 18000,
+  'estacion central': 4000, 'estación central': 4000,
+  'huechuraba': 4000,
+  'independencia': 4000,
+  'isla de maipo': 20000, 'isla de maipú': 20000,
+  'la cisterna': 4500,
+  'la florida': 7500,
+  'la granja': 4500,
+  'la pintana': 6000,
+  'la reina': 4000,
+  'lampa': 5000,
+  'las condes': 4000,
+  'lo barnechea': 5000,
+  'lo espejo': 4500,
+  'lo prado': 4000,
+  'macul': 4500,
+  'maipu': 5000, 'maipú': 5000,
+  'maria pinto': 20000, 'maría pinto': 20000,
+  'melipilla': 20000,
+  'nunoa': 4000, 'ñuñoa': 4000, 'nuñoa': 4000,
+  'padre hurtado': 10000,
+  'paine': 15000,
+  'pedro aguirre cerda': 4500,
+  'penaflor': 12000, 'peñaflor': 12000,
+  'penalolen': 5000, 'peñalolén': 5000, 'penalolén': 5000,
+  'pirque': 10000,
+  'providencia': 4000,
+  'pudahuel': 6000,
+  'puente alto': 8000,
+  'quilicura': 5000,
+  'quinta normal': 4000,
+  'recoleta': 4500,
+  'renca': 5000,
+  'san bernardo': 10000,
+  'san joaquin': 4500, 'san joaquín': 4500,
+  'san jose de maipo': 12000, 'san josé de maipo': 12000,
+  'san miguel': 4500,
+  'san pedro': 30000,
+  'san ramon': 4500, 'san ramón': 4500,
+  'santiago': 4500,
+  'talagante': 15000,
+  'tiltil': 10000, 'til til': 10000,
   'vitacura': 4000,
-  // Far northeast
-  'lo barnechea': 4500, 'los dominicos': 4500,
-  // Far north
-  'colina': 5000, 'chicureo': 5000, 'lampa': 5000, 'til til': 5500,
-  // West
-  'pudahuel': 3500, 'renca': 3000, 'quinta normal': 3000,
-  'bustos': 3500, 'cerro navia': 3000, 'lo prado': 3000,
-  // South
-  'puente alto': 4000, 'la pintana': 3500, 'san bernardo': 4000,
-  'el bosque': 3500, 'buin': 4500, 'paine': 5000,
-  // Default for unknown
-  '_default': 3500
+  '_default': 5000,
 };
 
 function normalize(str) {

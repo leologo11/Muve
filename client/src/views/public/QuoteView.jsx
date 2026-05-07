@@ -29,7 +29,7 @@ function suggestPriceFromZone(zones, commune) {
 function pinIcon(n) {
   return L.divIcon({
     className: '',
-    html: `<div style="width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#008855;border:2px solid #fff;box-shadow:0 2px 6px #0005;display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);color:#fff;font-size:9px;font-weight:800">${n}</span></div>`,
+    html: `<div style="width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#0052FF;border:2px solid #fff;box-shadow:0 2px 6px #0005;display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);color:#fff;font-size:9px;font-weight:800">${n}</span></div>`,
     iconSize: [26, 26],
     iconAnchor: [13, 26]
   });
@@ -139,7 +139,7 @@ const STATUS_META = {
   draft:     { label: 'Borrador',        color: '#888' },
   sent:      { label: 'Pendiente',       color: '#f57c00' },
   submitted: { label: 'Enviada al admin', color: '#0077aa' },
-  approved:  { label: '✓ Aprobada',      color: '#008855' },
+  approved:  { label: '✓ Aprobada',      color: '#0052FF' },
   rejected:  { label: '✗ Rechazada',     color: '#cc2244' },
 };
 
@@ -280,8 +280,8 @@ export default function QuoteView() {
           <button key={t} onClick={() => setTab(t)} style={{
             flex: 1, padding: '10px 4px', textAlign: 'center', fontSize: 11, fontWeight: 700,
             letterSpacing: 0.5, border: 'none', background: 'none', cursor: 'pointer',
-            color: tab === t ? '#008855' : '#888',
-            borderBottom: `2px solid ${tab === t ? '#008855' : 'transparent'}`
+            color: tab === t ? '#0052FF' : '#888',
+            borderBottom: `2px solid ${tab === t ? '#0052FF' : 'transparent'}`
           }}>{label}</button>
         ))}
       </div>
@@ -312,9 +312,9 @@ export default function QuoteView() {
 
             {/* Status message when done */}
             {isDone && (
-              <div style={{ padding: '14px 16px', borderRadius: 12, background: quote.status === 'approved' ? '#e8f5e9' : '#fce4ec', border: `1px solid ${quote.status === 'approved' ? '#00885530' : '#cc224430'}`, marginBottom: 12, textAlign: 'center' }}>
+              <div style={{ padding: '14px 16px', borderRadius: 12, background: quote.status === 'approved' ? '#f4f7ff' : '#fce4ec', border: `1px solid ${quote.status === 'approved' ? '#0052FF30' : '#cc224430'}`, marginBottom: 12, textAlign: 'center' }}>
                 <div style={{ fontSize: 18, marginBottom: 4 }}>{quote.status === 'approved' ? '✅' : '❌'}</div>
-                <div style={{ fontWeight: 700, color: quote.status === 'approved' ? '#008855' : '#cc2244' }}>
+                <div style={{ fontWeight: 700, color: quote.status === 'approved' ? '#0052FF' : '#cc2244' }}>
                   {quote.status === 'approved' ? 'Cotización aprobada — se está coordinando su entrega.' : 'Cotización rechazada. Contáctanos para más información.'}
                 </div>
               </div>
@@ -339,7 +339,7 @@ export default function QuoteView() {
                   <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{item.address}{item.commune ? `, ${item.commune}` : ''}</div>
                   {item.customerPhone && <div style={{ fontSize: 11, color: '#888', marginTop: 1 }}>📞 {item.customerPhone}</div>}
                   {item.note && <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>📝 {item.note}</div>}
-                  {item.price > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: '#008855', marginTop: 4 }}>${Number(item.price).toLocaleString('es-CL')}</div>}
+                  {item.price > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: '#0052FF', marginTop: 4 }}>${Number(item.price).toLocaleString('es-CL')}</div>}
                 </div>
                 {isEditable && (
                   <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#cc2244', cursor: 'pointer', fontSize: 16, padding: '0 0 0 8px', flexShrink: 0 }}>✕</button>
@@ -350,7 +350,7 @@ export default function QuoteView() {
             {items.length > 0 && (
               <div style={{ background: '#f5f5f5', borderRadius: 10, padding: '10px 14px', marginBottom: 14, display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ fontWeight: 700, fontSize: 13 }}>{items.length} paquete{items.length !== 1 ? 's' : ''}</span>
-                <span style={{ fontWeight: 800, fontSize: 14, color: '#008855' }}>${total.toLocaleString('es-CL')}</span>
+                <span style={{ fontWeight: 800, fontSize: 14, color: '#0052FF' }}>${total.toLocaleString('es-CL')}</span>
               </div>
             )}
 
@@ -399,14 +399,14 @@ export default function QuoteView() {
                       value={addForm.price}
                       onChange={e => setAdd('price', e.target.value)}
                       placeholder={autoPrice(addForm.commune) > 0 ? autoPrice(addForm.commune).toString() : '0'}
-                      style={{ ...qinp, fontWeight: 700, color: addForm.price > 0 ? '#008855' : '#888' }}
+                      style={{ ...qinp, fontWeight: 700, color: addForm.price > 0 ? '#0052FF' : '#888' }}
                     />
                   </div>
                   <div style={{ gridColumn: '1/-1' }}>
                     <QF label="Nota (opcional)" value={addForm.note} onChange={v => setAdd('note', v)} placeholder="Depto, piso, instrucciones…" />
                   </div>
                 </div>
-                <button onClick={addItem} style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', marginTop: 12, background: '#008855', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                <button onClick={addItem} style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', marginTop: 12, background: '#0052FF', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
                   ✓ Agregar paquete
                 </button>
 
@@ -435,7 +435,7 @@ export default function QuoteView() {
             {/* Action buttons */}
             {isEditable && (
               <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
-                <button onClick={handleSubmit} disabled={saving || items.length === 0} style={{ padding: '13px', borderRadius: 12, border: 'none', background: items.length === 0 ? '#ccc' : '#008855', color: '#fff', fontSize: 14, fontWeight: 800, cursor: items.length === 0 ? 'not-allowed' : 'pointer' }}>
+                <button onClick={handleSubmit} disabled={saving || items.length === 0} style={{ padding: '13px', borderRadius: 12, border: 'none', background: items.length === 0 ? '#ccc' : '#0052FF', color: '#fff', fontSize: 14, fontWeight: 800, cursor: items.length === 0 ? 'not-allowed' : 'pointer' }}>
                   {saving ? 'Enviando…' : '✅ Enviar cotización'}
                 </button>
                 <button onClick={handleSave} disabled={saving} style={{ padding: '11px', borderRadius: 12, border: '1px solid #e0e0e0', background: '#fff', color: '#555', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
@@ -467,7 +467,7 @@ export default function QuoteView() {
                       <div style={{ width: 12, height: 12, borderRadius: 3, background: z.color || tierColor(z.price), flexShrink: 0 }} />
                       <span style={{ fontSize: 13, fontWeight: 600 }}>{z.name}</span>
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#008855' }}>${(z.price || 0).toLocaleString('es-CL')}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0052FF' }}>${(z.price || 0).toLocaleString('es-CL')}</span>
                   </div>
                 ))}
               </div>
@@ -483,12 +483,12 @@ export default function QuoteView() {
                       <div style={{ fontWeight: 700, fontSize: 13 }}>{i + 1}. {item.customerName} {item.customerLastName}</div>
                       <div style={{ fontSize: 11, color: '#888' }}>{item.address}{item.commune ? `, ${item.commune}` : ''}</div>
                     </div>
-                    <span style={{ fontWeight: 700, fontSize: 13, color: '#008855', flexShrink: 0, marginLeft: 8 }}>${(Number(item.price) || 0).toLocaleString('es-CL')}</span>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: '#0052FF', flexShrink: 0, marginLeft: 8 }}>${(Number(item.price) || 0).toLocaleString('es-CL')}</span>
                   </div>
                 ))}
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0 0', fontWeight: 800, fontSize: 15 }}>
                   <span>TOTAL</span>
-                  <span style={{ color: '#008855' }}>${total.toLocaleString('es-CL')}</span>
+                  <span style={{ color: '#0052FF' }}>${total.toLocaleString('es-CL')}</span>
                 </div>
               </div>
             )}
@@ -502,7 +502,7 @@ export default function QuoteView() {
 
       {/* Bottom counter bar */}
       {tab !== 'summary' && items.length > 0 && (
-        <div style={{ background: '#008855', color: '#fff', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+        <div style={{ background: '#0052FF', color: '#fff', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
           <span style={{ fontWeight: 700, fontSize: 13 }}>{items.length} paquete{items.length !== 1 ? 's' : ''}</span>
           <span style={{ fontWeight: 800, fontSize: 15 }}>${total.toLocaleString('es-CL')}</span>
         </div>
@@ -519,7 +519,7 @@ function LegendRow({ name, price, color, zones = [] }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
       <div style={{ width: 11, height: 11, borderRadius: 3, background: c, flexShrink: 0 }} />
       <div style={{ flex: 1, fontSize: 11, fontWeight: 600, lineHeight: 1.2 }}>{name}</div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#008855', flexShrink: 0 }}>${(price || 0).toLocaleString('es-CL')}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#0052FF', flexShrink: 0 }}>${(price || 0).toLocaleString('es-CL')}</div>
     </div>
   );
 }
@@ -539,9 +539,9 @@ function PrintableQuote({ quote, items, zones, total }) {
         }
       `}</style>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, borderBottom: '3px solid #008855', paddingBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, borderBottom: '3px solid #0052FF', paddingBottom: 16 }}>
         <div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#008855' }}>🚚 ROUTIFLOW</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: '#0052FF' }}>🚚 MUVE</div>
           <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Servicio de entregas a domicilio</div>
         </div>
         <div style={{ textAlign: 'right' }}>
@@ -577,7 +577,7 @@ function PrintableQuote({ quote, items, zones, total }) {
               {priceRows.map((r, i) => (
                 <tr key={i}>
                   <td style={{ padding: '6px 10px', border: '1px solid #e8e8e8' }}>{r.commune || r.name}</td>
-                  <td style={{ padding: '6px 10px', textAlign: 'right', border: '1px solid #e8e8e8', fontWeight: 600, color: '#008855' }}>${(r.price || 0).toLocaleString('es-CL')}</td>
+                  <td style={{ padding: '6px 10px', textAlign: 'right', border: '1px solid #e8e8e8', fontWeight: 600, color: '#0052FF' }}>${(r.price || 0).toLocaleString('es-CL')}</td>
                 </tr>
               ))}
             </tbody>
@@ -608,12 +608,12 @@ function PrintableQuote({ quote, items, zones, total }) {
                   <td style={{ padding: '6px 10px', border: '1px solid #e8e8e8' }}>{item.address}</td>
                   <td style={{ padding: '6px 10px', border: '1px solid #e8e8e8' }}>{item.commune}</td>
                   <td style={{ padding: '6px 10px', border: '1px solid #e8e8e8' }}>{item.customerPhone}</td>
-                  <td style={{ padding: '6px 10px', border: '1px solid #e8e8e8', textAlign: 'right', fontWeight: 700, color: '#008855' }}>${(Number(item.price) || 0).toLocaleString('es-CL')}</td>
+                  <td style={{ padding: '6px 10px', border: '1px solid #e8e8e8', textAlign: 'right', fontWeight: 700, color: '#0052FF' }}>${(Number(item.price) || 0).toLocaleString('es-CL')}</td>
                 </tr>
               ))}
-              <tr style={{ background: '#e8f5e9' }}>
+              <tr style={{ background: '#f4f7ff' }}>
                 <td colSpan={5} style={{ padding: '8px 10px', border: '1px solid #e0e0e0', fontWeight: 800, textAlign: 'right' }}>TOTAL</td>
-                <td style={{ padding: '8px 10px', border: '1px solid #e0e0e0', fontWeight: 800, textAlign: 'right', color: '#008855', fontSize: 14 }}>${total.toLocaleString('es-CL')}</td>
+                <td style={{ padding: '8px 10px', border: '1px solid #e0e0e0', fontWeight: 800, textAlign: 'right', color: '#0052FF', fontSize: 14 }}>${total.toLocaleString('es-CL')}</td>
               </tr>
             </tbody>
           </table>
@@ -621,7 +621,7 @@ function PrintableQuote({ quote, items, zones, total }) {
       )}
 
       <div style={{ marginTop: 32, paddingTop: 16, borderTop: '1px solid #e0e0e0', fontSize: 11, color: '#888', textAlign: 'center' }}>
-        Routiflow · Sistema de gestión de entregas · {new Date().toLocaleDateString('es-CL')}
+        MUVE · Sistema de gestión de entregas · {new Date().toLocaleDateString('es-CL')}
       </div>
     </div>
   );

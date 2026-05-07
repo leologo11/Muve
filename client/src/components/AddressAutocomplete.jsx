@@ -48,7 +48,7 @@ async function nominatimSearch(q) {
     addressdetails: '1', limit: '7', 'accept-language': 'es',
   });
   const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
-    headers: { 'User-Agent': 'Routiflow/1.0' },
+    headers: { 'User-Agent': 'MUVE/1.0' },
   });
   if (!res.ok) throw new Error(`OSM ${res.status}`);
   const list = await res.json();
@@ -219,7 +219,7 @@ export default function AddressAutocomplete({
               key={s.placeId || idx}
               onMouseDown={() => handleSelect(s)}
               style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: idx < suggestions.length - 1 ? '1px solid var(--border)' : 'none' }}
-              onMouseEnter={e => e.currentTarget.style.background = '#f4f4ef'}
+              onMouseEnter={e => e.currentTarget.style.background = '#f4f7ff'}
               onMouseLeave={e => e.currentTarget.style.background = '#fff'}
             >
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>📍 {s.main}</div>

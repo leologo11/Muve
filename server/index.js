@@ -17,7 +17,10 @@ import publicRoutes from './routes/publicRoutes.js';
 import zoneRoutes from './routes/zoneRoutes.js';
 import tariffRoutes from './routes/tariffRoutes.js';
 import quoteRoutes from './routes/quoteRoutes.js';
+import credentialRoutes from './routes/credentials.js';
+import vehicleConfigRoutes from './routes/vehicleConfigRoutes.js';
 import { runCleanup } from './utils/cleanup.js';
+import { isSupabaseEnabled } from './utils/supabase.js';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -26,7 +29,13 @@ const PORT = process.env.PORT || 4000;
 app.use(cors({
   origin: (origin, cb) => {
     if (process.env.NODE_ENV === 'production') return cb(null, true);
-    const allowed = ['http://localhost:5173', 'http://localhost:3000', process.env.FRONTEND_URL].filter(Boolean);
+    const allowed = [
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+      process.env.FRONTEND_URL
+    ].filter(Boolean);
     if (!origin || allowed.includes(origin)) cb(null, true);
     else cb(new Error('Not allowed by CORS'));
   },
@@ -48,47 +57,91 @@ app.use('/api/prices', priceRoutes);
 app.use('/api/zones', zoneRoutes);
 app.use('/api/tariffs', tariffRoutes);
 app.use('/api/quotes', quoteRoutes);
+app.use('/api/credentials', credentialRoutes);
+app.use('/api/vehicle-configs', vehicleConfigRoutes);
 
 app.get('/api/health', (_, res) => res.json({ ok: true, ts: Date.now() }));
 
-// Reset completo — elimina rutas, paquetes, cotizaciones, tarifas y precios
+// Reset selectivo — elimina solo los targets indicados
 // Solo ejecutable por admin autenticado
 app.post('/api/admin/reset-data', async (req, res) => {
   try {
-    const { requireAuth, requireRole } = await import('./middleware/auth.js');
+    const { requireAuth } = await import('./middleware/auth.js');
     await new Promise((resolve, reject) => requireAuth(req, res, err => err ? reject(err) : resolve()));
     if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Solo admins' });
 
-    const [Route, Package, Quote, Tariff, Price, Zone] = await Promise.all([
-      import('./models/Route.js').then(m => m.default),
-      import('./models/Package.js').then(m => m.default),
+    const ALL = ['routes', 'quotes', 'tariffs', 'prices', 'zones', 'companies'];
+    const targets = Array.isArray(req.body?.targets) ? req.body.targets.filter(t => ALL.includes(t)) : ALL;
+
+    if (isSupabaseEnabled()) {
+      const { supabaseRequest, qs } = await import('./utils/supabase.js');
+      const deleted = { routes: 0, packages: 0, quotes: 0, tariffs: 0, prices: 0, zones: 0, companies: 0 };
+
+      if (targets.includes('routes')) {
+        const [pkgs, routes] = await Promise.all([
+          supabaseRequest(`/packages${qs({ select: 'id' })}`),
+          supabaseRequest(`/routes${qs({ select: 'id' })}`),
+        ]);
+        await supabaseRequest('/packages?id=not.is.null', { method: 'DELETE' });
+        await supabaseRequest('/routes?id=not.is.null', { method: 'DELETE' });
+        deleted.packages = pkgs.length;
+        deleted.routes = routes.length;
+      }
+      if (targets.includes('quotes')) {
+        const rows = await supabaseRequest(`/quotes${qs({ select: 'id' })}`);
+        await supabaseRequest('/quote_items?id=not.is.null', { method: 'DELETE' });
+        await supabaseRequest('/quotes?id=not.is.null', { method: 'DELETE' });
+        deleted.quotes = rows.length;
+      }
+      if (targets.includes('tariffs')) {
+        const rows = await supabaseRequest(`/tariffs${qs({ select: 'id' })}`);
+        await supabaseRequest('/tariff_items?id=not.is.null', { method: 'DELETE' });
+        await supabaseRequest('/tariffs?id=not.is.null', { method: 'DELETE' });
+        deleted.tariffs = rows.length;
+      }
+      if (targets.includes('prices')) {
+        const rows = await supabaseRequest(`/price_configs${qs({ select: 'id' })}`);
+        await supabaseRequest('/price_configs?id=not.is.null', { method: 'DELETE' });
+        deleted.prices = rows.length;
+      }
+      if (targets.includes('zones')) {
+        const rows = await supabaseRequest(`/zones${qs({ select: 'id' })}`);
+        await supabaseRequest('/zones?id=not.is.null', { method: 'DELETE' });
+        deleted.zones = rows.length;
+      }
+      if (targets.includes('companies')) {
+        const rows = await supabaseRequest(`/companies${qs({ select: 'id' })}`);
+        await supabaseRequest('/companies?id=not.is.null', { method: 'DELETE' });
+        deleted.companies = rows.length;
+      }
+
+      console.log('Reset Supabase ejecutado por', req.user.email, '| targets:', targets);
+      return res.json({ ok: true, deleted });
+    }
+
+    const [Route, Package, Quote, Tariff, Price, Zone, Company] = await Promise.all([
+      import('./models/Route.js').then(m => m.default).catch(() => null),
+      import('./models/Package.js').then(m => m.default).catch(() => null),
       import('./models/Quote.js').then(m => m.default).catch(() => null),
       import('./models/Tariff.js').then(m => m.default).catch(() => null),
       import('./models/Price.js').then(m => m.default).catch(() => null),
       import('./models/Zone.js').then(m => m.default).catch(() => null),
+      import('./models/Company.js').then(m => m.default).catch(() => null),
     ]);
 
-    const results = await Promise.all([
-      Route.deleteMany({}),
-      Package.deleteMany({}),
-      Quote   ? Quote.deleteMany({})   : { deletedCount: 0 },
-      Tariff  ? Tariff.deleteMany({})  : { deletedCount: 0 },
-      Price   ? Price.deleteMany({})   : { deletedCount: 0 },
-      Zone    ? Zone.deleteMany({})    : { deletedCount: 0 },
-    ]);
+    const deleted = { routes: 0, packages: 0, quotes: 0, tariffs: 0, prices: 0, zones: 0, companies: 0 };
+    if (targets.includes('routes')) {
+      if (Package) deleted.packages = (await Package.deleteMany({})).deletedCount;
+      if (Route)   deleted.routes   = (await Route.deleteMany({})).deletedCount;
+    }
+    if (targets.includes('quotes') && Quote)     deleted.quotes   = (await Quote.deleteMany({})).deletedCount;
+    if (targets.includes('tariffs') && Tariff)   deleted.tariffs  = (await Tariff.deleteMany({})).deletedCount;
+    if (targets.includes('prices') && Price)     deleted.prices   = (await Price.deleteMany({})).deletedCount;
+    if (targets.includes('zones') && Zone)       deleted.zones    = (await Zone.deleteMany({})).deletedCount;
+    if (targets.includes('companies') && Company) deleted.companies = (await Company.deleteMany({})).deletedCount;
 
-    console.log('🗑️ Reset completo ejecutado por', req.user.email);
-    res.json({
-      ok: true,
-      deleted: {
-        routes:   results[0].deletedCount,
-        packages: results[1].deletedCount,
-        quotes:   results[2].deletedCount,
-        tariffs:  results[3].deletedCount,
-        prices:   results[4].deletedCount,
-        zones:    results[5].deletedCount,
-      }
-    });
+    console.log('🗑️ Reset ejecutado por', req.user.email, '| targets:', targets);
+    res.json({ ok: true, deleted });
   } catch (err) {
     console.error('Reset error:', err);
     res.status(500).json({ error: err.message });
@@ -123,7 +176,7 @@ if (fs.existsSync(clientDist)) {
 
 // Arrancar el servidor PRIMERO para que el healthcheck responda,
 // luego conectar MongoDB en segundo plano con reintentos
-app.listen(PORT, () => console.log(`🚀 Routiflow escuchando en puerto ${PORT}`));
+app.listen(PORT, () => console.log(`MUVE escuchando en puerto ${PORT}`));
 
 async function connectMongo(attempt = 1) {
   try {
@@ -139,4 +192,8 @@ async function connectMongo(attempt = 1) {
     setTimeout(() => connectMongo(attempt + 1), delay);
   }
 }
-connectMongo();
+if (process.env.DATABASE_PROVIDER === 'supabase' && isSupabaseEnabled()) {
+  console.log('Supabase configurado como base principal; se omite conexion MongoDB.');
+} else {
+  connectMongo();
+}

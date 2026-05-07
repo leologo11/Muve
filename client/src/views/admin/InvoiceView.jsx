@@ -6,7 +6,7 @@ const INV_STATUS = {
   none:    { label: 'Sin factura',    color: '#aaa',          bg: '#f0f0f0' },
   pending: { label: 'Por cobrar',     color: '#f57c00',       bg: '#fff3e0' },
   net30:   { label: 'Neto 30',        color: '#0077aa',       bg: '#e3f2fd' },
-  paid:    { label: '✓ Pagada',       color: '#008855',       bg: '#e8f5e9' },
+  paid:    { label: '✓ Pagada',       color: '#0052FF',       bg: '#f4f7ff' },
   overdue: { label: '⚠ Vencida',      color: '#cc2244',       bg: '#fce4e8' }
 };
 
@@ -99,7 +99,7 @@ export default function InvoiceView({ onBack }) {
           {[
             { label: 'Por cobrar', amount: totalPending, color: '#f57c00', bg: '#fff3e0', onClick: () => setFilter('pending') },
             { label: 'Vencido', amount: totalOverdue, color: '#cc2244', bg: '#fce4e8', onClick: () => setFilter('overdue') },
-            { label: 'Cobrado', amount: totalPaid, color: '#008855', bg: '#e8f5e9', onClick: () => setFilter('paid') }
+            { label: 'Cobrado', amount: totalPaid, color: '#0052FF', bg: '#f4f7ff', onClick: () => setFilter('paid') }
           ].map(({ label, amount, color, bg, onClick }) => (
             <div key={label} onClick={onClick} style={{ background: bg, borderRadius: 12, padding: '10px 10px', cursor: 'pointer', border: `1px solid ${color}22` }}>
               <div style={{ fontSize: 9, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{label}</div>
@@ -229,9 +229,9 @@ function InvoiceCard({ route, onMarkPaid, onEdit }) {
             <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>👤 {route.clientCompany.contactPerson}</div>
           )}
           {route.clientCompany?.contactPhone && (
-            <a href={`https://wa.me/${route.clientCompany.contactPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola, te escribo desde Routiflow sobre la factura de la ruta ${route.routeCode}.`)}`}
+            <a href={`https://wa.me/${route.clientCompany.contactPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola, te escribo desde MUVE sobre la factura de la ruta ${route.routeCode}.`)}`}
               target="_blank" rel="noreferrer"
-              style={{ fontSize: 11, color: '#128c3a', fontWeight: 600, display: 'block', marginTop: 1, textDecoration: 'none' }}>
+              style={{ fontSize: 11, color: '#0052FF', fontWeight: 600, display: 'block', marginTop: 1, textDecoration: 'none' }}>
               💬 {route.clientCompany.contactPhone}
             </a>
           )}
@@ -270,7 +270,7 @@ function InvoiceCard({ route, onMarkPaid, onEdit }) {
       {/* Stats row */}
       {route.stats && (
         <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--muted)', marginBottom: 9, padding: '6px 10px', background: 'var(--card2)', borderRadius: 8 }}>
-          <span style={{ color: '#008855', fontWeight: 700 }}>✅ {route.stats.delivered}</span>
+          <span style={{ color: '#0052FF', fontWeight: 700 }}>✅ {route.stats.delivered}</span>
           <span style={{ color: '#cc2244', fontWeight: 700 }}>❌ {route.stats.failed}</span>
           <span>⏳ {route.stats.pending}</span>
           <span>/ {route.stats.total} pkgs</span>
@@ -280,11 +280,11 @@ function InvoiceCard({ route, onMarkPaid, onEdit }) {
       {/* Actions */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {inv.status !== 'paid' && (
-          <button onClick={onMarkPaid} style={btn('#008855')}>✓ Marcar pagada</button>
+          <button onClick={onMarkPaid} style={btn('#0052FF')}>✓ Marcar pagada</button>
         )}
         <button onClick={onEdit} style={btn('#0077aa')}>✏️ Editar factura</button>
         {inv.status === 'paid' && (
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#008855', padding: '5px 0', alignSelf: 'center' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#0052FF', padding: '5px 0', alignSelf: 'center' }}>
             ✓ Cobrada
           </span>
         )}
@@ -409,12 +409,12 @@ function InvoiceEditModal({ route, saving, onClose, onSave }) {
         <FL label="Notas" value={form.notes} onChange={v => setInv('notes', v)} placeholder="Transferencia banco X, ref. 12345…" />
 
         {/* Driver payout + margin */}
-        <SectionTitle color="#008855">🚗 Pago al repartidor</SectionTitle>
+        <SectionTitle color="#0052FF">🚗 Pago al repartidor</SectionTitle>
         <FL label="Monto a pagar al driver (CLP)" value={form.driverPayout} onChange={v => setForm(f => ({ ...f, driverPayout: v }))} placeholder="80000" type="number" />
         {margin !== null && (
-          <div style={{ padding: '10px 14px', borderRadius: 10, background: margin >= 0 ? '#e8f5e9' : '#fce4e8', border: `1px solid ${margin >= 0 ? '#00885530' : '#cc224430'}`, marginBottom: 10 }}>
+          <div style={{ padding: '10px 14px', borderRadius: 10, background: margin >= 0 ? '#f4f7ff' : '#fce4e8', border: `1px solid ${margin >= 0 ? '#0052FF30' : '#cc224430'}`, marginBottom: 10 }}>
             <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>GANANCIA NETA</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: margin >= 0 ? '#008855' : '#cc2244', marginTop: 2 }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: margin >= 0 ? '#0052FF' : '#cc2244', marginTop: 2 }}>
               ${margin.toLocaleString('es-CL')}
             </div>
             <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
@@ -442,11 +442,11 @@ function InvoiceEditModal({ route, saving, onClose, onSave }) {
         <div style={{ marginBottom: 14 }}>
           <Label>Comprobante de pago</Label>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button onClick={() => proofFileRef.current.click()} disabled={uploadingProof} style={{ ...btn('#008855'), padding: '8px 14px', fontSize: 12, flexShrink: 0 }}>
+            <button onClick={() => proofFileRef.current.click()} disabled={uploadingProof} style={{ ...btn('#0052FF'), padding: '8px 14px', fontSize: 12, flexShrink: 0 }}>
               {uploadingProof ? '⏳…' : '✅ Subir comprobante'}
             </button>
             {proofFile && (
-              <a href={proofFile} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#008855', fontWeight: 600 }}>
+              <a href={proofFile} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#0052FF', fontWeight: 600 }}>
                 Ver comprobante ↗
               </a>
             )}

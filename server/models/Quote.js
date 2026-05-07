@@ -17,6 +17,16 @@ const quoteSchema = new mongoose.Schema({
   quoteCode:   { type: String, unique: true, index: true },
   shareToken:  { type: String, unique: true, sparse: true, index: true },
 
+  serviceType: {
+    type: String,
+    enum: ['flete', 'mudanza', 'paqueteria'],
+    default: 'flete',
+    index: true
+  },
+  origin:      { type: String, trim: true, default: '' },
+  destination: { type: String, trim: true, default: '' },
+  moveSize:    { type: String, trim: true, default: '' },
+
   status: {
     type: String,
     enum: ['draft', 'sent', 'submitted', 'approved', 'rejected'],
@@ -46,7 +56,7 @@ quoteSchema.pre('save', function (next) {
   if (!this.quoteCode) {
     const d = new Date();
     const ds = d.toISOString().slice(0, 10).replace(/-/g, '');
-    this.quoteCode = `QT-${ds}-${nanoid(4).toUpperCase()}`;
+    this.quoteCode = `MUVE-${ds}-${nanoid(4).toUpperCase()}`;
   }
   next();
 });

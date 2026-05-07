@@ -5,20 +5,20 @@ import { api } from '../api/index.js';
 
 const STATUS_META = {
   pendiente:      { label: '⏳ Pendiente',    color: '#888' },
-  entregado:      { label: '✅ Entregado',     color: '#008855' },
+  entregado:      { label: '✅ Entregado',     color: '#0052FF' },
   'no-entregado': { label: '❌ No entregado', color: '#cc2244' }
 };
 
 const ROUTE_STATUS = {
   draft:     { label: 'Borrador',      color: '#888',    bg: '#f5f5f5' },
-  active:    { label: '● En curso',    color: '#008855', bg: '#00885512' },
+  active:    { label: '● En curso',    color: '#0052FF', bg: '#0052FF12' },
   paused:    { label: '⏸ Pausada',    color: '#f57c00', bg: '#f57c0012' },
   completed: { label: '✓ Completada', color: '#0077aa', bg: '#0077aa12' },
   cancelled: { label: 'Cancelada',    color: '#cc2244', bg: '#cc224412' }
 };
 
 function pinColor(status) {
-  if (status === 'entregado')    return '#008855';
+  if (status === 'entregado')    return '#0052FF';
   if (status === 'no-entregado') return '#cc2244';
   return '#f57c00';
 }
@@ -103,13 +103,13 @@ function generatePdf(route, packages) {
     </div>` : ''}
     ${totalAmt > 0 ? `<div class="card">
       <div class="card-title">💰 Total ruta</div>
-      <div class="card-val" style="color:#008855">$${totalAmt.toLocaleString('es-CL')}</div>
+      <div class="card-val" style="color:#0052FF">$${totalAmt.toLocaleString('es-CL')}</div>
     </div>` : ''}
   </div>
 
   <div class="stat-row">
     <div class="stat"><div class="num">${active.length}</div><div class="lbl">Total</div></div>
-    <div class="stat"><div class="num" style="color:#008855">${delivered.length}</div><div class="lbl">✅ Entregados</div></div>
+    <div class="stat"><div class="num" style="color:#0052FF">${delivered.length}</div><div class="lbl">✅ Entregados</div></div>
     <div class="stat"><div class="num" style="color:#cc2244">${failed.length}</div><div class="lbl">❌ No entregados</div></div>
     <div class="stat"><div class="num" style="color:#f57c00">${pending.length}</div><div class="lbl">⏳ Pendientes</div></div>
   </div>
@@ -129,7 +129,7 @@ function generatePdf(route, packages) {
     <tbody>${rowsHtml}</tbody>
   </table>
 
-  <div class="footer">Generado por Routiflow · ${new Date().toLocaleString('es-CL')}</div>
+  <div class="footer">Generado por MUVE · ${new Date().toLocaleString('es-CL')}</div>
   <script>window.onload = () => { window.print(); }</script>
 </body>
 </html>`;
@@ -164,7 +164,7 @@ function PublicMap({ packages }) {
     withCoords.forEach((pkg, i) => {
       const mk = L.marker([pkg.lat, pkg.lng], { icon: makePin(i + 1, pkg.status) }).addTo(map);
       mk.bindPopup(
-        `<div style="font-family:'Space Grotesk',sans-serif;min-width:160px">
+        `<div style="font-family:'Inter',sans-serif;min-width:160px">
           <b style="font-size:13px">${pkg.customerName} ${pkg.customerLastName || ''}</b><br>
           <span style="font-size:11px;color:#555">${pkg.address || ''}${pkg.commune ? ', ' + pkg.commune : ''}</span><br>
           <span style="font-size:12px;font-weight:700;color:${pinColor(pkg.status)}">${STATUS_META[pkg.status]?.label || pkg.status}</span>
@@ -205,7 +205,7 @@ function PkgCard({ pkg, expanded, onToggle }) {
       <div style={{ padding: '13px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{
           width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-          background: pkg.status === 'entregado' ? '#008855' : pkg.status === 'no-entregado' ? '#cc2244' : '#e8e8e8',
+          background: pkg.status === 'entregado' ? '#0052FF' : pkg.status === 'no-entregado' ? '#cc2244' : '#e8e8e8',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 12, fontWeight: 800, color: pkg.status === 'pendiente' ? '#888' : '#fff'
         }}>
@@ -296,7 +296,7 @@ export default function PublicRouteView() {
   }, [route?.status, load]);
 
   if (loading) return (
-    <div style={{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f7fa', fontFamily: "'Space Grotesk', system-ui, sans-serif" }}>
+    <div style={{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f7fa', fontFamily: "'Inter', system-ui, sans-serif" }}>
       <div style={{ textAlign: 'center', color: '#888' }}>
         <div style={{ fontSize: 36, marginBottom: 12 }}>📦</div>
         <div style={{ fontSize: 14 }}>Cargando estado de la ruta…</div>
@@ -305,7 +305,7 @@ export default function PublicRouteView() {
   );
 
   if (error || !route) return (
-    <div style={{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f7fa', fontFamily: "'Space Grotesk', system-ui, sans-serif" }}>
+    <div style={{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f7fa', fontFamily: "'Inter', system-ui, sans-serif" }}>
       <div style={{ textAlign: 'center', color: '#cc2244', padding: '0 24px' }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>🔗</div>
         <div style={{ fontSize: 16, fontWeight: 700 }}>Enlace no válido</div>
@@ -331,7 +331,7 @@ export default function PublicRouteView() {
   const driverWaPhone = route.driverPhone?.replace(/[^0-9]/g, '');
 
   return (
-    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', fontFamily: "'Space Grotesk', system-ui, sans-serif", background: '#f5f7fa', overflow: 'hidden' }}>
+    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', fontFamily: "'Inter', system-ui, sans-serif", background: '#f5f7fa', overflow: 'hidden' }}>
 
       {/* ── Header ── */}
       <div style={{ flexShrink: 0, background: '#fff', borderBottom: '1px solid #e8e8e8', padding: '12px 16px' }}>
@@ -359,18 +359,18 @@ export default function PublicRouteView() {
 
           {/* Progress bar */}
           <div style={{ height: 6, background: '#f0f0f0', borderRadius: 6, overflow: 'hidden', marginBottom: 8 }}>
-            <div style={{ height: '100%', width: `${progress}%`, background: 'linear-gradient(90deg, #008855, #00bb77)', borderRadius: 6, transition: 'width .5s' }} />
+            <div style={{ height: '100%', width: `${progress}%`, background: 'linear-gradient(90deg, #0052FF, #00DAFF)', borderRadius: 6, transition: 'width .5s' }} />
           </div>
 
           {/* Stats */}
           <div style={{ display: 'flex', gap: 0, marginBottom: 12 }}>
             {[
               { label: 'Total', value: total, color: '#555' },
-              { label: '✅', value: delivered, color: '#008855' },
+              { label: '✅', value: delivered, color: '#0052FF' },
               { label: '❌', value: failed, color: '#cc2244' },
               { label: '⏳', value: pending, color: '#f57c00' },
               { label: `${progress}%`, value: '', color: '#111', bold: true },
-              ...(totalAmt > 0 ? [{ label: '$' + totalAmt.toLocaleString('es-CL'), value: '', color: '#008855', bold: true }] : [])
+              ...(totalAmt > 0 ? [{ label: '$' + totalAmt.toLocaleString('es-CL'), value: '', color: '#0052FF', bold: true }] : [])
             ].map(({ label, value, color, bold }) => (
               <div key={label} style={{ flex: 1, textAlign: 'center' }}>
                 <div style={{ fontSize: bold ? 13 : 18, fontWeight: 800, color }}>{bold ? label : value}</div>
@@ -397,7 +397,7 @@ export default function PublicRouteView() {
                       <a
                         href={`https://wa.me/${driverWaPhone}?text=${encodeURIComponent('Hola, te contacto por la ruta ' + (route.name || route.routeCode))}`}
                         target="_blank" rel="noreferrer"
-                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '5px 8px', borderRadius: 8, background: '#00885512', border: '1px solid #00885525', color: '#008855', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '5px 8px', borderRadius: 8, background: '#0052FF12', border: '1px solid #0052FF25', color: '#0052FF', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}
                       >
                         💬 WhatsApp
                       </a>
@@ -434,8 +434,8 @@ export default function PublicRouteView() {
           <button key={t} onClick={() => setTab(t)} style={{
             flex: 1, padding: '10px 4px', fontSize: 12, fontWeight: 700, border: 'none',
             background: 'none', cursor: 'pointer', letterSpacing: .3,
-            color: tab === t ? '#008855' : '#aaa',
-            borderBottom: `2px solid ${tab === t ? '#008855' : 'transparent'}`
+            color: tab === t ? '#0052FF' : '#aaa',
+            borderBottom: `2px solid ${tab === t ? '#0052FF' : 'transparent'}`
           }}>{lbl}</button>
         ))}
       </div>
@@ -477,7 +477,7 @@ export default function PublicRouteView() {
               />
             ))}
             <div style={{ textAlign: 'center', marginTop: 16, color: '#ccc', fontSize: 11 }}>
-              {route.status === 'active' ? 'Actualización automática cada 60 s · ' : ''}Routiflow
+              {route.status === 'active' ? 'Actualización automática cada 60 s · ' : ''}MUVE
             </div>
           </div>
         )}

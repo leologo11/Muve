@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
 
-const STATUS_COLORS = { pendiente: '#d4650a', entregado: '#008855', 'no-entregado': '#cc2244' };
+const STATUS_COLORS = { pendiente: '#d4650a', entregado: '#0052FF', 'no-entregado': '#cc2244' };
 
 export default function ImportModal({ routeId, onClose, onImported }) {
   const [step, setStep] = useState('upload'); // upload | preview | done
@@ -93,7 +93,7 @@ export default function ImportModal({ routeId, onClose, onImported }) {
             </div>
 
             {/* Instructions */}
-            <div style={{ background: '#00885508', border: '1px solid #00885520', borderRadius: 12, padding: '12px 14px', marginBottom: 16, fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
+            <div style={{ background: '#0052FF08', border: '1px solid #0052FF20', borderRadius: 12, padding: '12px 14px', marginBottom: 16, fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
               <b style={{ color: 'var(--accent)', display: 'block', marginBottom: 4 }}>¿Cómo funciona?</b>
               📸 <b>Foto del Excel:</b> Toma una foto de tu planilla y Claude lee los datos<br />
               📊 <b>Archivo Excel:</b> Sube tu .xlsx directamente<br />
@@ -103,7 +103,7 @@ export default function ImportModal({ routeId, onClose, onImported }) {
             </div>
 
             {file && (
-              <div style={{ background: '#00885512', border: '1px solid #00885530', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13 }}>
+              <div style={{ background: '#0052FF12', border: '1px solid #0052FF30', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13 }}>
                 ✅ Archivo listo: <b>{file.name}</b> ({(file.size / 1024).toFixed(0)} KB)
               </div>
             )}
@@ -128,7 +128,7 @@ export default function ImportModal({ routeId, onClose, onImported }) {
         {/* STEP 2: Preview & Edit */}
         {step === 'preview' && (
           <>
-            <div style={{ background: '#00885510', border: '1px solid #00885528', borderRadius: 10, padding: '10px 14px', marginBottom: 14, fontSize: 13 }}>
+            <div style={{ background: '#0052FF10', border: '1px solid #0052FF28', borderRadius: 10, padding: '10px 14px', marginBottom: 14, fontSize: 13 }}>
               🤖 Claude detectó <b>{preview.length} paquetes</b>. Revisa y edita antes de confirmar.
             </div>
 

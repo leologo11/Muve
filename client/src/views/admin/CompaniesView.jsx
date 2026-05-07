@@ -110,7 +110,7 @@ export default function CompaniesView() {
       {/* FAB */}
       <button
         onClick={openCreate}
-        style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16, width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', boxShadow: '0 4px 16px #00885540', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16, width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', boxShadow: '0 4px 16px #0052FF40', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       >＋</button>
 
       {/* Edit / Create sheet */}
@@ -197,9 +197,9 @@ function CompanyCard({ company: c, onEdit, onDelete }) {
         <div style={{ borderTop: '1px solid var(--border)', padding: '10px 14px 12px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
             {c.contactPhone && (
-              <a href={`https://wa.me/${c.contactPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hola, te contacto desde Routiflow 🚚')}`}
+              <a href={`https://wa.me/${c.contactPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hola, te contacto desde MUVE 🚚')}`}
                 target="_blank" rel="noreferrer"
-                style={{ fontSize: 13, color: '#128c3a', fontWeight: 600, textDecoration: 'none' }}>
+                style={{ fontSize: 13, color: '#0052FF', fontWeight: 600, textDecoration: 'none' }}>
                 💬 {c.contactPhone}
               </a>
             )}
@@ -218,7 +218,7 @@ function CompanyCard({ company: c, onEdit, onDelete }) {
           <div style={{ display: 'flex', gap: 7 }}>
             <button onClick={onEdit} style={actionBtn('var(--accent)')}>✏️ Editar</button>
             {c.contactPhone && (
-              <a href={`tel:${c.contactPhone}`} style={{ ...actionBtn('#008855'), textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>📞 Llamar</a>
+              <a href={`tel:${c.contactPhone}`} style={{ ...actionBtn('#0052FF'), textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>📞 Llamar</a>
             )}
             <button onClick={onDelete} style={actionBtn('var(--danger)')}>🗑️ Eliminar</button>
           </div>

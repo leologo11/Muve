@@ -218,7 +218,7 @@ export default function AddRouteModal({ onClose, onCreated }) {
         </div>
 
         {/* Starting point */}
-        <div style={{ margin: '10px 0 5px', padding: '12px 14px', background: '#00885508', border: '1px solid #00885520', borderRadius: 12 }}>
+        <div style={{ margin: '10px 0 5px', padding: '12px 14px', background: '#0052FF08', border: '1px solid #0052FF20', borderRadius: 12 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', marginBottom: 6 }}>📍 Punto de inicio / Bodega</div>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
             Desde aquí parte el repartidor. La IA usa este punto para optimizar el orden.

@@ -5,7 +5,7 @@ import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
 
 const STATUS_OPTS = [
   { value: 'pendiente', label: '⏳ Pendiente', bg: '#fff8e1', color: '#f57c00' },
-  { value: 'entregado', label: '✅ Entregado', bg: '#e8f5e9', color: '#2e7d32' },
+  { value: 'entregado', label: '✅ Entregado', bg: '#f4f7ff', color: '#2e7d32' },
   { value: 'no-entregado', label: '❌ No entregado', bg: '#fce4ec', color: '#c62828' }
 ];
 
@@ -13,10 +13,11 @@ function hasNumber(address) {
   return !address || /\d/.test(address.trim());
 }
 
-export default function PackageTable({ packages, onUpdate }) {
+export default function PackageTable({ packages, onUpdate, onDelete }) {
   const [editing, setEditing] = useState(null);
   const [val, setVal] = useState('');
   const [saving, setSaving] = useState(null);
+  const [locked, setLocked] = useState(false);
   const addrPickedRef = useRef(false);
 
   const active = packages.filter(p => p.status !== 'eliminado');
@@ -178,7 +179,7 @@ export default function PackageTable({ packages, onUpdate }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 680 }}>
         <thead>
           <tr style={{ background: 'var(--card2)', position: 'sticky', top: 0, zIndex: 1, boxShadow: '0 1px 0 var(--border)' }}>
-            {['#', 'Nombre', 'Dirección / Comuna', 'Teléfono', 'Precio', 'Estado', 'Nota', '📷'].map(h => (
+            {['#', 'Nombre', 'Dirección / Comuna', 'Teléfono', 'Precio', 'Estado', 'Nota', '📷', ''].map(h => (
               <th key={h} style={{ padding: '8px 8px', textAlign: 'left', fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: 'var(--muted)', whiteSpace: 'nowrap', borderBottom: '2px solid var(--border)' }}>{h.toUpperCase()}</th>
             ))}
           </tr>
@@ -260,6 +261,21 @@ export default function PackageTable({ packages, onUpdate }) {
                       />
                     )}
                   </div>
+                </td>
+
+                <td style={{ padding: '4px 6px', verticalAlign: 'top' }}>
+                  {onDelete && (
+                    <button
+                      onClick={() => onDelete(pkg)}
+                      disabled={isSaving}
+                      title="Eliminar paquete"
+                      style={{ background: 'none', border: '1px solid #e5534b', borderRadius: 6, color: '#e5534b', cursor: 'pointer', fontSize: 13, padding: '3px 7px', lineHeight: 1, opacity: isSaving ? 0.4 : 1, transition: 'background .15s, color .15s' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#e5534b'; e.currentTarget.style.color = '#fff'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#e5534b'; }}
+                    >
+                      🗑
+                    </button>
+                  )}
                 </td>
               </tr>
             );

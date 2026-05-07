@@ -4,7 +4,7 @@ import { api } from '../../api/index.js';
 
 const STATUS_INFO = {
   pendiente: { emoji: '⏳', label: 'En camino', color: '#d4650a', bg: '#d4650a10' },
-  entregado: { emoji: '✅', label: 'Entregado', color: '#008855', bg: '#00885510' },
+  entregado: { emoji: '✅', label: 'Entregado', color: '#0052FF', bg: '#0052FF10' },
   'no-entregado': { emoji: '❌', label: 'No entregado', color: '#cc2244', bg: '#cc224410' },
   eliminado: { emoji: '🗑️', label: 'Cancelado', color: '#888', bg: '#88888810' }
 };
@@ -42,13 +42,13 @@ export default function CustomerView() {
     <div style={{
       minHeight: '100dvh', background: 'var(--bg)',
       display: 'flex', flexDirection: 'column', alignItems: 'center',
-      padding: '24px 16px', fontFamily: "'Space Grotesk', sans-serif"
+      padding: '24px 16px', fontFamily: "'Inter', sans-serif"
     }}>
       <div style={{ width: '100%', maxWidth: 440 }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <div style={{ fontSize: 36, marginBottom: 8 }}>🚚</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>Routiflow</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>MUVE</h1>
           <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Rastreo de entrega</p>
         </div>
 

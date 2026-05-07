@@ -17,10 +17,12 @@ import SectorMap from './SectorMap.jsx';
 import AllPackagesView from './AllPackagesView.jsx';
 import QuotesView from './QuotesView.jsx';
 import CompaniesView from './CompaniesView.jsx';
+import CredentialsView from './CredentialsView.jsx';
+import MovePricingView from './MovePricingView.jsx';
 
 const STATUS_META = {
   draft:      { label: 'Borrador',   color: 'var(--muted)',   bg: 'var(--card2)' },
-  active:     { label: '● Activa',   color: 'var(--accent)',  bg: '#00885512' },
+  active:     { label: '● Activa',   color: 'var(--accent)',  bg: '#0052FF12' },
   paused:     { label: '⏸ Pausada',  color: '#f57c00',        bg: '#f57c0012' },
   completed:  { label: '✓ Completada', color: '#0077aa',      bg: '#0077aa12' },
   cancelled:  { label: 'Cancelada',  color: 'var(--danger)',  bg: '#cc224412' }
@@ -274,6 +276,26 @@ export default function AdminView() {
     );
   }
 
+  if (view === 'credentials') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Header title="Credenciales API" onBack={() => setView('routes')} />
+        <CredentialsView />
+        <Toast />
+      </div>
+    );
+  }
+
+  if (view === 'movePricing') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Header title="🚛 Precios Fletes y Mudanzas" onBack={() => setView('routes')} />
+        <MovePricingView />
+        <Toast />
+      </div>
+    );
+  }
+
   // ── ALL PACKAGES VIEW ──
   if (view === 'allPackages') {
     return (
@@ -330,7 +352,7 @@ export default function AdminView() {
           title="⚙️ Admin · Rutas"
           extra={
             <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-              <button onClick={() => setView('allPackages')} style={{ background: '#00885514', border: '1px solid #00885530', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', cursor: 'pointer' }}>
+              <button onClick={() => setView('allPackages')} style={{ background: '#0052FF14', border: '1px solid #0052FF30', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', cursor: 'pointer' }}>
                 📦 Paquetes
               </button>
               <QuotesBadgeBtn onClick={() => setView('quotes')} />
@@ -345,6 +367,12 @@ export default function AdminView() {
               </button>
               <button onClick={() => setView('users')} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', cursor: 'pointer' }}>
                 👥 Usuarios
+              </button>
+              <button onClick={() => setView('movePricing')} style={{ background: '#0052FF12', border: '1px solid #0052FF28', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', cursor: 'pointer' }}>
+                🚛 Precios
+              </button>
+              <button onClick={() => setView('credentials')} style={{ background: 'linear-gradient(135deg, #0052FF 0%, #00DAFF 100%)', border: 'none', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 800, color: '#fff', cursor: 'pointer', boxShadow: '0 6px 14px #0052ff24' }}>
+                API Keys
               </button>
               <ResetDataBtn onDone={() => { setRoutes([]); setSelectedRoute(null); }} />
             </div>
@@ -393,7 +421,7 @@ export default function AdminView() {
 
         <button
           onClick={() => setShowAddRoute(true)}
-          style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16, width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', boxShadow: '0 4px 16px #00885540', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16, width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', boxShadow: '0 4px 16px #0052FF40', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >＋</button>
 
         {showAddRoute && (
@@ -433,7 +461,7 @@ export default function AdminView() {
           <button
             onClick={handleOptimize}
             disabled={optimizing}
-            style={{ background: optimizing ? 'var(--card2)' : '#00885512', border: '1px solid #00885530', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', cursor: optimizing ? 'not-allowed' : 'pointer' }}
+            style={{ background: optimizing ? 'var(--card2)' : '#0052FF12', border: '1px solid #0052FF30', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', cursor: optimizing ? 'not-allowed' : 'pointer' }}
           >
             {optimizing ? '⏳…' : '🤖 IA'}
           </button>
@@ -554,7 +582,7 @@ export default function AdminView() {
                 </span>
               </div>
             )}
-            <PackageTable packages={packages} onUpdate={handlePkgUpdate} />
+            <PackageTable packages={packages} onUpdate={handlePkgUpdate} onDelete={handleDelete} />
           </div>
         )}
 
@@ -596,10 +624,10 @@ export default function AdminView() {
             onClick={handleCompleteRoute}
             style={{
               padding: '14px 28px', borderRadius: 'var(--r-full)', border: 'none',
-              background: 'linear-gradient(135deg, #008855, #00aa66)',
+              background: 'linear-gradient(135deg, #0052FF, #00DAFF)',
               color: '#fff', fontSize: 15, fontWeight: 800,
               cursor: 'pointer', whiteSpace: 'nowrap',
-              boxShadow: '0 6px 24px #00885550, 0 2px 8px #00000020',
+              boxShadow: '0 6px 24px #0052FF50, 0 2px 8px #00000020',
               letterSpacing: '-.2px'
             }}
           >
@@ -610,7 +638,7 @@ export default function AdminView() {
 
       <div style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16, display: 'flex', flexDirection: 'column', gap: 10, zIndex: 400 }}>
         <button onClick={() => setShowImport(true)} title="Importar paquetes con IA (Excel, CSV, foto)" style={{ width: 52, height: 52, borderRadius: '50%', background: '#9c27b0', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', boxShadow: '0 4px 16px #9c27b040', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🤖</button>
-        {tab !== 'm' && <button onClick={() => setShowAddPkg(true)} style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', boxShadow: '0 4px 16px #00885540', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>＋</button>}
+        {tab !== 'm' && <button onClick={() => setShowAddPkg(true)} style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', boxShadow: '0 4px 16px #0052FF40', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>＋</button>}
       </div>
 
       {editPkg && <DeliveryModal pkg={editPkg} route={selectedRoute} onClose={() => setEditPkg(null)} onSaved={refreshRoute} />}
@@ -876,7 +904,7 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
                     )}
                   </div>
                   {p.customerPhone && (
-                    <a href={`tel:${p.customerPhone}`} style={{ fontSize: 11, color: '#008855', fontWeight: 600, textDecoration: 'none', marginTop: 2, display: 'block' }}>
+                    <a href={`tel:${p.customerPhone}`} style={{ fontSize: 11, color: '#0052FF', fontWeight: 600, textDecoration: 'none', marginTop: 2, display: 'block' }}>
                       📞 {p.customerPhone}
                     </a>
                   )}
@@ -990,7 +1018,7 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#0077aa' }}>🚗 {route.driverId.name}</div>
                   {route.driverId.phone && (
-                    <a href={`tel:${route.driverId.phone}`} style={{ fontSize: 11, color: '#008855', fontWeight: 600, textDecoration: 'none', marginTop: 2, display: 'block' }}>
+                    <a href={`tel:${route.driverId.phone}`} style={{ fontSize: 11, color: '#0052FF', fontWeight: 600, textDecoration: 'none', marginTop: 2, display: 'block' }}>
                       📞 {route.driverId.phone}
                     </a>
                   )}
@@ -1019,8 +1047,8 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
                 <div style={{ fontSize: 13, fontWeight: 700 }}>🏢 {route.clientCompany.name}</div>
                 {route.clientCompany.contactPerson && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>👤 {route.clientCompany.contactPerson}</div>}
                 {route.clientCompany.contactPhone && (
-                  <a href={`https://wa.me/${route.clientCompany.contactPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hola, te contacto desde Routiflow 🚚')}`} target="_blank" rel="noreferrer"
-                    style={{ fontSize: 12, color: '#128c3a', fontWeight: 600, display: 'block', marginTop: 1 }}>
+                  <a href={`https://wa.me/${route.clientCompany.contactPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hola, te contacto desde MUVE 🚚')}`} target="_blank" rel="noreferrer"
+                    style={{ fontSize: 12, color: '#0052FF', fontWeight: 600, display: 'block', marginTop: 1 }}>
                     💬 {route.clientCompany.contactPhone}
                   </a>
                 )}
@@ -1028,7 +1056,7 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
             ) : <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Sin empresa cliente asignada</div>}
 
             {inv && inv.status !== 'none' && (
-              <div style={{ padding: '10px 12px', borderRadius: 10, background: inv.status === 'paid' ? '#e8f5e9' : inv.status === 'overdue' ? '#fce4ec' : '#fff8e1' }}>
+              <div style={{ padding: '10px 12px', borderRadius: 10, background: inv.status === 'paid' ? '#f4f7ff' : inv.status === 'overdue' ? '#fce4ec' : '#fff8e1' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: inv.status === 'paid' ? 'var(--accent)' : inv.status === 'overdue' ? 'var(--danger)' : '#f57c00' }}>
                     💳 {{ pending: 'Por cobrar', net30: 'Neto 30', paid: 'Pagada ✓', overdue: 'Vencida' }[inv.status]}
@@ -1069,7 +1097,7 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
         <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: 'var(--muted)', marginBottom: 10 }}>🔗 ENLACE PARA EMPRESA</div>
         {shareUrl ? (
           <div>
-            <div style={{ background: '#e8f5e9', border: '1px solid #00885530', borderRadius: 10, padding: '9px 12px', marginBottom: 8, fontSize: 11, color: '#005a30', wordBreak: 'break-all', fontFamily: 'monospace' }}>
+            <div style={{ background: '#f4f7ff', border: '1px solid #0052FF30', borderRadius: 10, padding: '9px 12px', marginBottom: 8, fontSize: 11, color: '#003BB5', wordBreak: 'break-all', fontFamily: 'monospace' }}>
               {shareUrl}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -1117,7 +1145,7 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
       </div>
 
       {[
-        { title: 'ENTREGADOS', items: delivered, color: 'var(--accent)', border: '#00885528' },
+        { title: 'ENTREGADOS', items: delivered, color: 'var(--accent)', border: '#0052FF28' },
         { title: 'NO ENTREGADOS', items: failed, color: 'var(--danger)', border: '#cc224428' },
         { title: 'PENDIENTES', items: active.filter(p => p.status === 'pendiente'), color: 'var(--muted)', border: 'var(--border)' }
       ].map(({ title, items, color, border }) => items.length > 0 && (
@@ -1148,14 +1176,14 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
 
       {/* Reopen completed / cancelled route */}
       {(route?.status === 'completed' || route?.status === 'cancelled') && onReopen && (
-        <div style={{ marginTop: 16, padding: '13px 14px', background: '#00885508', border: '1px solid #00885530', borderRadius: 13 }}>
+        <div style={{ marginTop: 16, padding: '13px 14px', background: '#0052FF08', border: '1px solid #0052FF30', borderRadius: 13 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', marginBottom: 6, letterSpacing: 1 }}>🔓 REABRIR RUTA</div>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
             Vuelve la ruta a estado "Activa" para poder editarla, agregar paquetes o corregir datos.
           </div>
           <button
             onClick={onReopen}
-            style={{ width: '100%', padding: '11px', borderRadius: 10, border: '1px solid #00885550', background: '#00885512', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+            style={{ width: '100%', padding: '11px', borderRadius: 10, border: '1px solid #0052FF50', background: '#0052FF12', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
           >
             🔓 Reabrir como activa
           </button>
@@ -1188,21 +1216,48 @@ function Label({ children }) {
 const inp = { width: '100%', background: '#fff', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)', fontSize: 13, padding: '9px 12px', outline: 'none', display: 'block', WebkitAppearance: 'none', boxSizing: 'border-box' };
 
 // ── ResetDataBtn ──────────────────────────────────────────────────────────────
+const RESET_TARGETS = [
+  { id: 'routes',    label: 'Rutas y paquetes',     desc: 'Elimina todas las rutas y sus paquetes' },
+  { id: 'quotes',    label: 'Cotizaciones',          desc: 'Elimina todas las cotizaciones (flete/mensajería)' },
+  { id: 'tariffs',   label: 'Tarifas',               desc: 'Elimina tarifas y sus ítems de precios' },
+  { id: 'prices',    label: 'Precios por comuna',    desc: 'Elimina la configuración de precios por zona' },
+  { id: 'zones',     label: 'Zonas geográficas',     desc: 'Elimina los polígonos de zonas' },
+  { id: 'companies', label: 'Empresas / clientes',   desc: 'Elimina todos los registros de empresas' },
+];
+
 function ResetDataBtn({ onDone }) {
+  const [open, setOpen] = React.useState(false);
+  const [checked, setChecked] = React.useState({});
+  const [confirm, setConfirm] = React.useState('');
   const [busy, setBusy] = React.useState(false);
 
-  const handleReset = async () => {
-    const confirmed = window.confirm(
-      '⚠️ BORRAR TODO\n\nEsto eliminará:\n• Todas las rutas\n• Todos los paquetes\n• Cotizaciones\n• Tarifas\n• Zonas y precios\n\nLos usuarios NO se borran.\n\n¿Confirmar?'
-    );
-    if (!confirmed) return;
-    const reconfirm = window.confirm('¿Estás seguro? Esta acción no se puede deshacer.');
-    if (!reconfirm) return;
+  const toggle = id => setChecked(prev => ({ ...prev, [id]: !prev[id] }));
+  const anyChecked = RESET_TARGETS.some(t => checked[t.id]);
+  const canSubmit = anyChecked && confirm === 'CONFIRMAR' && !busy;
 
+  const handleOpen = () => {
+    setChecked({});
+    setConfirm('');
+    setOpen(true);
+  };
+
+  const handleReset = async () => {
+    if (!canSubmit) return;
+    const targets = RESET_TARGETS.filter(t => checked[t.id]).map(t => t.id);
     setBusy(true);
     try {
-      const result = await api.resetAllData();
-      toast(`🗑️ Listo — ${result.deleted.routes} rutas, ${result.deleted.packages} paquetes eliminados`);
+      const result = await api.resetAllData(targets);
+      const d = result.deleted;
+      const parts = [];
+      if (d.routes)    parts.push(`${d.routes} rutas`);
+      if (d.packages)  parts.push(`${d.packages} paquetes`);
+      if (d.quotes)    parts.push(`${d.quotes} cotizaciones`);
+      if (d.tariffs)   parts.push(`${d.tariffs} tarifas`);
+      if (d.prices)    parts.push(`${d.prices} precios`);
+      if (d.zones)     parts.push(`${d.zones} zonas`);
+      if (d.companies) parts.push(`${d.companies} empresas`);
+      toast(`🗑️ Eliminado: ${parts.join(', ') || 'nada'}`);
+      setOpen(false);
       onDone?.();
     } catch (err) {
       toast('❌ ' + err.message);
@@ -1212,13 +1267,79 @@ function ResetDataBtn({ onDone }) {
   };
 
   return (
-    <button
-      onClick={handleReset}
-      disabled={busy}
-      style={{ background: '#cc224408', border: '1px solid #cc224430', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#cc2244', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}
-    >
-      {busy ? '⏳…' : '🗑️ Reset DB'}
-    </button>
+    <>
+      <button
+        onClick={handleOpen}
+        style={{ background: '#cc224408', border: '1px solid #cc224430', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#cc2244', cursor: 'pointer' }}
+      >
+        🗑️ Reset DB
+      </button>
+
+      {open && (
+        <div style={{ position: 'fixed', inset: 0, background: '#00000070', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={e => e.target === e.currentTarget && !busy && setOpen(false)}
+        >
+          <div style={{ background: 'var(--card)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, boxShadow: '0 20px 60px #0006' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <span style={{ fontSize: 22 }}>⚠️</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16, color: '#cc2244' }}>Borrar datos</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>Los usuarios NO se eliminan</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+              {RESET_TARGETS.map(t => (
+                <label key={t.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', borderRadius: 8, border: `1px solid ${checked[t.id] ? '#cc224440' : 'var(--border)'}`, background: checked[t.id] ? '#cc224408' : 'var(--card2)', cursor: 'pointer', transition: 'all .15s' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!checked[t.id]}
+                    onChange={() => toggle(t.id)}
+                    style={{ marginTop: 2, accentColor: '#cc2244', flexShrink: 0 }}
+                  />
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: checked[t.id] ? '#cc2244' : 'var(--text)' }}>{t.label}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>{t.desc}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            {anyChecked && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--muted)' }}>
+                  Escribe <strong style={{ color: '#cc2244' }}>CONFIRMAR</strong> para habilitar el botón
+                </div>
+                <input
+                  autoFocus
+                  value={confirm}
+                  onChange={e => setConfirm(e.target.value)}
+                  placeholder="CONFIRMAR"
+                  style={{ ...inp, borderColor: confirm === 'CONFIRMAR' ? '#cc2244' : 'var(--border)', fontWeight: confirm === 'CONFIRMAR' ? 700 : 400 }}
+                />
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => setOpen(false)}
+                disabled={busy}
+                style={{ flex: 1, padding: '10px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--card2)', fontSize: 13, cursor: 'pointer' }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleReset}
+                disabled={!canSubmit}
+                style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: canSubmit ? '#cc2244' : '#cc224430', color: canSubmit ? '#fff' : '#cc224480', fontSize: 13, fontWeight: 700, cursor: canSubmit ? 'pointer' : 'not-allowed', transition: 'all .15s' }}
+              >
+                {busy ? '⏳ Borrando…' : '🗑️ Borrar selección'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

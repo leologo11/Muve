@@ -17,10 +17,10 @@ export function uploadToCloudinary(buffer, options = {}) {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
-        folder: 'routiflow/packages',
+        folder: 'MUVE/packages',
         allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'heic'],
         transformation: [{ width: 1200, height: 1200, crop: 'limit', quality: 'auto' }],
-        tags: ['routiflow', 'delivery_photo'],
+        tags: ['MUVE', 'delivery_photo'],
         ...options
       },
       (error, result) => {

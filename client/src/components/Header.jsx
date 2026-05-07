@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../contexts/AuthContext.jsx';
 
 const ROLE_META = {
-  admin:   { label: 'Admin',   color: '#008855', bg: '#00885514', icon: '⚙️' },
+  admin:   { label: 'Admin',   color: '#0052FF', bg: '#0052FF14', icon: '⚙️' },
   driver:  { label: 'Driver',  color: '#0077aa', bg: '#0077aa14', icon: '🚗' },
   company: { label: 'Empresa', color: '#d4650a', bg: '#d4650a14', icon: '🏢' },
 };
@@ -60,7 +60,7 @@ export default function Header({ title, stats, onBack, extra }) {
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             letterSpacing: '-.1px'
           }}>
-            {title || '🚚 Routiflow'}
+            {title || '🚚 MUVE'}
           </h1>
         </div>
 

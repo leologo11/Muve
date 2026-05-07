@@ -145,7 +145,7 @@ export default function TariffSettings() {
                     <TLabel style={{ margin: 0 }}>Precios por comuna</TLabel>
                     <button
                       onClick={addItem}
-                      style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', background: '#00885514', border: '1px solid #00885530', borderRadius: 8, padding: '4px 10px', cursor: 'pointer' }}
+                      style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', background: '#0052FF14', border: '1px solid #0052FF30', borderRadius: 8, padding: '4px 10px', cursor: 'pointer' }}
                     >
                       + Agregar comuna
                     </button>
@@ -196,7 +196,7 @@ export default function TariffSettings() {
 
       <button
         onClick={handleCreate}
-        style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16, width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', boxShadow: '0 4px 16px #00885540', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16, width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', boxShadow: '0 4px 16px #0052FF40', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       >
         ＋
       </button>
