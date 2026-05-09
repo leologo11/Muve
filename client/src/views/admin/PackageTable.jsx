@@ -13,7 +13,7 @@ function hasNumber(address) {
   return !address || /\d/.test(address.trim());
 }
 
-export default function PackageTable({ packages, onUpdate, onDelete }) {
+export default function PackageTable({ packages, onUpdate, onDelete, onMoveRoute, routeOptions = [], currentRouteId = '' }) {
   const [editing, setEditing] = useState(null);
   const [val, setVal] = useState('');
   const [saving, setSaving] = useState(null);
@@ -205,6 +205,11 @@ export default function PackageTable({ packages, onUpdate, onDelete }) {
                 <td style={{ padding: '4px 6px', minWidth: 120, verticalAlign: 'top' }}>
                   <div style={{ fontWeight: 600 }}>{cell(pkg, 'customerName')}</div>
                   <div style={{ color: 'var(--muted)' }}>{cell(pkg, 'customerLastName')}</div>
+                  {(pkg.companyName || pkg.companyId?.name) && (
+                    <div style={{ color: '#0077aa', fontSize: 10, fontWeight: 800, marginTop: 3 }}>
+                      {pkg.companyName || pkg.companyId?.name}
+                    </div>
+                  )}
                 </td>
 
                 <td style={{ padding: '4px 6px', minWidth: 170, verticalAlign: 'top' }}>
@@ -264,11 +269,38 @@ export default function PackageTable({ packages, onUpdate, onDelete }) {
                 </td>
 
                 <td style={{ padding: '4px 6px', verticalAlign: 'top' }}>
+                  {onMoveRoute && routeOptions.length > 0 && (
+                    <select
+                      value=""
+                      onChange={e => {
+                        if (!e.target.value) return;
+                        onMoveRoute(pkg, e.target.value);
+                        e.target.value = '';
+                      }}
+                      disabled={isSaving}
+                      title="Mover paquete a otra ruta"
+                      style={{
+                        width: 120, marginBottom: 4, display: 'block',
+                        border: '1px solid #0077aa55', borderRadius: 6,
+                        color: '#0077aa', background: '#f0fbff', fontSize: 10,
+                        fontWeight: 700, padding: '3px 5px', cursor: isSaving ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      <option value="">Mover...</option>
+                      {routeOptions
+                        .filter(r => String(r._id || r.id) !== String(currentRouteId))
+                        .map(r => (
+                          <option key={r._id || r.id} value={r._id || r.id}>
+                            {r.routeCode}{r.driverId?.name ? ` - ${r.driverId.name}` : ''}
+                          </option>
+                        ))}
+                    </select>
+                  )}
                   {onDelete && (
                     <button
                       onClick={() => onDelete(pkg)}
                       disabled={isSaving}
-                      title="Eliminar paquete"
+                      title="Quitar de esta ruta"
                       style={{ background: 'none', border: '1px solid #e5534b', borderRadius: 6, color: '#e5534b', cursor: 'pointer', fontSize: 13, padding: '3px 7px', lineHeight: 1, opacity: isSaving ? 0.4 : 1, transition: 'background .15s, color .15s' }}
                       onMouseEnter={e => { e.currentTarget.style.background = '#e5534b'; e.currentTarget.style.color = '#fff'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#e5534b'; }}

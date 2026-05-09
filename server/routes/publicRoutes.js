@@ -1,9 +1,5 @@
 import { Router } from 'express';
-import Route from '../models/Route.js';
-import Package from '../models/Package.js';
-import Quote from '../models/Quote.js';
-import Zone from '../models/Zone.js';
-import { nanoid } from 'nanoid';
+import crypto from 'crypto';
 import { isSupabaseEnabled, normalizeQuote, normalizeQuoteItem, qs, supabaseRequest } from '../utils/supabase.js';
 
 const router = Router();
@@ -35,15 +31,12 @@ function priceRange(exact) {
 // GET /api/public/vehicle-configs — active vehicle pricing (no auth)
 router.get('/vehicle-configs', async (req, res) => {
   try {
-    if (isSupabaseEnabled()) {
-      const rows = await supabaseRequest(`/vehicle_configs${qs({ active: 'eq.true', select: '*', order: 'sort_order.asc' })}`);
-      return res.json(rows.map(r => ({
-        id: r.id, vehicleType: r.vehicle_type, name: r.name, description: r.description,
-        basePrice: Number(r.base_price || 0), kmTiers: r.km_tiers || [],
-        extras: r.extras || {}, active: r.active, onlyRegions: r.only_regions,
-      })));
-    }
-    res.json([]);
+    const rows = await supabaseRequest(`/vehicle_configs${qs({ active: 'eq.true', select: '*', order: 'sort_order.asc' })}`);
+    return res.json(rows.map(r => ({
+      id: r.id, vehicleType: r.vehicle_type, name: r.name, description: r.description,
+      basePrice: Number(r.base_price || 0), kmTiers: r.km_tiers || [],
+      extras: r.extras || {}, active: r.active, onlyRegions: r.only_regions,
+    })));
   } catch (err) {
     if (err.message.includes('vehicle_configs') || err.message.includes('schema cache')) {
       return res.json([]);
@@ -109,7 +102,6 @@ router.post('/quote-estimate', async (req, res) => {
   try {
     const { distanceKm, numHelpers = 0, numFloors = 0, needsPacking = false, driverHelps = false } = req.body;
     if (!distanceKm) return res.status(400).json({ error: 'distanceKm requerido' });
-    if (!isSupabaseEnabled()) return res.json({ vehicles: [] });
     const configs = await supabaseRequest(`/vehicle_configs${qs({ active: 'eq.true', select: '*', order: 'sort_order.asc' })}`);
     const vehicles = configs.map(cfg => {
       const exact = calcVehiclePrice(cfg, distanceKm, numHelpers, numFloors, needsPacking, driverHelps);
@@ -237,128 +229,75 @@ router.post('/quotes', async (req, res) => {
       return res.status(400).json({ error: 'Direccion de origen y destino son obligatorias' });
     }
 
-    if (isSupabaseEnabled()) {
-      const ds = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-      const quoteCode = `MUVE-${ds}-${nanoid(4).toUpperCase()}`;
+    const ds = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const quoteCode = `MUVE-${ds}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
 
-      const payload = {
-        quote_code: quoteCode,
-        service_type: serviceType,
-        status: 'submitted',
-        contact_person: contactPerson,
-        contact_phone: contactPhone,
-        client_notes: clientNotes,
-        client_company: clientCompany,
-        origin: originAddress,
-        destination: destinationAddress,
-        move_size: moveSize,
-      };
-      if (deliveryDate) {
-        try { payload.delivery_date = new Date(deliveryDate).toISOString(); } catch (_) {}
-      }
-      if (serviceType !== 'paqueteria') {
-        if (vehicleType) payload.vehicle_type = vehicleType;
-        if (distanceKm !== null) payload.distance_km = distanceKm;
-        if (originAddress) payload.origin_address = originAddress;
-        if (originCoords) payload.origin_coords = originCoords;
-        if (destinationAddress) payload.destination_address = destinationAddress;
-        if (destinationCoords) payload.destination_coords = destinationCoords;
-        payload.driver_helps = driverHelps;
-        payload.num_helpers = numHelpers;
-        payload.num_floors = numFloors;
-        payload.needs_packing = needsPacking;
-        payload.is_conserjeria = isConserjeria;
-        if (itemsDescription) payload.items_description = itemsDescription;
-        if (priceMin !== null) payload.price_min = priceMin;
-        if (priceMax !== null) payload.price_max = priceMax;
-      }
-
-      let quoteRows;
-      try {
-        quoteRows = await supabaseRequest('/quotes', { method: 'POST', body: JSON.stringify(payload) });
-      } catch (schemaErr) {
-        // Migration not run yet — new columns don't exist. Fall back to base fields,
-        // but preserve ALL flete data in client_notes as JSON so the admin can recover it.
-        if (schemaErr.message.includes('column') || schemaErr.message.includes('schema cache')) {
-          const fleteSnapshot = serviceType !== 'paqueteria' ? JSON.stringify({
-            vh: vehicleType, km: distanceKm,
-            hl: numHelpers, fl: numFloors,
-            pk: needsPacking, cs: isConserjeria,
-            items: itemsDescription,
-            pMin: priceMin, pMax: priceMax,
-            origin: originAddress, dest: destinationAddress,
-          }) : null;
-          const basePayload = {
-            quote_code: payload.quote_code,
-            service_type: payload.service_type,
-            status: payload.status,
-            contact_person: payload.contact_person,
-            contact_phone: payload.contact_phone,
-            client_company: payload.client_company,
-            origin: payload.origin || '',
-            destination: payload.destination || '',
-            // Preserve all flete data in client_notes until migration is run
-            client_notes: [clientNotes, fleteSnapshot ? `__flete__:${fleteSnapshot}` : ''].filter(Boolean).join('\n'),
-          };
-          if (payload.delivery_date) basePayload.delivery_date = payload.delivery_date;
-          quoteRows = await supabaseRequest('/quotes', { method: 'POST', body: JSON.stringify(basePayload) });
-        } else {
-          throw schemaErr;
-        }
-      }
-      const quote = quoteRows?.[0];
-
-      const noteParts = [];
-      if (originAddress) noteParts.push(`Origen: ${originAddress}`);
-      if (distanceKm) noteParts.push(`Distancia: ${distanceKm} km`);
-      if (vehicleType) noteParts.push(`Vehiculo: ${vehicleType}`);
-      if (driverHelps) noteParts.push('Ayuda del chofer');
-      if (numHelpers > 0) noteParts.push(`${numHelpers} ayudante(s) adicional(es)`);
-      if (numFloors > 0) noteParts.push(`${numFloors} piso(s)`);
-      if (needsPacking) noteParts.push('Embalaje');
-      if (isConserjeria) noteParts.push('Conserjeria');
-      if (priceMin && priceMax) noteParts.push(`Precio: $${priceMin.toLocaleString('es-CL')} - $${priceMax.toLocaleString('es-CL')}`);
-      if (itemsDescription) noteParts.push(itemsDescription);
-      if (clientNotes) noteParts.push(clientNotes);
-      if (moveSize) noteParts.push(`Tamano: ${moveSize}`);
-
-      await supabaseRequest('/quote_items', {
-        method: 'POST',
-        body: JSON.stringify({
-          quote_id: quote.id,
-          customer_name: contactPerson,
-          customer_phone: contactPhone,
-          address: destinationAddress || originAddress || '',
-          commune: '',
-          note: noteParts.join(' | ') || (serviceType === 'paqueteria' ? 'Lead paqueteria' : ''),
-        }),
-      });
-
-      return res.status(201).json({
-        _id: quote.id,
-        quoteCode: quote.quote_code,
-        status: quote.status,
-        serviceType: quote.service_type,
-      });
-    }
-
-    const quote = await Quote.create({
-      serviceType,
+    const payload = {
+      quote_code: quoteCode,
+      service_type: serviceType,
       status: 'submitted',
-      deliveryDate: deliveryDate ? new Date(deliveryDate) : undefined,
+      contact_person: contactPerson,
+      contact_phone: contactPhone,
+      client_notes: clientNotes,
+      client_company: clientCompany,
       origin: originAddress,
       destination: destinationAddress,
-      moveSize,
-      clientCompany,
-      contactPerson,
-      contactPhone,
-      clientNotes,
+      move_size: moveSize,
+    };
+    if (deliveryDate) {
+      try { payload.delivery_date = new Date(deliveryDate).toISOString(); } catch (_) {}
+    }
+    if (serviceType !== 'paqueteria') {
+      if (vehicleType) payload.vehicle_type = vehicleType;
+      if (distanceKm !== null) payload.distance_km = distanceKm;
+      if (originAddress) payload.origin_address = originAddress;
+      if (originCoords) payload.origin_coords = originCoords;
+      if (destinationAddress) payload.destination_address = destinationAddress;
+      if (destinationCoords) payload.destination_coords = destinationCoords;
+      payload.driver_helps = driverHelps;
+      payload.num_helpers = numHelpers;
+      payload.num_floors = numFloors;
+      payload.needs_packing = needsPacking;
+      payload.is_conserjeria = isConserjeria;
+      if (itemsDescription) payload.items_description = itemsDescription;
+      if (priceMin !== null) payload.price_min = priceMin;
+      if (priceMax !== null) payload.price_max = priceMax;
+    }
+
+    const quoteRows = await supabaseRequest('/quotes', { method: 'POST', body: JSON.stringify(payload) });
+    const quote = quoteRows?.[0];
+
+    const noteParts = [];
+    if (originAddress) noteParts.push(`Origen: ${originAddress}`);
+    if (distanceKm) noteParts.push(`Distancia: ${distanceKm} km`);
+    if (vehicleType) noteParts.push(`Vehiculo: ${vehicleType}`);
+    if (driverHelps) noteParts.push('Ayuda del chofer');
+    if (numHelpers > 0) noteParts.push(`${numHelpers} ayudante(s) adicional(es)`);
+    if (numFloors > 0) noteParts.push(`${numFloors} piso(s)`);
+    if (needsPacking) noteParts.push('Embalaje');
+    if (isConserjeria) noteParts.push('Conserjeria');
+    if (priceMin && priceMax) noteParts.push(`Precio: $${priceMin.toLocaleString('es-CL')} - $${priceMax.toLocaleString('es-CL')}`);
+    if (itemsDescription) noteParts.push(itemsDescription);
+    if (clientNotes) noteParts.push(clientNotes);
+    if (moveSize) noteParts.push(`Tamano: ${moveSize}`);
+
+    await supabaseRequest('/quote_items', {
+      method: 'POST',
+      body: JSON.stringify({
+        quote_id: quote.id,
+        customer_name: contactPerson,
+        customer_phone: contactPhone,
+        address: destinationAddress || originAddress || '',
+        commune: '',
+        note: noteParts.join(' | ') || (serviceType === 'paqueteria' ? 'Lead paqueteria' : ''),
+      }),
     });
-    res.status(201).json({
-      _id: quote._id,
-      quoteCode: quote.quoteCode,
+
+    return res.status(201).json({
+      _id: quote.id,
+      quoteCode: quote.quote_code,
       status: quote.status,
-      serviceType: quote.serviceType,
+      serviceType: quote.service_type,
     });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -368,164 +307,35 @@ router.post('/quotes', async (req, res) => {
 // GET /api/public/route/:shareToken — company tracking (no auth required)
 router.get('/route/:shareToken', async (req, res) => {
   try {
-    if (isSupabaseEnabled()) {
-      const routes = await supabaseRequest(`/routes${qs({ share_token: `eq.${req.params.shareToken}`, select: '*' })}`);
-      const route = routes?.[0];
-      if (!route) return res.status(404).json({ error: 'Enlace no valido o expirado' });
+    const routes = await supabaseRequest(`/routes${qs({ share_token: `eq.${req.params.shareToken}`, select: '*' })}`);
+    const route = routes?.[0];
+    if (!route) return res.status(404).json({ error: 'Enlace no valido o expirado' });
 
-      const packages = await supabaseRequest(`/packages${qs({ route_id: `eq.${route.id}`, select: '*', order: 'stop_order.asc' })}`);
-      const publicPackages = packages.filter(p => p.status !== 'eliminado').map(mapPublicPackage);
+    const packages = await supabaseRequest(`/packages${qs({ route_id: `eq.${route.id}`, select: '*', order: 'stop_order.asc' })}`);
+    const publicPackages = packages.filter(p => p.status !== 'eliminado').map(mapPublicPackage);
 
-      return res.json({
-        route: {
-          _id: route.id,
-          id: route.id,
-          routeCode: route.route_code,
-          name: route.name,
-          date: route.date,
-          status: route.status,
-          statusLabel: STATUS_LABELS[route.status] || route.status,
-          driverName: null,
-          driverPhone: null,
-          clientCompany: {
-            name: route.client_company?.name || null,
-            contactPerson: route.client_company?.contactPerson || null,
-            contactPhone: route.client_company?.contactPhone || null
-          },
-          startPoint: route.start_point || {},
-          distanceKm: route.distance_km,
-          stats: route.stats || {},
-          invoiceAmount: route.invoice?.amount || null
-        },
-        packages: publicPackages
-      });
-    }
-    const route = await Route.findOne({ shareToken: req.params.shareToken })
-      .populate('driverId', 'name phone')
-      .lean();
-    if (!route) return res.status(404).json({ error: 'Enlace no válido o expirado' });
-
-    const packages = await Package.find({ routeId: route._id })
-      .sort({ order: 1 })
-      .lean();
-
-    const publicPackages = packages
-      .filter(p => p.status !== 'eliminado')
-      .map(p => ({
-        _id: p._id,
-        trackingId: p.trackingId,
-        customerName: p.customerName,
-        customerLastName: p.customerLastName ? p.customerLastName[0] + '.' : '',
-        address: p.address,
-        commune: p.commune,
-        aptFloor: p.aptFloor,
-        status: p.status,
-        note: p.note,
-        failReason: p.failReason,
-        photoUrl: p.photoUrl,
-        photo2Url: p.photo2Url,
-        photoUploadedAt: p.photoUploadedAt,
-        photo2UploadedAt: p.photo2UploadedAt,
-        deliveredAt: p.deliveredAt,
-        order: p.order,
-        lat: p.lat,
-        lng: p.lng
-      }));
-    res.json({
+    return res.json({
       route: {
-        _id: route._id,
-        routeCode: route.routeCode,
+        _id: route.id,
+        id: route.id,
+        routeCode: route.route_code,
         name: route.name,
         date: route.date,
         status: route.status,
         statusLabel: STATUS_LABELS[route.status] || route.status,
-        driverName: route.driverId?.name || null,
-        driverPhone: route.driverId?.phone || null,
+        driverName: null,
+        driverPhone: null,
         clientCompany: {
-          name: route.clientCompany?.name || null,
-          contactPerson: route.clientCompany?.contactPerson || null,
-          contactPhone: route.clientCompany?.contactPhone || null
+          name: route.client_company?.name || null,
+          contactPerson: route.client_company?.contactPerson || null,
+          contactPhone: route.client_company?.contactPhone || null
         },
-        startPoint: route.startPoint,
-        distanceKm: route.distanceKm,
-        stats: route.stats,
+        startPoint: route.start_point || {},
+        distanceKm: route.distance_km,
+        stats: route.stats || {},
         invoiceAmount: route.invoice?.amount || null
       },
       packages: publicPackages
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// GET /api/public/quote/:token — client opens quote view
-router.get('/quote/:token', async (req, res) => {
-  try {
-    if (isSupabaseEnabled()) {
-      const quote = await findSupabaseQuoteByToken(req.params.token);
-      if (!quote) return res.status(404).json({ error: 'Enlace de cotizacion no valido o expirado' });
-
-      const [items, zones] = await Promise.all([
-        supabaseRequest(`/quote_items${qs({ quote_id: `eq.${quote.id}`, select: '*', order: 'created_at.asc' })}`),
-        supabaseRequest(`/zones${qs({ select: 'name,price,color,source,polygon', order: 'source.asc,name.asc' })}`),
-      ]);
-
-      let tariff = null;
-      if (quote.tariff_id) {
-        const [tariffs, tariffItems] = await Promise.all([
-          supabaseRequest(`/tariffs${qs({ id: `eq.${quote.tariff_id}`, select: '*' })}`),
-          supabaseRequest(`/tariff_items${qs({ tariff_id: `eq.${quote.tariff_id}`, select: '*', order: 'commune.asc' })}`),
-        ]);
-        if (tariffs?.[0]) {
-          tariff = {
-            _id: tariffs[0].id,
-            id: tariffs[0].id,
-            name: tariffs[0].name,
-            defaultPrice: Number(tariffs[0].default_price || 0),
-            items: tariffItems.map(i => ({
-              _id: i.id,
-              id: i.id,
-              commune: i.commune,
-              price: Number(i.price || 0),
-              zone: i.zone || '',
-            })),
-          };
-        }
-      }
-
-      return res.json({
-        quote: normalizeQuote(quote, items || []),
-        tariff,
-        zones: (zones || []).map(z => ({
-          name: z.name,
-          price: Number(z.price || 0),
-          color: z.color,
-          source: z.source,
-          polygon: z.polygon,
-        })),
-      });
-    }
-    const quote = await Quote.findOne({ shareToken: req.params.token })
-      .populate('tariffId', 'name defaultPrice items')
-      .lean();
-    if (!quote) return res.status(404).json({ error: 'Enlace de cotización no válido o expirado' });
-
-    const zones = await Zone.find().select('name price color source polygon').lean();
-
-    res.json({
-      quote: {
-        _id: quote._id,
-        quoteCode: quote.quoteCode,
-        status: quote.status,
-        clientCompany: quote.clientCompany,
-        contactPerson: quote.contactPerson,
-        contactEmail: quote.contactEmail,
-        deliveryDate: quote.deliveryDate,
-        adminNotes: quote.adminNotes,
-        items: quote.items,
-      },
-      tariff: quote.tariffId || null,
-      zones,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

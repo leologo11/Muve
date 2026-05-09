@@ -49,13 +49,15 @@ export default function DeliveryModal({ pkg, onClose, onSaved, readOnly, route }
   const handleSave = async () => {
     setSaving(true);
     try {
+      const deliveryMeta = await captureDeliveryMeta(pkg, status);
       await api.updatePackage(pkg._id, {
         status,
         note,
-        failReason: status === 'no-entregado' ? failReason : ''
+        failReason: status === 'no-entregado' ? failReason : '',
+        deliveryMeta
       });
-      if (photoFile1) await api.uploadPhoto(pkg._id, photoFile1, 1);
-      if (photoFile2) await api.uploadPhoto(pkg._id, photoFile2, 2);
+      if (photoFile1) await api.uploadPhoto(pkg._id, await createFramedDeliveryImage(photoFile1, pkg, status), 1);
+      if (photoFile2) await api.uploadPhoto(pkg._id, await createFramedDeliveryImage(photoFile2, pkg, status), 2);
       toast('✅ Guardado');
       onSaved?.();
       onClose();
@@ -238,6 +240,109 @@ export default function DeliveryModal({ pkg, onClose, onSaved, readOnly, route }
 
 function Label({ children }) {
   return <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: 'var(--muted)', textTransform: 'uppercase', margin: '13px 0 5px' }}>{children}</div>;
+}
+
+function distanceMeters(a, b) {
+  if (!a?.lat || !a?.lng || !b?.lat || !b?.lng) return null;
+  const R = 6371000;
+  const toRad = n => Number(n) * Math.PI / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function getCurrentPositionSafe() {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve(pos),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 }
+    );
+  });
+}
+
+async function captureDeliveryMeta(pkg, status) {
+  if (!['entregado', 'no-entregado'].includes(status)) return pkg.deliveryMeta || {};
+  const pos = await getCurrentPositionSafe();
+  const point = pos ? { lat: pos.coords.latitude, lng: pos.coords.longitude } : null;
+  const target = pkg.lat && pkg.lng ? { lat: Number(pkg.lat), lng: Number(pkg.lng) } : null;
+  const dist = point && target ? distanceMeters(point, target) : null;
+  return {
+    lat: point?.lat ?? null,
+    lng: point?.lng ?? null,
+    accuracy: pos?.coords?.accuracy ?? null,
+    distanceMeters: dist != null ? Math.round(dist) : null,
+    onPoint: dist != null ? dist <= 180 : null,
+    capturedAt: new Date().toISOString(),
+    status
+  };
+}
+
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function createFramedDeliveryImage(file, pkg, status) {
+  try {
+    const img = await loadImageFromFile(file);
+    const maxW = 1280;
+    const scale = Math.min(1, maxW / img.width);
+    const w = Math.round(img.width * scale);
+    const h = Math.round(img.height * scale);
+    const footerH = 150;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h + footerH;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, w, h);
+    ctx.fillStyle = '#081225';
+    ctx.fillRect(0, h, w, footerH);
+    ctx.fillStyle = '#0b5cff';
+    ctx.fillRect(0, h, w, 8);
+    const name = [pkg.customerName, pkg.customerLastName].filter(Boolean).join(' ') || 'Cliente';
+    const address = [pkg.address, pkg.aptFloor, pkg.commune].filter(Boolean).join(', ');
+    const time = new Date().toLocaleString('es-CL');
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 34px system-ui, Arial';
+    ctx.fillText(name, 28, h + 48);
+    ctx.font = '24px system-ui, Arial';
+    ctx.fillStyle = '#dbe7ff';
+    ctx.fillText(`${status === 'entregado' ? 'Entregado' : 'Incidencia'} · ${time}`, 28, h + 84);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '22px system-ui, Arial';
+    wrapText(ctx, address, 28, h + 118, w - 56, 26);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.88));
+    return blob ? new File([blob], `muve-${pkg.trackingId || Date.now()}.jpg`, { type: 'image/jpeg' }) : file;
+  } catch {
+    return file;
+  }
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = String(text || '').split(' ');
+  let line = '';
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      ctx.fillText(line, x, y);
+      line = word;
+      y += lineHeight;
+    } else {
+      line = test;
+    }
+  }
+  if (line) ctx.fillText(line, x, y);
 }
 
 const inputStyle = {

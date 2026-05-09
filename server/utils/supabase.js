@@ -13,16 +13,22 @@ function assertSupabase() {
 
 export async function supabaseRequest(path, options = {}) {
   assertSupabase();
-  const res = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
-    ...options,
-    headers: {
-      apikey: SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=representation',
-      ...(options.headers || {}),
-    },
-  });
+  let res;
+  try {
+    res = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
+      ...options,
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation',
+        ...(options.headers || {}),
+      },
+    });
+  } catch (fetchErr) {
+    console.error('❌ Error de conexión Supabase:', fetchErr.message);
+    throw new Error('No se pudo conectar con la base de datos');
+  }
 
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;

@@ -121,6 +121,7 @@ export default function DriverView() {
   });
 
   const active = packages.filter(p => p.status !== 'eliminado');
+  const pay = calcDriverPay(selectedRoute, active);
 
   const addrCountMap = (() => {
     const map = {};
@@ -139,8 +140,8 @@ export default function DriverView() {
     ...(packages.filter(p => p.status === 'devuelto').length > 0
       ? [{ label: 'Devueltos', value: packages.filter(p => p.status === 'devuelto').length, color: '#7b1fa2' }]
       : []),
-    ...(selectedRoute?.driverPayout
-      ? [{ label: 'Mi pago', value: '$' + Number(selectedRoute.driverPayout).toLocaleString('es-CL'), color: 'var(--accent)' }]
+    ...(pay.base > 0
+      ? [{ label: pay.isFinal ? 'Pago final' : 'Pago estimado', value: '$' + pay.final.toLocaleString('es-CL'), color: 'var(--accent)' }]
       : [])
   ];
 
@@ -223,6 +224,26 @@ export default function DriverView() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {selectedRoute && pay.base > 0 && (
+        <div style={{ background: '#f4f7ff', borderBottom: '1px solid #0052FF20', padding: '9px 14px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 800 }}>
+                {pay.isFinal ? 'Pago final de ruta' : 'Pago estimado de ruta'}
+              </div>
+              <div style={{ fontSize: 19, color: 'var(--accent)', fontWeight: 900, marginTop: 1 }}>
+                ${pay.final.toLocaleString('es-CL')}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>
+              <strong style={{ color: 'var(--text)' }}>{pay.payable}/{pay.total}</strong> pagables<br />
+              Base ${pay.base.toLocaleString('es-CL')}
+              {pay.adjustment !== 0 && <> · Ajuste {pay.adjustment > 0 ? '+' : ''}${pay.adjustment.toLocaleString('es-CL')}</>}
+            </div>
+          </div>
         </div>
       )}
 
@@ -361,15 +382,75 @@ export default function DriverView() {
   );
 }
 
+function calcDriverPay(route, activePackages = []) {
+  const settlement = route?.driverSettlement || {};
+  const base = Number(route?.driverPayout || settlement.baseAmount || 0);
+  const delivered = activePackages.filter(p => p.status === 'entregado').length;
+  const payable = activePackages.filter(isPayableForDriver).length;
+  const total = activePackages.length;
+  const ratio = total ? payable / total : 0;
+  const status = settlement.status || 'pending';
+  const approved = Number(settlement.approvedAmount || 0);
+  const adjustment = Number(settlement.adjustment || 0);
+  const mode = settlement.mode || 'proportional_delivered';
+  const suggested = mode === 'fixed'
+    ? base
+    : mode === 'manual'
+      ? (approved || base)
+      : Math.round(base * ratio);
+  const isFinal = ['approved', 'paid'].includes(status) && approved > 0;
+  return {
+    base,
+    delivered,
+    payable,
+    total,
+    adjustment,
+    status,
+    isFinal,
+    final: Math.max(0, isFinal ? approved : suggested + adjustment),
+  };
+}
+
+function isPayableForDriver(pkg) {
+  if (pkg.status === 'entregado') return true;
+  if (pkg.status === 'no-entregado') return Boolean(pkg.failReason);
+  if (pkg.status === 'devuelto') return Boolean(pkg.failReason || pkg.note);
+  return false;
+}
+
 function DriverReport({ packages, route }) {
   const active = packages.filter(p => p.status !== 'eliminado');
   const delivered = active.filter(p => p.status === 'entregado');
   const failed = active.filter(p => p.status === 'no-entregado');
   const returned = active.filter(p => p.status === 'devuelto');
   const pending = active.filter(p => p.status === 'pendiente');
+  const pay = calcDriverPay(route, active);
 
   return (
     <div style={{ padding: '14px 10px calc(50px + env(safe-area-inset-bottom))', overflowY: 'auto', height: '100%' }}>
+      {pay.base > 0 && (
+        <div style={{ background: '#f4f7ff', border: '1px solid #0052FF26', borderRadius: 13, padding: 14, marginBottom: 14 }}>
+          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 1.2, color: 'var(--accent)', marginBottom: 8 }}>
+            {pay.isFinal ? 'PAGO FINAL' : 'PAGO ESTIMADO'}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: 'var(--accent)' }}>${pay.final.toLocaleString('es-CL')}</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>
+                Base ${pay.base.toLocaleString('es-CL')} · {pay.payable}/{pay.total} pagables
+              </div>
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: pay.status === 'paid' ? '#16a34a' : 'var(--muted)', textTransform: 'uppercase' }}>
+              {pay.status}
+            </div>
+          </div>
+          {!pay.isFinal && (
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8, lineHeight: 1.35 }}>
+              Este monto puede cambiar hasta que el admin cierre y apruebe la liquidacion.
+            </div>
+          )}
+        </div>
+      )}
       <div style={{ background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 13, padding: 14, marginBottom: 14 }}>
         {[
           ['Total paradas', active.length],
@@ -377,7 +458,7 @@ function DriverReport({ packages, route }) {
           ['No entregados', failed.length],
           ...(returned.length > 0 ? [['Devueltos', returned.length]] : []),
           ['Pendientes', pending.length],
-          ...(route?.driverPayout ? [['Mi pago', '$' + Number(route.driverPayout).toLocaleString('es-CL')]] : [])
+          ...(pay.base > 0 ? [[pay.isFinal ? 'Pago final' : 'Pago estimado', '$' + pay.final.toLocaleString('es-CL')]] : [])
         ].map(([label, val]) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 13, borderBottom: '1px solid var(--border)' }}>
             <span>{label}</span>

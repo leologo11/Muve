@@ -45,6 +45,16 @@ export const api = {
   getPublicRoute: (token) => request('GET', `/public/route/${token}`),
 
   // Packages
+  getMapPackages: (params = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => v != null && v !== '' && q.set(k, String(v)));
+    return request('GET', `/packages/map?${q}`);
+  },
+  getPoolPackages: (params = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => v != null && v !== '' && q.set(k, String(v)));
+    return request('GET', `/packages/pool?${q}`);
+  },
   getAllPackages: (params = {}) => {
     const q = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => v != null && v !== '' && q.set(k, String(v)));
@@ -80,6 +90,14 @@ export const api = {
     return request('POST', `/import/${routeId}/preview`, fd, true);
   },
   importConfirm: (routeId, packages) => request('POST', `/import/${routeId}/confirm`, { packages }),
+
+  // Pool import (no route)
+  importPoolPreview: (file) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return request('POST', '/import/pool/preview', fd, true);
+  },
+  importPoolConfirm: (packages, companyId) => request('POST', '/import/pool/confirm', { packages, companyId }),
   getPriceSuggestion: (commune) => request('GET', `/import/price-suggestion?commune=${encodeURIComponent(commune)}`),
 
   uploadInvoiceFile: (routeId, file, type = 'invoice') => {

@@ -8,9 +8,8 @@ import DeliveryModal from '../../components/DeliveryModal.jsx';
 import Toast, { toast } from '../../components/Toast.jsx';
 import UserManager from './UserManager.jsx';
 import InvoiceView from './InvoiceView.jsx';
-import AddPackageModal from './AddPackageModal.jsx';
 import AddRouteModal from './AddRouteModal.jsx';
-import ImportModal from './ImportModal.jsx';
+import PoolAssignModal from './PoolAssignModal.jsx';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
 import PriceSettings from '../../components/PriceSettings.jsx';
 import SectorMap from './SectorMap.jsx';
@@ -19,6 +18,7 @@ import QuotesView from './QuotesView.jsx';
 import CompaniesView from './CompaniesView.jsx';
 import CredentialsView from './CredentialsView.jsx';
 import MovePricingView from './MovePricingView.jsx';
+import GeneralMapView from './GeneralMapView.jsx';
 
 const STATUS_META = {
   draft:      { label: 'Borrador',   color: 'var(--muted)',   bg: 'var(--card2)' },
@@ -38,18 +38,24 @@ export default function AdminView() {
   const [search, setSearch] = useState('');
   const [routeSearch, setRouteSearch] = useState('');
   const [routeFilter, setRouteFilter] = useState('all');
+  const [routeDriverFilter, setRouteDriverFilter] = useState('');
   const [editPkg, setEditPkg] = useState(null);
-  const [showAddPkg, setShowAddPkg] = useState(false);
   const [showAddRoute, setShowAddRoute] = useState(false);
-  const [showImport, setShowImport] = useState(false);
+  const [showPoolAssign, setShowPoolAssign] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editingName, setEditingName] = useState(false);
   const [routeName, setRouteName] = useState('');
   const [driverLocation, setDriverLocation] = useState(null);
+  const [routeDrivers, setRouteDrivers] = useState([]);
 
-  useEffect(() => { loadRoutes(); }, []);
+  useEffect(() => {
+    loadRoutes();
+    api.getUsers()
+      .then(users => setRouteDrivers(users.filter(u => u.role === 'driver' && u.active !== false)))
+      .catch(() => {});
+  }, []);
 
   // Poll driver location every 20s while viewing an active route with a driver assigned
   useEffect(() => {
@@ -111,12 +117,33 @@ export default function AdminView() {
   };
 
   const handleDelete = async (pkg) => {
+    if (!confirm(`Quitar a ${pkg.customerName || 'este paquete'} de esta ruta?\n\nEl paquete NO se borra del sistema. Quedara sin ruta en Paquetes.`)) return;
+    try {
+      await api.updatePackage(pkg._id, { routeId: null });
+      setPackages(prev => prev.filter(p => p._id !== pkg._id));
+      toast('Paquete quitado de la ruta');
+      return;
+    } catch (err) { toast('âŒ ' + err.message); return; }
     if (!confirm(`¿Eliminar a ${pkg.customerName}?`)) return;
     try {
-      await api.deletePackage(pkg._id);
-      setPackages(prev => prev.map(p => p._id === pkg._id ? { ...p, status: 'eliminado' } : p));
+      await api.updatePackage(pkg._id, { routeId: null });
+      setPackages(prev => prev.filter(p => p._id !== pkg._id));
+      toast('Paquete quitado de la ruta');
+      return;
       toast('🗑️ Eliminado');
     } catch (err) { toast('❌ ' + err.message); }
+  };
+
+  const handleMovePackageToRoute = async (pkg, targetRouteId) => {
+    const target = routes.find(r => String(r._id || r.id) === String(targetRouteId));
+    if (!targetRouteId || !target) return;
+    if (!confirm(`Mover ${pkg.trackingId || pkg.customerName || 'este paquete'} a ${target.routeCode}${target.driverId?.name ? ` (${target.driverId.name})` : ''}?`)) return;
+    try {
+      await api.updatePackage(pkg._id, { routeId: targetRouteId });
+      setPackages(prev => prev.filter(p => p._id !== pkg._id));
+      toast('Paquete movido a otra ruta');
+      loadRoutes();
+    } catch (err) { toast('âŒ ' + err.message); }
   };
 
   const handleRestore = async (pkg) => {
@@ -155,9 +182,22 @@ export default function AdminView() {
     } catch (err) { toast('❌ ' + err.message); }
   };
 
+  const handleRouteDriverChange = async (route, driverId) => {
+    try {
+      await api.updateRoute(route._id || route.id, { driverId: driverId || null });
+      const driversById = new Map(routeDrivers.map(d => [String(d._id || d.id), d]));
+      const driver = driverId ? driversById.get(String(driverId)) : null;
+      setRoutes(prev => prev.map(r => String(r._id || r.id) === String(route._id || route.id)
+        ? { ...r, driverId: driver ? { _id: driver._id || driver.id, id: driver._id || driver.id, name: driver.name, phone: driver.phone } : null }
+        : r
+      ));
+      toast(driver ? `Driver asignado: ${driver.name}` : 'Ruta sin driver');
+    } catch (err) { toast('❌ ' + err.message); }
+  };
+
   const handleDeleteRoute = async (route) => {
     const code = window.prompt(
-      `⚠️ ELIMINAR RUTA ${route.routeCode}\n\nEsto eliminará la ruta y TODOS sus paquetes permanentemente.\n\nEscribe CONFIRMAR para continuar:`
+      `⚠️ ELIMINAR RUTA ${route.routeCode}\n\nLa ruta se eliminará permanentemente.\nLos paquetes NO se borran — quedan libres en el pool sin ruta asignada.\n\nEscribe CONFIRMAR para continuar:`
     );
     if (code !== 'CONFIRMAR') return;
     try {
@@ -225,9 +265,14 @@ export default function AdminView() {
     return routes.filter(r => {
       const matchQ = !q || [r.routeCode, r.name, r.clientCompany?.name, r.driverId?.name].filter(Boolean).join(' ').toLowerCase().includes(q);
       const matchF = routeFilter === 'all' || r.status === routeFilter;
-      return matchQ && matchF;
+      const matchDriver = !routeDriverFilter || r.driverId?.name === routeDriverFilter;
+      return matchQ && matchF && matchDriver;
     });
-  }, [routes, routeSearch, routeFilter]);
+  }, [routes, routeSearch, routeFilter, routeDriverFilter]);
+
+  const routeDriverNames = useMemo(() => (
+    [...new Set(routes.map(r => r.driverId?.name).filter(Boolean))].sort()
+  ), [routes]);
 
   const invBadge = (() => {
     const inv = selectedRoute?.invoice;
@@ -307,6 +352,17 @@ export default function AdminView() {
     );
   }
 
+  // ── GENERAL MAP VIEW ──
+  if (view === 'generalMap') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Header title="🗺 Mapa General de Paquetes" onBack={() => setView('routes')} />
+        <GeneralMapView />
+        <Toast />
+      </div>
+    );
+  }
+
   // ── SECTOR MAP VIEW ──
   if (view === 'zones') {
     return <ZonesView onBack={() => setView('routes')} />;
@@ -355,6 +411,9 @@ export default function AdminView() {
               <button onClick={() => setView('allPackages')} style={{ background: '#0052FF14', border: '1px solid #0052FF30', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', cursor: 'pointer' }}>
                 📦 Paquetes
               </button>
+              <button onClick={() => setView('generalMap')} style={{ background: '#22c55e14', border: '1px solid #22c55e40', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#16a34a', cursor: 'pointer' }}>
+                🗺 Mapa
+              </button>
               <QuotesBadgeBtn onClick={() => setView('quotes')} />
               <button onClick={() => setView('zones')} style={{ background: '#5c35cc14', border: '1px solid #5c35cc30', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#5c35cc', cursor: 'pointer' }}>
                 🗺 Zonas
@@ -396,6 +455,34 @@ export default function AdminView() {
                 color: routeFilter === val ? '#fff' : 'var(--muted)'
               }}>{lbl}</button>
             ))}
+            {routeDriverNames.length > 0 && (
+              <select
+                value={routeDriverFilter}
+                onChange={e => setRouteDriverFilter(e.target.value)}
+                style={{
+                  flexShrink: 0,
+                  padding: '4px 10px',
+                  borderRadius: 20,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  border: routeDriverFilter ? '1px solid var(--accent)' : '1px solid var(--border)',
+                  background: routeDriverFilter ? '#0052FF12' : 'var(--card2)',
+                  color: routeDriverFilter ? 'var(--accent)' : 'var(--muted)',
+                  outline: 'none',
+                }}
+              >
+                <option value="">Todos los drivers</option>
+                {routeDriverNames.map(name => <option key={name} value={name}>{name}</option>)}
+              </select>
+            )}
+            {(routeFilter !== 'all' || routeDriverFilter || routeSearch) && (
+              <button
+                onClick={() => { setRouteFilter('all'); setRouteDriverFilter(''); setRouteSearch(''); }}
+                style={{ flexShrink: 0, padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, border: '1px solid var(--border)', background: 'none', color: 'var(--muted)', cursor: 'pointer' }}
+              >
+                Limpiar
+              </button>
+            )}
           </div>
         </div>
 
@@ -410,8 +497,10 @@ export default function AdminView() {
               <RouteCard
                 key={route._id}
                 route={route}
+                drivers={routeDrivers}
                 onClick={() => loadRoute(route._id)}
                 onStatusChange={handleRouteStatus}
+                onDriverChange={handleRouteDriverChange}
                 onCancel={handleCancelRoute}
                 onDelete={handleDeleteRoute}
               />
@@ -580,9 +669,32 @@ export default function AdminView() {
                 <span style={{ fontSize: 12, color: '#d4650a', fontWeight: 600 }}>
                   {noGeoCount} paquete{noGeoCount > 1 ? 's' : ''} sin geocodificar — borde naranja en la tabla
                 </span>
+                {p.deliveryMeta?.distanceMeters != null && (
+                  <div style={{ fontSize: 11, fontWeight: 800, color: p.deliveryMeta.onPoint === false ? 'var(--danger)' : 'var(--accent)', marginTop: 4 }}>
+                    GPS: {p.deliveryMeta.onPoint === false ? 'Lejos del punto' : 'En punto'} · {Math.round(p.deliveryMeta.distanceMeters)}m
+                  </div>
+                )}
+                {p.deliveryMeta?.payStatus && (
+                  <div style={{ fontSize: 11, fontWeight: 800, color: p.deliveryMeta.payStatus === 'rejected' ? 'var(--danger)' : 'var(--accent)', marginTop: 4 }}>
+                    Pago: {p.deliveryMeta.payStatus === 'rejected' ? 'rechazado' : 'aprobado'}
+                  </div>
+                )}
+                {p.status === 'no-entregado' && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 7, flexWrap: 'wrap' }}>
+                    <button onClick={() => reviewPackagePay(p, 'approved')} style={actBtn('var(--accent)')}>Aprobar pago</button>
+                    <button onClick={() => reviewPackagePay(p, 'rejected')} style={actBtn('var(--danger)')}>Rechazar pago</button>
+                  </div>
+                )}
               </div>
             )}
-            <PackageTable packages={packages} onUpdate={handlePkgUpdate} onDelete={handleDelete} />
+            <PackageTable
+              packages={packages}
+              onUpdate={handlePkgUpdate}
+              onDelete={handleDelete}
+              onMoveRoute={handleMovePackageToRoute}
+              routeOptions={routes.filter(r => ['draft', 'active'].includes(r.status))}
+              currentRouteId={selectedRoute?._id || selectedRoute?.id}
+            />
           </div>
         )}
 
@@ -637,13 +749,23 @@ export default function AdminView() {
       )}
 
       <div style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16, display: 'flex', flexDirection: 'column', gap: 10, zIndex: 400 }}>
-        <button onClick={() => setShowImport(true)} title="Importar paquetes con IA (Excel, CSV, foto)" style={{ width: 52, height: 52, borderRadius: '50%', background: '#9c27b0', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', boxShadow: '0 4px 16px #9c27b040', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🤖</button>
-        {tab !== 'm' && <button onClick={() => setShowAddPkg(true)} style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', boxShadow: '0 4px 16px #0052FF40', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>＋</button>}
+        <button
+          onClick={() => setShowPoolAssign(true)}
+          title="Asignar paquetes del pool a esta ruta"
+          style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', boxShadow: '0 4px 16px #0052FF40', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          📦
+        </button>
       </div>
 
       {editPkg && <DeliveryModal pkg={editPkg} route={selectedRoute} onClose={() => setEditPkg(null)} onSaved={refreshRoute} />}
-      {showAddPkg && <AddPackageModal routeId={selectedRoute._id} onClose={() => setShowAddPkg(false)} onCreated={() => { setShowAddPkg(false); refreshRoute(); }} />}
-      {showImport && <ImportModal routeId={selectedRoute._id} onClose={() => setShowImport(false)} onImported={() => { setShowImport(false); refreshRoute(); }} />}
+      {showPoolAssign && (
+        <PoolAssignModal
+          route={selectedRoute}
+          onClose={() => setShowPoolAssign(false)}
+          onAssigned={() => { setShowPoolAssign(false); refreshRoute(); }}
+        />
+      )}
       <Toast />
     </div>
   );
@@ -670,7 +792,7 @@ function QuotesBadgeBtn({ onClick }) {
 }
 
 // ── Route card in list ──
-function RouteCard({ route, onClick, onStatusChange, onCancel, onDelete }) {
+function RouteCard({ route, drivers = [], onClick, onStatusChange, onDriverChange, onCancel, onDelete }) {
   const inv = route.invoice;
   const daysLeft = inv?.status === 'net30' && inv?.dueDate
     ? Math.ceil((new Date(inv.dueDate) - Date.now()) / 86400000) : null;
@@ -684,14 +806,43 @@ function RouteCard({ route, onClick, onStatusChange, onCancel, onDelete }) {
   const nextStatus = { draft: 'active', active: 'paused', paused: 'active', completed: null, cancelled: null }[route.status];
   const nextLabel = { draft: '▶ Activar', active: '⏸ Pausar', paused: '▶ Reactivar' }[route.status];
   const canReopen = route.status === 'completed' || route.status === 'cancelled';
+  const driverName = route.driverId?.name;
 
   return (
-    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid var(--border)', padding: '13px 14px', marginBottom: 10, boxShadow: '0 1px 4px #0000000a', cursor: 'pointer' }} onClick={onClick}>
+    <div style={{ background: '#fff', borderRadius: 14, border: route.status === 'active' && driverName ? '1px solid #0077aa40' : '1px solid var(--border)', padding: '13px 14px', marginBottom: 10, boxShadow: '0 1px 4px #0000000a', cursor: 'pointer' }} onClick={onClick}>
       {/* Top row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 700 }}>{route.name || route.routeCode}</div>
           {route.name && <div style={{ fontSize: 10, color: 'var(--muted)' }}>{route.routeCode}</div>}
+          <select
+            value={route.driverId?._id || route.driverId?.id || ''}
+            onClick={e => e.stopPropagation()}
+            onChange={e => {
+              e.stopPropagation();
+              onDriverChange?.(route, e.target.value);
+            }}
+            style={{
+              marginTop: 5,
+              maxWidth: 220,
+              padding: '3px 8px',
+              borderRadius: 20,
+              fontSize: 11,
+              fontWeight: 800,
+              outline: 'none',
+              background: driverName ? (route.status === 'active' ? '#0077aa12' : '#64748b10') : '#f59e0b12',
+              color: driverName ? (route.status === 'active' ? '#0077aa' : 'var(--muted)') : '#b45309',
+              border: `1px solid ${driverName ? (route.status === 'active' ? '#0077aa30' : '#64748b20') : '#f59e0b30'}`,
+              cursor: 'pointer',
+            }}
+          >
+            <option value="">Sin driver</option>
+            {drivers.map(d => (
+              <option key={d._id || d.id} value={d._id || d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
             {new Date(route.date).toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
             {route.driverId && ` · 🚗 ${route.driverId.name}`}
@@ -752,7 +903,24 @@ function actBtn(color) {
   return { padding: '5px 11px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: `1px solid ${color}30`, background: `${color}12`, color };
 }
 
+function MiniMoney({ label, value, color }) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 10px' }}>
+      <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 800, marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 14, color, fontWeight: 900 }}>${Number(value || 0).toLocaleString('es-CL')}</div>
+    </div>
+  );
+}
+
 // ── Info / Report tab ──
+function isPayableForDriver(pkg) {
+  if (pkg.deliveryMeta?.payStatus === 'rejected') return false;
+  if (pkg.status === 'entregado') return true;
+  if (pkg.status === 'no-entregado') return Boolean(pkg.failReason);
+  if (pkg.status === 'devuelto') return Boolean(pkg.failReason || pkg.note);
+  return false;
+}
+
 function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onReopen, onDelete, onRefresh }) {
   const [editingRoute, setEditingRoute] = useState(false);
   const [form, setForm] = useState(null);
@@ -822,6 +990,14 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
         invoiceDate: route?.invoice?.invoiceDate ? new Date(route.invoice.invoiceDate).toISOString().slice(0, 10) : '',
         notes: route?.invoice?.notes || ''
       },
+      driverPayout: route?.driverPayout ?? '',
+      driverSettlement: {
+        status: route?.driverSettlement?.status || 'pending',
+        mode: route?.driverSettlement?.mode || 'proportional_delivered',
+        adjustment: route?.driverSettlement?.adjustment ?? 0,
+        approvedAmount: route?.driverSettlement?.approvedAmount ?? '',
+        note: route?.driverSettlement?.note || ''
+      },
       startPoint: { address: route?.startPoint?.address || '', lat: route?.startPoint?.lat ?? '', lng: route?.startPoint?.lng ?? '' }
     });
   }, [route]);
@@ -829,6 +1005,7 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setCompany = (k, v) => setForm(f => ({ ...f, clientCompany: { ...f.clientCompany, [k]: v } }));
   const setInvoice = (k, v) => setForm(f => ({ ...f, invoice: { ...f.invoice, [k]: v } }));
+  const setSettlement = (k, v) => setForm(f => ({ ...f, driverSettlement: { ...f.driverSettlement, [k]: v } }));
   const setStart = (k, v) => setForm(f => ({ ...f, startPoint: { ...f.startPoint, [k]: v } }));
 
   const saveRoute = async () => {
@@ -842,6 +1019,12 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
         tariffId: form.tariffId || null,
         clientCompany: form.clientCompany,
         invoice: { ...form.invoice, amount: form.invoice.amount !== '' ? Number(form.invoice.amount) : undefined, invoiceDate: form.invoice.invoiceDate || undefined },
+        driverPayout: form.driverPayout !== '' ? Number(form.driverPayout) : null,
+        driverSettlement: {
+          ...form.driverSettlement,
+          adjustment: Number(form.driverSettlement.adjustment || 0),
+          approvedAmount: form.driverSettlement.approvedAmount !== '' ? Number(form.driverSettlement.approvedAmount) : undefined,
+        },
         startPoint: { address: form.startPoint.address || undefined, lat: form.startPoint.lat !== '' ? Number(form.startPoint.lat) : undefined, lng: form.startPoint.lng !== '' ? Number(form.startPoint.lng) : undefined }
       });
       onRouteUpdate(updated);
@@ -856,8 +1039,26 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
   const active = packages.filter(p => p.status !== 'eliminado');
   const delivered = active.filter(p => p.status === 'entregado');
   const failed = active.filter(p => p.status === 'no-entregado');
+  const pending = active.filter(p => p.status === 'pendiente');
+  const payable = active.filter(isPayableForDriver);
   const total = active.reduce((s, p) => s + (p.price || 0), 0);
   const collected = delivered.reduce((s, p) => s + (p.price || 0), 0);
+  const driverSettlement = route?.driverSettlement || {};
+  const driverBase = Number(route?.driverPayout || driverSettlement.baseAmount || 0);
+  const driverUnitValue = active.length ? Math.round(driverBase / active.length) : 0;
+  const unpaidDriverPackages = active.filter(p => !isPayableForDriver(p));
+  const deliveredRatio = active.length ? payable.length / active.length : 0;
+  const suggestedDriverPay = driverSettlement.mode === 'fixed'
+    ? driverBase
+    : driverSettlement.mode === 'manual'
+      ? Number(driverSettlement.approvedAmount || driverBase || 0)
+      : Math.round(driverBase * deliveredRatio);
+  const driverDiscount = driverSettlement.mode === 'proportional_delivered'
+    ? Math.max(0, driverBase - suggestedDriverPay)
+    : 0;
+  const driverAdjustment = Number(driverSettlement.adjustment || 0);
+  const driverFinal = Math.max(0, Number(driverSettlement.approvedAmount || suggestedDriverPay + driverAdjustment || 0));
+  const companyMargin = total - driverFinal;
   const inv = route?.invoice;
   const dueDate = inv?.dueDate ? new Date(inv.dueDate) : null;
   const daysLeft = dueDate ? Math.ceil((dueDate - Date.now()) / 86400000) : null;
@@ -865,6 +1066,53 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
   const noCoords = noCoordsPackages.length;
 
   if (!form) return null;
+
+  const saveDriverSettlement = async (patch = {}) => {
+    const next = {
+      ...form.driverSettlement,
+      ...patch,
+      mode: patch.mode || form.driverSettlement.mode,
+      adjustment: Number((patch.adjustment ?? form.driverSettlement.adjustment) || 0),
+      baseAmount: driverBase,
+      calculatedAmount: suggestedDriverPay,
+      driverUnitValue,
+      discountAmount: driverDiscount,
+      approvedAmount: patch.approvedAmount !== undefined
+        ? Number(patch.approvedAmount || 0)
+        : (form.driverSettlement.approvedAmount !== '' ? Number(form.driverSettlement.approvedAmount) : driverFinal),
+      delivered: delivered.length,
+      payable: payable.length,
+      failed: failed.length,
+      pending: pending.length,
+      discountedPackages: unpaidDriverPackages.length,
+      totalPackages: active.length,
+      updatedAt: new Date().toISOString(),
+    };
+    if (next.status === 'paid' && !next.paidAt) next.paidAt = new Date().toISOString();
+    try {
+      const updated = await api.updateRoute(route._id, {
+        driverPayout: driverBase || null,
+        driverSettlement: next,
+      });
+      onRouteUpdate(updated);
+      setForm(f => ({ ...f, driverSettlement: { ...f.driverSettlement, ...next } }));
+      toast('Liquidacion de driver actualizada');
+    } catch (err) { toast('Error: ' + err.message); }
+  };
+
+  const reviewPackagePay = async (pkg, payStatus) => {
+    try {
+      await api.updatePackage(pkg._id, {
+        deliveryMeta: {
+          ...(pkg.deliveryMeta || {}),
+          payStatus,
+          payReviewedAt: new Date().toISOString(),
+        }
+      });
+      toast(payStatus === 'rejected' ? 'Pago del paquete rechazado' : 'Pago del paquete aprobado');
+      onRefresh?.();
+    } catch (err) { toast('Error: ' + err.message); }
+  };
 
   return (
     <div style={{ padding: '14px 10px calc(80px + env(safe-area-inset-bottom))', overflowY: 'auto', height: '100%' }}>
@@ -995,6 +1243,18 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
 
             <div style={{ margin: '14px 0 4px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: 1 }}>📍 PUNTO DE INICIO</div>
             <Label>Dirección bodega / bodega de retiro</Label>
+            <div style={{ margin: '14px 0 4px', fontSize: 11, fontWeight: 700, color: '#0077aa', letterSpacing: 1 }}>PAGO DRIVER</div>
+            <Label>Monto base pactado</Label>
+            <input type="number" value={form.driverPayout} onChange={e => set('driverPayout', e.target.value)} placeholder="Ej: 60000" style={inp} />
+            <Label>Regla de liquidacion</Label>
+            <select value={form.driverSettlement.mode} onChange={e => setSettlement('mode', e.target.value)} style={inp}>
+              <option value="proportional_delivered">Proporcional a entregados</option>
+              <option value="fixed">Fijo si se revisa manualmente</option>
+              <option value="manual">Manual</option>
+            </select>
+            <Label>Ajuste manual (+/-)</Label>
+            <input type="number" value={form.driverSettlement.adjustment} onChange={e => setSettlement('adjustment', e.target.value)} placeholder="0" style={inp} />
+
             <AddressAutocomplete
               value={form.startPoint.address}
               onChange={v => setStart('address', v)}
@@ -1090,6 +1350,43 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
             )}
           </div>
         )}
+      </div>
+
+      {/* Driver settlement */}
+      <div style={{ background: '#f8fafc', border: '1px solid #0077aa26', borderRadius: 13, padding: 14, marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.5, color: '#0077aa', marginBottom: 4 }}>LIQUIDACION DRIVER</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+              Base ${driverBase.toLocaleString('es-CL')} · {delivered.length}/{active.length} entregados
+            </div>
+          </div>
+          <span style={{ fontSize: 10, fontWeight: 800, borderRadius: 20, padding: '4px 9px', color: '#0077aa', background: '#0077aa12', border: '1px solid #0077aa28' }}>
+            {driverSettlement.status || 'pending'}
+          </span>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', margin: '-4px 0 10px' }}>
+          Neto ruta ${total.toLocaleString('es-CL')} · Oferta driver ${driverBase.toLocaleString('es-CL')} · {payable.length}/{active.length} pagables
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginBottom: 10 }}>
+          <MiniMoney label="Neto empresas" value={total} color="var(--text)" />
+          <MiniMoney label="Oferta driver" value={driverBase} color="#0077aa" />
+          <MiniMoney label="Valor por paquete" value={driverUnitValue} color="#64748b" />
+          <MiniMoney label="Descuento no cumplidos" value={driverDiscount} color="var(--danger)" />
+          <MiniMoney label="Ajuste manual" value={driverAdjustment} color={driverAdjustment < 0 ? 'var(--danger)' : '#f57c00'} />
+          <MiniMoney label="Final sugerido" value={driverFinal} color="var(--accent)" />
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+          Regla actual: entregados e incidencias justificadas se pagan. Pendientes o incidencias sin motivo descuentan aprox. <strong>${driverUnitValue.toLocaleString('es-CL')}</strong>.
+          <br />
+          Pagables: <strong>{payable.length}</strong> · A revisar/descontar: <strong>{unpaidDriverPackages.length}</strong> · Marcados lejos: <strong>{active.filter(p => p.deliveryMeta?.onPoint === false).length}</strong> · Margen estimado empresa: <strong style={{ color: companyMargin < 0 ? 'var(--danger)' : 'var(--text)' }}>${companyMargin.toLocaleString('es-CL')}</strong>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button onClick={() => saveDriverSettlement({ status: 'calculated', approvedAmount: driverFinal })} style={actBtn('#0077aa')}>Calcular</button>
+          <button onClick={() => saveDriverSettlement({ status: 'approved', approvedAmount: driverFinal })} style={actBtn('var(--accent)')}>Aprobar</button>
+          <button onClick={() => saveDriverSettlement({ status: 'paid', approvedAmount: driverFinal })} style={actBtn('#16a34a')}>Marcar pagada</button>
+          <button onClick={() => setEditingRoute(true)} style={actBtn('#f57c00')}>Editar regla</button>
+        </div>
       </div>
 
       {/* Share link card */}

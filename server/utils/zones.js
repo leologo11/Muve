@@ -1,5 +1,4 @@
-import Zone from '../models/Zone.js';
-import { isSupabaseEnabled, qs, supabaseRequest } from './supabase.js';
+import { qs, supabaseRequest } from './supabase.js';
 
 // Ray-casting point-in-polygon (GeoJSON: coords are [lng, lat])
 export function pointInPolygon(lngLat, ring) {
@@ -14,14 +13,10 @@ export function pointInPolygon(lngLat, ring) {
 
 export async function findZoneForPoint(lng, lat) {
   try {
-    if (isSupabaseEnabled()) {
-      const zones = await supabaseRequest(`/zones${qs({ select: 'name,price,color,source,polygon' })}`);
-      return zones.find(z => {
-        const ring = z.polygon?.coordinates?.[0] || z.polygon?.geometry?.coordinates?.[0];
-        return ring && pointInPolygon([lng, lat], ring);
-      }) || null;
-    }
-    const zones = await Zone.find().lean();
-    return zones.find(z => pointInPolygon([lng, lat], z.polygon.coordinates[0])) || null;
+    const zones = await supabaseRequest(`/zones${qs({ select: 'name,price,color,source,polygon' })}`);
+    return zones.find(z => {
+      const ring = z.polygon?.coordinates?.[0] || z.polygon?.geometry?.coordinates?.[0];
+      return ring && pointInPolygon([lng, lat], ring);
+    }) || null;
   } catch { return null; }
 }

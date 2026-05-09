@@ -67,6 +67,8 @@ html, body, #root {
   color: var(--text);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   overflow: hidden;
+  overscroll-behavior: none;
+  scrollbar-gutter: stable;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -314,10 +316,10 @@ mark {
 }
 
 .quote-panel h1 {
-  font-size: 42px;
-  line-height: .96;
+  font-size: 38px;
+  line-height: 1.02;
   font-weight: 900;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .lead {
@@ -381,6 +383,7 @@ mark {
 .quote-form select,
 .quote-form textarea {
   width: 100%;
+  min-height: 44px;
   border: 1px solid #dbe3ef;
   border-radius: 12px;
   background: #f8fbff;
@@ -388,13 +391,94 @@ mark {
   font-size: 14px;
   font-weight: 500;
   padding: 12px 13px;
-  resize: vertical;
+  line-height: 1.35;
+  resize: none;
+  overflow: auto;
+}
+
+.quote-form textarea {
+  height: 82px;
+  max-height: 82px;
+}
+
+.quote-form label {
+  min-width: 0;
+}
+
+.quote-form input,
+.quote-form textarea {
+  white-space: normal;
+}
+
+.field-status {
+  display: block;
+  min-height: 16px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+}
+
+.field-status.is-hidden {
+  visibility: hidden;
+}
+
+.form-guidance-slot {
+  min-height: 18px;
+  margin: -4px 0 0;
+  color: #f57c00;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.form-guidance-slot.is-hidden {
+  visibility: hidden;
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+
+.address-step {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.address-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.address-grid label {
+  position: relative;
+}
+
+.inline-field-note {
+  display: block;
+  position: absolute;
+  top: 1px;
+  right: 0;
+  max-width: 58%;
+  color: #dc2626;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: right;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.inline-field-note.show {
+  opacity: 1;
+}
+
+.address-step .form-guidance-slot {
+  display: none;
 }
 
 .service-tabs {
@@ -443,9 +527,19 @@ mark {
   background: var(--danger-dim);
   color: var(--danger);
   border: 1px solid #cc224430;
-  padding: 10px 12px;
-  font-size: 13px;
+  padding: 7px 10px;
+  font-size: 11px;
   font-weight: 700;
+}
+
+.form-error-slot {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+}
+
+.form-error-slot:not(.show) {
+  visibility: hidden;
 }
 
 .scene-panel {
@@ -991,13 +1085,13 @@ mark {
   border-radius: 3px;
 }
 
-/* cone positions — sidewalk / road edge */
-.tc1 { left: 6%;   bottom: 37%; }
-.tc2 { left: 14%;  bottom: 36.5%; transform: scale(.85); }
+/* cone positions — safety zone around centered truck (truck ~20–80% wide) */
+.tc1 { left: 16%;  bottom: 37%; }
+.tc2 { left: 20%;  bottom: 36.5%; transform: scale(.85); }
 .tc3 { left: 23%;  bottom: 37%; }
-.tc4 { left: 42%;  bottom: 36.5%; transform: scale(.9); }
-.tc5 { right: 31%; bottom: 37%; }
-.tc6 { right: 19%; bottom: 36.5%; transform: scale(.88); }
+.tc4 { right: 16%; bottom: 36.5%; transform: scale(.9); }
+.tc5 { right: 20%; bottom: 37%; }
+.tc6 { right: 23%; bottom: 36.5%; transform: scale(.88); }
 
 /* Road surface (replaces parking-lines) */
 .road-surface {
@@ -1083,23 +1177,24 @@ mark {
 }
 
 .scene-panel .truck-stage {
-  position: relative;
-  left: auto;
-  bottom: auto;
-  width: 60vw;
-  max-width: 700px;
+  position: absolute;
+  left: 50%;
+  bottom: 28%;
+  width: 60%;
+  max-width: 680px;
   height: auto;
-  margin-top: 10dvh; /* push truck down onto the road */
-  transform: translateX(6vw);
+  margin: 0;
+  transform: translateX(-50%);
   animation: muveTruckIn 1.6s cubic-bezier(.2,1,.22,1) both;
   z-index: 8;
   pointer-events: none;
+  will-change: transform;
 }
 
 @keyframes muveTruckIn {
-  from { transform: translateX(-120vw); opacity: 0; }
-  60% { transform: translateX(140px); opacity: 1; }
-  100% { transform: translateX(95px); opacity: 1; }
+  from { transform: translateX(calc(-50% - 110vw)); opacity: 0; }
+  60%  { transform: translateX(calc(-50% + 28px)); opacity: 1; }
+  100% { transform: translateX(-50%); opacity: 1; }
 }
 
 .scene-panel .truck-stage.depart {
@@ -1107,9 +1202,9 @@ mark {
 }
 
 @keyframes muveTruckDepart {
-  0%   { transform: translateX(95px); opacity: 1; }
-  12%  { transform: translateX(55px); opacity: 1; }
-  100% { transform: translateX(140vw); opacity: 1; }
+  0%   { transform: translateX(-50%); opacity: 1; }
+  12%  { transform: translateX(calc(-50% - 22px)); opacity: 1; }
+  100% { transform: translateX(calc(-50% + 140vw)); opacity: 1; }
 }
 
 .scene-panel .truck {
@@ -1117,11 +1212,17 @@ mark {
   inset: auto;
   width: 100%;
   height: auto;
-  filter: drop-shadow(0 24px 28px rgba(15,23,42,.18));
+  filter: drop-shadow(0 16px 18px rgba(15,23,42,.14));
   animation: muveIdle 3s ease-in-out infinite;
 }
 
 .scene-panel .truck-stage.depart .truck {
+  animation: none;
+}
+
+.scene-panel.settled .truck,
+.scene-panel.settled .cab-logo,
+.scene-panel.settled .cargo-space {
   animation: none;
 }
 
@@ -1164,8 +1265,8 @@ mark {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(2, 1fr);
-  gap: 10px;
-  padding: 6px;
+  gap: 5px;
+  padding: 4px;
   z-index: 10;
   pointer-events: none;
   align-items: end;
@@ -1244,17 +1345,8 @@ mark {
 
 .cargo-space .truck-box.show {
   animation: muveFlyToTruck .9s cubic-bezier(.2, .8, .25, 1) both;
+  animation-delay: 0s;
 }
-
-/* stagger: box 7 (nth-child 8) aparece primero, box 0 (nth-child 1) aparece último */
-.cargo-space .truck-box.show:nth-child(8) { animation-delay: 0.00s; }
-.cargo-space .truck-box.show:nth-child(7) { animation-delay: 0.08s; }
-.cargo-space .truck-box.show:nth-child(6) { animation-delay: 0.16s; }
-.cargo-space .truck-box.show:nth-child(5) { animation-delay: 0.24s; }
-.cargo-space .truck-box.show:nth-child(4) { animation-delay: 0.32s; }
-.cargo-space .truck-box.show:nth-child(3) { animation-delay: 0.40s; }
-.cargo-space .truck-box.show:nth-child(2) { animation-delay: 0.48s; }
-.cargo-space .truck-box.show:nth-child(1) { animation-delay: 0.56s; }
 
 @keyframes muveFlyToTruck {
   from { transform: translateY(-14px) scale(.82); opacity: 0; }
@@ -1264,8 +1356,8 @@ mark {
 .scene-panel .cart-loader {
   animation: muveCartDelay 2s ease both;
   position: absolute;
-  left: -26%; /* on the sidewalk near the cones */
-  bottom: 23%;
+  left: 3%;   /* % of scene-panel — stays left of truck at all widths */
+  bottom: 34%; /* matches curb-strip/road-surface top = sidewalk level */
   width: 160px;
   height: auto;
   z-index: 6;
@@ -1474,88 +1566,267 @@ mark {
   100% { transform: translate(-28px,-58px) scale(2.0); opacity: 0; }
 }
 
-@media (max-width: 1150px) {
-  .scene-panel {
-    height: 430px;
-    min-height: 430px;
-    padding: 10px 20px 20px;
-    align-items: center;
-  }
+/* ── MUVE Landing: full-screen scene + floating overlay ──────────────────── */
 
-  .scene-panel .truck-stage {
-    width: min(760px, 92vw);
-    max-width: 760px;
-    margin-top: 42px;
-    transform: translateX(0);
-  }
-
-  @keyframes muveTruckIn {
-    from { transform: translateX(-120vw); opacity: 0; }
-    60% { transform: translateX(24px); opacity: 1; }
-    to { transform: translateX(0); opacity: 1; }
-  }
-
-  @keyframes muveTruckDepart {
-    0% { transform: translateX(0); opacity: 1; }
-    18% { transform: translateX(-24px); opacity: 1; }
-    100% { transform: translateX(130vw); opacity: 1; }
-  }
-
-  .scene-panel .cart-loader {
-    left: -26%;
-    bottom: 23%;
-    width: min(210px, 26vw);
-  }
-
-  .scene-panel .cab-logo { font-size: 12px; right: 22%; top: 65%; }
-}
-
-@media (max-width: 720px) {
-  .scene-panel { height: 360px; min-height: 360px; }
-  .scene-panel .truck-stage { width: 106vw; margin-top: 46px; transform: translateX(4vw); }
-  .status-card { display: none; }
-  .scene-panel .cart-loader { left: -26%; width: 145px; bottom: 23%; }
-  .scene-panel .cab-logo { font-size: 10px; right: 21%; top: 66%; }
-  .box { font-size: .25rem; padding: 3px; }
-}
-
-@media (max-width: 520px) {
-  .scene-panel { height: 410px; }
-  .scene-panel .truck-stage { width: 118%; margin-top: 30px; }
-  .scene-panel .cart-loader { width: 120px; left: -26%; bottom: 23%; }
-  .cargo-space { gap: 3px; }
-  .box { font-size: .28rem; border-radius: 4px; padding: 4px; }
-  .scene-panel .cab-logo { font-size: 9px; right: 20%; top: 67%; }
-}
-
-/* ── Landing: viewport-fixed, step-based layout ────────────────────────── */
-
-/* Desktop: flex row, quote panel left + scene panel right, no page scroll */
 .muve-landing {
-  height: 100dvh !important;
-  overflow: hidden !important;
-  display: flex !important;
-  flex-direction: row;
+  position: relative;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
 }
 
-/* Quote panel is a flex column so header/body/footer stack correctly */
-.quote-panel {
+/* Scene fills the entire viewport */
+.muve-landing .scene-panel {
+  position: absolute;
+  inset: 0;
+  height: 100dvh !important;
+  max-height: none !important;
+}
+
+/* ── Passing cars (right → left) ─────────────────────────────────────────── */
+
+.road-traffic {
+  position: absolute;
+  bottom: 0.5%;
+  left: 0;
+  right: 0;
+  height: 140px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.passing-car {
+  position: absolute;
+  bottom: 4px;
+  width: clamp(240px, 32vw, 400px);
+  height: auto;
+  animation: carPass linear 1 forwards;
+  will-change: transform;
+}
+
+@keyframes carPass {
+  from { transform: translateX(calc(100vw + 20px)); }
+  to   { transform: translateX(calc(-100% - 20px)); }
+}
+
+/* ── Scene blur — fades in after truck arrives, clears on submit ─────────── */
+
+.scene-blur {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  pointer-events: none;
+  opacity: 0;
+  background: rgba(15, 23, 42, 0);
+  transition: opacity .45s ease, background-color .45s ease;
+}
+
+/* truck has landed — fade blur in */
+.scene-blur.active {
+  opacity: 1;
+  background: rgba(15, 23, 42, .22);
+}
+
+/* after submit — fade blur out slowly */
+.scene-blur.active.reveal {
+  opacity: 0;
+  background: rgba(15, 23, 42, 0);
+  transition: opacity 1.4s ease .4s, background-color 1.4s ease .4s;
+}
+
+/* ── Floating form overlay ───────────────────────────────────────────────── */
+
+.quote-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  /* starts slightly above center, invisible */
+  transform: translate(-50%, -44%);
+  width: min(680px, 92vw);
+  max-height: 94dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 20;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.7s ease, transform 0.7s cubic-bezier(.2,1,.22,1);
+}
+
+.quote-overlay.step-inventory {
+  width: min(1120px, 96vw);
+}
+
+/* truck landed + blur active — slide form down into center */
+.quote-overlay.ready {
+  opacity: 1;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+/* after submit — fade form out */
+.quote-overlay.departed {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition: opacity 1.6s ease;
+}
+
+/* ── Progress boxes ─────────────────────────────────────────────────────── */
+
+.progress-boxes {
+  display: flex;
+  gap: 5px;
+  justify-content: flex-start;
+  margin-bottom: 6px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.pb-box {
+  width: 26px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid #e2e8f0;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .45s ease, border-color .45s ease, transform .3s ease, box-shadow .3s ease;
+  font-size: 4px;
+  font-weight: 900;
+  color: #cbd5e1;
+  overflow: hidden;
+}
+
+.pb-box.filled {
+  background: linear-gradient(145deg, #e8b87a, #c17f45, #a0622e);
+  border-color: rgba(140,88,40,.55);
+  transform: scale(1.08) translateY(-1px);
+  box-shadow: 0 3px 10px rgba(160,98,46,.35);
+  color: rgba(255,238,210,.92);
+}
+
+.step-guide {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  line-height: 1.4;
+  margin-top: 2px;
+  letter-spacing: .1px;
+}
+
+/* Boxes fly down to truck on departure */
+.pb-box.fly {
+  animation: pbFly .9s cubic-bezier(.3, 0, .55, 1) both;
+}
+.pb-box.fly:nth-child(1) { animation-delay: 0.00s; }
+.pb-box.fly:nth-child(2) { animation-delay: 0.30s; }
+.pb-box.fly:nth-child(3) { animation-delay: 0.60s; }
+.pb-box.fly:nth-child(4) { animation-delay: 0.90s; }
+.pb-box.fly:nth-child(5) { animation-delay: 1.20s; }
+.pb-box.fly:nth-child(6) { animation-delay: 1.50s; }
+.pb-box.fly:nth-child(7) { animation-delay: 1.80s; }
+.pb-box.fly:nth-child(8) { animation-delay: 2.10s; }
+
+@keyframes pbFly {
+  0%   { transform: scale(1) translate(0, 0); opacity: 1; }
+  30%  { transform: scale(1.15) translate(0, 12px); opacity: 1; }
+  100% { transform: scale(.06) translate(0, 58vh); opacity: 0; }
+}
+
+/* ── App thought bubble — flat cloud ─────────────────────────────────────── */
+
+/* Wrapper: absolutely positioned above the panel — never affects form layout */
+.app-bubble-wrap {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 6px 22px rgba(0, 82, 255, .17)) drop-shadow(0 1px 4px rgba(0,0,0,.08));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 32px;      /* breathing room for cloud bumps above bubble body */
+  max-width: min(360px, 80vw);
+  pointer-events: none;
+  animation: bubblePop .44s cubic-bezier(.34, 1.56, .64, 1) both;
+}
+
+/* Cloud body — wide pill */
+.app-bubble {
+  position: relative;
+  background: #fff;
+  border-radius: 28px;
+  padding: 28px 22px 12px;  /* top padding clears the 24px bump depth */
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  text-align: center;
+  line-height: 1.5;
+  width: 100%;
+}
+
+/* Three bumps on top: center tallest, two sides shorter — all via one pseudo */
+.app-bubble::before {
+  content: '';
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+  width: 52px;
+  height: 52px;
+  top: -28px;             /* center bump peaks 28px above body */
+  left: 50%;
+  transform: translateX(-50%);
+  /* side bumps: spread -10 → radius 16px each, 52px outward, 12px lower */
+  box-shadow: -54px 12px 0 -10px #fff, 54px 12px 0 -10px #fff;
+}
+
+/* Thought tail: two circles decreasing in size */
+.thought-tail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  margin-bottom: 4px;
+}
+
+.thought-tail span {
+  display: block;
+  background: #fff;
+  border-radius: 50%;
+}
+
+.thought-tail span:nth-child(1) { width: 10px; height: 10px; }
+.thought-tail span:nth-child(2) { width:  6px; height:  6px; }
+
+@keyframes bubblePop {
+  from { transform: scale(.82) translateY(12px); opacity: 0; }
+  to   { transform: scale(1)   translateY(0);    opacity: 1; }
+}
+
+/* ── Form card inside the overlay ────────────────────────────────────────── */
+
+.quote-overlay .quote-panel {
+  width: 100% !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: calc(94dvh - 50px);
+  overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
-  overflow: hidden !important;
-  height: 100% !important;
-  padding: 0 !important;
-  width: 50%;
-  min-width: 380px;
-  max-width: 560px;
-  flex-shrink: 0;
-  border-right: 1px solid var(--border);
+  border-radius: 20px !important;
+  border-right: none !important;
+  border: none !important;
+  box-shadow: 0 32px 90px rgba(0,0,0,.32), 0 8px 28px rgba(0,0,0,.18);
+  background: #fff;
 }
 
-/* Brand + step indicator — sticky at top of panel */
+/* Brand + step indicator */
 .q-header {
   flex-shrink: 0;
-  padding: 20px 28px 12px;
+  padding: 18px 24px 12px;
   border-bottom: 1px solid var(--border);
   background: #fff;
   z-index: 10;
@@ -1566,95 +1837,212 @@ mark {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 16px 28px 8px;
+  padding: 14px 24px 8px;
   min-height: 0;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   box-sizing: border-box;
   width: 100%;
 }
 
-/* Back / Next navigation */
+.form-guide-message {
+  width: 100%;
+  min-height: 48px;
+  max-height: 48px;
+  margin: 0 0 6px;
+  padding: 9px 12px;
+  border: 1px solid #dbeafe;
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  background: linear-gradient(90deg, #eef4ff 0%, #f8fbff 100%);
+  color: #334155;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: left;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  animation: fadeIn .22s ease both;
+}
+
+.form-guide-message strong {
+  display: block;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .8px;
+  line-height: 1.1;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+
+.form-guide-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: 0 0 9px;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px #0052ff14;
+}
+
+/* Navigation footer */
 .q-foot {
   flex-shrink: 0;
-  padding: 8px 28px 18px;
+  padding: 8px 24px 16px;
   display: flex;
   gap: 10px;
   background: #fff;
 }
 
-/* Admin link always on top */
-.admin-link {
-  z-index: 11;
+/* Admin link */
+.admin-link { z-index: 11; }
+
+/* ── Large desktop — more horizontal room ────────────────────────────────── */
+
+@media (min-width: 1100px) {
+  .quote-overlay { width: min(860px, 88vw); }
 }
 
-/* Scene panel fills remaining width at full height on desktop */
-@media (min-width: 981px) {
-  .muve-landing .scene-panel {
-    flex: 1;
-    height: 100%;
-    min-height: 0;
+/* ── Step 3: two-column layout on wide form ──────────────────────────────── */
+
+.s3-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.s3-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@media (min-width: 580px) {
+  .s3-wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(330px, .95fr);
+    gap: 16px;
+    align-items: start;
   }
 }
 
-/* Tablet (981px–1200px): keep 50% but enforce min */
-@media (min-width: 981px) and (max-width: 1200px) {
-  .quote-panel {
-    min-width: 360px;
-  }
-  .q-header { padding: 18px 22px 10px; }
-  .q-body   { padding: 14px 22px 8px; }
-  .q-foot   { padding: 8px 22px 16px; }
+.quote-overlay.step-inventory .s3-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-/* Mobile: animation at top (compact), form fills rest — internal scroll only */
-@media (max-width: 980px) {
-  .muve-landing {
-    flex-direction: column !important;
-  }
-
-  .scene-panel {
-    order: 0;
-    height: 28dvh !important;
-    min-height: 150px !important;
-    max-height: 240px !important;
-    flex-shrink: 0;
-  }
-
-  .quote-panel {
-    order: 1;
-    width: 100% !important;
-    flex: 1 !important;
-    min-height: 0 !important;
-    border-right: none !important;
-    border-top: 1px solid var(--border);
-  }
-
-  .q-header { padding: 12px 18px 10px; }
-  .q-body   { padding: 12px 18px 8px; }
-  .q-foot   { padding: 6px 18px 14px; }
+.quote-overlay.step-inventory .s3-col {
+  width: 100%;
 }
 
-/* Phone (≤ 480px): tighter, smaller animation */
+.quote-overlay.step-inventory .s3-col:nth-child(2) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.quote-overlay.step-inventory .s3-col:nth-child(2) > :last-child {
+  grid-column: 1 / -1;
+}
+
+.inventory-item-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.quote-overlay.step-inventory .inventory-item-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (min-width: 1100px) {
+  .quote-overlay.step-inventory .inventory-item-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .quote-overlay.step-inventory .s3-col:nth-child(2) {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+/* ── Tablet / mobile ─────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  /* Form card fills more width on tablet */
+  .quote-overlay {
+    width: min(560px, 94vw);
+  }
+
+  .quote-overlay.step-inventory {
+    width: 98vw;
+  }
+
+  .scene-panel .truck-stage {
+    width: 72%;
+    bottom: 26%;
+  }
+
+  .passing-car { width: clamp(180px, 42vw, 300px); }
+
+  .q-header { padding: 14px 20px 10px; }
+  .q-body   { padding: 12px 20px 8px;  }
+  .q-foot   { padding: 6px 20px 14px;  }
+
+  .address-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 480px) {
-  .scene-panel {
-    height: 22dvh !important;
-    min-height: 120px !important;
-    max-height: 180px !important;
+  /* On phones: take full width, anchor near top so footer stays on screen */
+  .quote-overlay {
+    width: 96vw;
+    top: 2svh;
+    max-height: 96svh;
+    transform: translateX(-50%) translateY(8px); /* hidden: slightly above */
   }
+
+  .quote-overlay.ready {
+    transform: translateX(-50%) translateY(0);   /* visible: drop to position */
+  }
+
+  .quote-overlay.departed {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .quote-overlay .quote-panel {
+    max-height: calc(96svh - 4px);
+    border-radius: 16px !important;
+  }
+
+  .app-bubble-wrap { display: none; }  /* bubble is above viewport on phones */
+
+  .progress-boxes { gap: 4px; margin-bottom: 4px; }
+  .pb-box { width: 20px; height: 14px; border-radius: 4px; font-size: 3px; }
+  .step-guide { font-size: 10px; }
+
+  .scene-panel .truck-stage {
+    width: 90%;
+    bottom: 24%;
+  }
+
+  .passing-car { width: clamp(150px, 48vw, 240px); }
 
   .q-header { padding: 10px 14px 8px; }
   .q-body   { padding: 10px 14px 6px; }
-  .q-foot   { padding: 6px 14px 12px; }
+  .q-foot   { padding: 6px 14px 10px; }
 
   .brand-name { font-size: 17px; }
   .brand-caption { font-size: 10px; }
-
-  /* Shrink logo on phones */
-  .q-header img { width: 42px !important; height: 42px !important; border-radius: 10px !important; }
-
-  /* Tighten brand-lockup spacing */
-  .brand-lockup { gap: 8px; margin-bottom: 8px !important; }
-
-  /* Smaller h1 on phones */
-  .quote-panel h1 { font-size: 26px !important; }
+  .q-header img { width: 38px !important; height: 38px !important; border-radius: 10px !important; }
+  .brand-lockup { gap: 8px; margin-bottom: 6px !important; }
+  .quote-panel h1 { font-size: 22px !important; }
+  .lead { font-size: 13px !important; margin-bottom: 14px !important; }
 }

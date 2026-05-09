@@ -177,6 +177,7 @@ function VehicleCard({ config: c, onEdit, onToggleActive }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             <ExtraStat icon="🏢" label="Piso sin ascensor" value={ex.floor} />
             <ExtraStat icon="📦" label="Embalaje profesional" value={ex.packing} />
+            <ExtraStat icon="📐" label="m³ adicional" value={ex.extra_m3} unit="/m³" />
           </div>
         </div>
       </div>
@@ -184,12 +185,12 @@ function VehicleCard({ config: c, onEdit, onToggleActive }) {
   );
 }
 
-function ExtraStat({ icon, label, value }) {
+function ExtraStat({ icon, label, value, unit = '' }) {
   return (
     <div style={{ textAlign: 'center', padding: '8px 6px', background: '#fff', border: '1px solid var(--border)', borderRadius: 9 }}>
       <div style={{ fontSize: 16 }}>{icon}</div>
       <div style={{ fontSize: 9, color: 'var(--muted)', margin: '2px 0' }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)' }}>${fmt(value)}</div>
+      <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)' }}>${fmt(value)}<span style={{ fontSize: 10, fontWeight: 500, color: 'var(--muted)' }}>{unit}</span></div>
     </div>
   );
 }
@@ -210,6 +211,7 @@ function EditModal({ config: c, onClose, onSaved }) {
     helper:      c.extras?.helper      ?? 15000,
     floor:       c.extras?.floor       ?? 5000,
     packing:     c.extras?.packing     ?? 15000,
+    extra_m3:    c.extras?.extra_m3    ?? 16000,
   });
   const [saving, setSaving] = useState(false);
 
@@ -357,6 +359,11 @@ function EditModal({ config: c, onClose, onSaved }) {
             <div>
               <FL>📦 Embalaje</FL>
               <input type="number" value={extras.packing} onChange={e => setExtra('packing', e.target.value)} style={inp} />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <FL>📐 m³ adicional (sobre los {3} m³ base)</FL>
+              <input type="number" value={extras.extra_m3} onChange={e => setExtra('extra_m3', e.target.value)} style={inp} />
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Se cobra por cada m³ que exceda los 3 m³ incluidos en la tarifa base</div>
             </div>
           </div>
         </div>

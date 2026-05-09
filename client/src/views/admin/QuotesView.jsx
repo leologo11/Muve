@@ -430,7 +430,7 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
   useEffect(() => {
     const vol = totalVol(inventory);
     if (vol === 0) return;
-    const rec = recommendVehicleType(vol);
+    const rec = recommendVehicleType(vol, inventory);
     if (rec !== vehicleType) {
       setVehicleType(rec);
       setPriceEdited(false);

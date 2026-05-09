@@ -74,6 +74,7 @@ async function nominatimSearch(q) {
 const INP = {
   width: '100%', background: 'var(--card2)', border: '1px solid var(--border)',
   borderRadius: 10, color: 'var(--text)', fontSize: 14,
+  height: 44, minHeight: 44,
   padding: '10px 36px 10px 12px', outline: 'none',
   boxSizing: 'border-box', fontFamily: 'inherit', transition: 'border-color .15s',
 };
@@ -188,7 +189,7 @@ export default function AddressAutocomplete({
   }, []);
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', ...style }}>
+    <div ref={containerRef} style={{ position: 'relative', zIndex: open ? 40 : 'auto', ...style }}>
       <div style={{ position: 'relative' }}>
         <input
           ref={inputRef}
@@ -209,8 +210,8 @@ export default function AddressAutocomplete({
 
       {open && suggestions.length > 0 && dropPos && (
         <div style={{
-          position: 'fixed', zIndex: 9999,
-          top: dropPos.top, left: dropPos.left, width: dropPos.width,
+          position: 'absolute', zIndex: 9999,
+          top: 'calc(100% + 4px)', left: 0, width: '100%',
           background: '#fff', border: '1px solid var(--border)',
           borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.16)', overflow: 'hidden',
         }}>

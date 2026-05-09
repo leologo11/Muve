@@ -1,31 +1,40 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { api } from '../../api/index.js';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
-import InventoryPicker, { CATALOG, totalVol, recommendVehicleType, serializeInventory, VEHICLE_THRESHOLDS } from '../../components/InventoryPicker.jsx';
+import InventoryPicker, { CATALOG, totalVol, recommendVehicleType, serializeInventory, VEHICLE_THRESHOLDS, inventoryHasTallItems } from '../../components/InventoryPicker.jsx';
 
 const LARGE_ITEM_IDS = new Set(['camaQueen', 'cama2p', 'sofa3p', 'sofa2p', 'closet', 'nevera', 'lavadora', 'cocina']);
 
 const BOXES = Array.from({ length: 8 });
-const TRUCK_LOAD_ORDER  = [7, 6, 5, 4, 3, 2, 1, 0];
-const CART_UNLOAD_ORDER = [0, 1, 2, 3, 4, 5, 6, 7];
+const TRUCK_LOAD_ORDER = [7, 6, 5, 4, 3, 2, 1, 0];
+
+const CAR_COLORS = ['#c0392b','#1a3a5c','#2c6e3a','#8e44ad','#d35400','#2980b9','#7f8c8d','#922b21','#1a5276','#145a32'];
 
 // Ítems altos/voluminosos que requieren camión 3/4
-const TALL_ITEM_IDS = new Set(['nevera', 'closet', 'camaQueen', 'cama2p', 'cama1p', 'sofa3p']);
-
 // ── Flete m³ pricing ──────────────────────────────────────────────────────────
-const FLETE_BASE_PRICE   = 30_000; // tarifa base (primeros 2 m³)
-const FLETE_BASE_VOL     = 2;      // m³ incluidos en tarifa base
-const FLETE_EXTRA_M3     = 12_000; // por cada m³ adicional
-const FLETE_FLOOR_COST   = 8_000;  // por piso sin ascensor
-const FLETE_DRIVER_HELP  = 8_000;  // ayuda del chofer
+const FLETE_BASE_PRICE   = 35_000; // tarifa base (primeros 3 m³)
+const FLETE_BASE_VOL     = 3;      // m³ incluidos en tarifa base
+const FLETE_EXTRA_M3     = 16_000; // por cada m³ adicional
+const FLETE_FLOOR_COST   = 6_000;  // por piso sin ascensor
+const FLETE_DRIVER_HELP  = 10_000; // ayuda del chofer
 const FLETE_HELPER_COST  = 15_000; // por ayudante adicional
-const FLETE_PACKING_COST = 20_000; // embalaje profesional
+const FLETE_PACKING_COST = 22_000; // embalaje profesional
 const fmt = n => Number(n || 0).toLocaleString('es-CL');
 const makeRange = (exact) => ({
   exact,
   lo: Math.round(exact * 0.88 / 1000) * 1000,
   hi: Math.round(exact * 1.15 / 1000) * 1000,
 });
+
+function tierPricePerKm(kmTiers = [], distanceKm = 0) {
+  const tiers = (kmTiers || []).slice().sort((a, b) => Number(a.max_km) - Number(b.max_km));
+  const tier = tiers.find(t => Number(distanceKm) <= Number(t.max_km)) || tiers[tiers.length - 1];
+  return tier ? Number(tier.price_per_km || tier.pricePerKm || 0) : 0;
+}
+
+function roundToThousand(n) {
+  return Math.round(Number(n || 0) / 1000) * 1000;
+}
 
 const STEP_TITLES = {
   flete:      ['Tipo de servicio', '¿De dónde a dónde?', '¿Qué llevas?',   'Tus datos'],
@@ -110,9 +119,11 @@ export default function LandingView() {
   // Vehicle (fetched from API alongside distance, shown in step 3)
   const [vehicles,        setVehicles]        = useState([]);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
+  const [vehicleConfigs,  setVehicleConfigs]  = useState([]);
 
   // Extras
   const [helpMode,        setHelpMode]        = useState('none'); // 'none' | 'driver' | 'helpers'
+  const [helpModeManual,  setHelpModeManual]  = useState(false);
   const [numHelpers,      setNumHelpers]      = useState(1);
   const [numFloors,       setNumFloors]       = useState(0);
   const [needsPacking,    setNeedsPacking]    = useState(false);
@@ -131,16 +142,26 @@ export default function LandingView() {
 
   // UI
   const [submitting, setSubmitting] = useState(false);
-  const [departed,   setDeparted]   = useState(false);
-  const [success,    setSuccess]    = useState(null);
+  const [formGone,    setFormGone]    = useState(false); // form faded + boxes flew
+  const [departed,    setDeparted]    = useState(false); // truck driving away
+  const [success,     setSuccess]     = useState(null);
+  const [animatedLoad, setAnimatedLoad] = useState([]);  // truck boxes filled one by one
+  const [blurReady,   setBlurReady]   = useState(false); // blur + form appear after truck arrives
   const [error,      setError]      = useState('');
   const [priceRange, setPriceRange] = useState(null);
 
   const isFlete  = serviceType === 'flete' || serviceType === 'mudanza';
+  const addressesVerified = !isFlete || Boolean(origin.lat && dest.lat);
   const maxSteps = serviceType === 'paqueteria' ? 2 : 4;
   const isLastStep = (step === 4 && isFlete) || (step === 2 && serviceType === 'paqueteria');
 
   const stepTitle = serviceType ? (STEP_TITLES[serviceType]?.[step - 1] ?? '') : '';
+
+  useEffect(() => {
+    api.getPublicVehicleConfigs()
+      .then(cfgs => setVehicleConfigs(Array.isArray(cfgs) ? cfgs : []))
+      .catch(() => setVehicleConfigs([]));
+  }, []);
 
   // ── Navigation ──────────────────────────────────────────────────────────────
 
@@ -153,15 +174,9 @@ export default function LandingView() {
     if (!canGoNext() || step >= maxSteps) return;
     // Precio m³ al pasar de step 3 → 4
     if (step === 3 && isFlete) {
-      // Mismo cálculo que el card en vivo — incluye extras
-      const vol2      = totalVol(inventory);
-      const extra2    = Math.max(0, vol2 - FLETE_BASE_VOL);
-      const flCost    = numFloors * FLETE_FLOOR_COST;
-      const hlCost    = helpMode === 'driver' ? FLETE_DRIVER_HELP
-                      : helpMode === 'helpers' ? FLETE_DRIVER_HELP + numHelpers * FLETE_HELPER_COST : 0;
-      const pkCost    = needsPacking ? FLETE_PACKING_COST : 0;
-      const exact     = Math.round((FLETE_BASE_PRICE + extra2 * FLETE_EXTRA_M3 + flCost + hlCost + pkCost) / 1000) * 1000;
-      setPriceRange(makeRange(Math.max(exact, FLETE_BASE_PRICE)));
+      const vol2 = totalVol(inventory);
+      const finalExact = Math.max(fleteExact, vehicleBasePrice);
+      setPriceRange({ exact: finalExact, lo: finalExact, hi: finalExact });
       // Recomendación de vehículo (solo si hay distancia calculada)
       if (distanceKm) {
         try {
@@ -170,7 +185,7 @@ export default function LandingView() {
             driverHelps: helpMode !== 'none', numFloors, needsPacking,
           });
           if (vs?.length) {
-            const recType = vol2 > 0 ? recommendVehicleType(vol2) : null;
+            const recType = vol2 > 0 ? recommendVehicleType(vol2, inventory) : null;
             const rec = (recType && vs.find(v => v.vehicleType === recType)) || vs[0];
             if (rec) setSelectedVehicle(rec);
           }
@@ -183,6 +198,7 @@ export default function LandingView() {
 
   const selectServiceType = (v) => {
     setServiceType(v);
+    setHelpModeManual(false);
     setError('');
     setStep(2);
   };
@@ -196,7 +212,7 @@ export default function LandingView() {
   // 8 → name + phone filled (remaining)
 
   const sceneCount = useMemo(() => {
-    if (departed || isLastStep) return 8;
+    if (formGone || isLastStep) return 8;
     if (!serviceType) return 0;
     let n = 1; // service selected
     if (serviceType === 'paqueteria') {
@@ -211,30 +227,37 @@ export default function LandingView() {
       if (contactPhone.trim())  n  = 8; // teléfono → completa todo
     }
     return Math.min(n, 8);
-  }, [serviceType, departed, isLastStep, clientCompany, contactPerson, contactPhone,
+  }, [serviceType, formGone, isLastStep, clientCompany, contactPerson, contactPhone,
       origin, dest, inventory, helpMode]);
 
-  const loadedTruck  = TRUCK_LOAD_ORDER.slice(0, sceneCount);
-  const unloadedCart = CART_UNLOAD_ORDER.slice(0, sceneCount);
+  const loadedTruck = TRUCK_LOAD_ORDER.slice(0, sceneCount);
 
   // ── Live m³ price (flete/mudanza) ──────────────────────────────────────────
   const invVol       = totalVol(inventory);
   const extraVol     = Math.max(0, invVol - FLETE_BASE_VOL);
-  const hasTallItems = inventory.some(i => TALL_ITEM_IDS.has(i.id) && i.qty > 0);
-  // Vehículo inteligente: ítems altos → camión 3/4, cajas/cocinas → furgón
-  const smartVehicleType = invVol > 18 ? 'camionLargo'
-    : hasTallItems || invVol > 7 ? 'camion34'
-    : 'furgon';
+  const hasTallItems = inventoryHasTallItems(inventory);
+  const smartVehicleType = invVol > 0 ? recommendVehicleType(invVol, inventory) : 'furgon';
   const vehicleLabel = VEHICLE_THRESHOLDS.find(t => t.vehicleType === smartVehicleType);
+  const activeVehicleConfig = vehicleConfigs.find(c => c.vehicleType === smartVehicleType);
+  const vehicleBasePrice = Number(activeVehicleConfig?.basePrice ?? FLETE_BASE_PRICE);
+  const vehicleKmPrice = tierPricePerKm(activeVehicleConfig?.kmTiers || [], distanceKm || 0);
+  const distanceCost = distanceKm ? roundToThousand(distanceKm * vehicleKmPrice) : 0;
+  const cfgExtras = activeVehicleConfig?.extras || {};
+  const driverHelpPrice = Number(cfgExtras.driver_help ?? FLETE_DRIVER_HELP);
+  const helperUnitPrice = Number(cfgExtras.helper ?? FLETE_HELPER_COST);
+  const floorUnitPrice = Number(cfgExtras.floor ?? FLETE_FLOOR_COST);
+  const packingPrice = Number(cfgExtras.packing ?? FLETE_PACKING_COST);
+  const extraM3Price = Number(cfgExtras.extra_m3 ?? FLETE_EXTRA_M3);
   // Ayudante sugerido: vol>6 o ítems pesados → chofer+ayudante, vol>2 → solo chofer
   const suggestHelperMode = invVol > 6 || hasTallItems ? 'helpers' : invVol > 2 ? 'driver' : 'none';
   // Costos extras
-  const floorCost    = numFloors * FLETE_FLOOR_COST;
-  const helpCost     = helpMode === 'driver'  ? FLETE_DRIVER_HELP
-                     : helpMode === 'helpers' ? FLETE_DRIVER_HELP + numHelpers * FLETE_HELPER_COST
+  const floorCost    = numFloors * floorUnitPrice;
+  const helpCost     = helpMode === 'driver'  ? driverHelpPrice
+                     : helpMode === 'helpers' ? driverHelpPrice + numHelpers * helperUnitPrice
                      : 0;
-  const packCost     = needsPacking ? FLETE_PACKING_COST : 0;
-  const fleteExact   = Math.round((FLETE_BASE_PRICE + extraVol * FLETE_EXTRA_M3 + floorCost + helpCost + packCost) / 1000) * 1000;
+  const packCost     = needsPacking ? packingPrice : 0;
+  const extraVolCost = roundToThousand(extraVol * extraM3Price);
+  const fleteExact   = roundToThousand(vehicleBasePrice + distanceCost + extraVolCost + floorCost + helpCost + packCost);
 
   const status = useMemo(() => {
     if (!serviceType)    return ['¿Listo para mover?', 'Elige el tipo de servicio que necesitas para comenzar tu cotización.'];
@@ -243,12 +266,11 @@ export default function LandingView() {
       if (sceneCount < 6) return ['Casi listo', 'Agrega tu teléfono para que podamos contactarte.'];
       return ['¡Listo!', 'Revisa los datos y envía tu cotización.'];
     }
-    if (sceneCount < 3) return ['¿De dónde a dónde?', 'Ingresa la dirección de retiro y la dirección de entrega. Usamos GPS para calcular la distancia exacta.'];
-    if (sceneCount < 4) return ['¿Qué llevas?', 'Selecciona los artículos de la lista — calculamos el volumen y el vehículo ideal automáticamente.'];
-    if (sceneCount < 5) return ['Servicio de carga', 'Elige si necesitas solo transporte, ayuda del chofer o un equipo completo de carga y descarga.'];
-    if (sceneCount < 8) return ['¡Casi listo!', 'Ingresa tu nombre y teléfono — el precio ya está calculado arriba.'];
+    if (step === 2) return ['¿De dónde a dónde?', 'Ingresa la dirección de retiro y la dirección de entrega. Usamos GPS para calcular la distancia exacta.'];
+    if (step === 3) return ['¿Qué llevas?', 'Selecciona artículos, servicio de carga y adicionales. Abajo verás el precio calculado.'];
+    if (step === 4) return ['Tus datos', 'Ingresa tu nombre y teléfono para enviar esta cotización al administrador.'];
     return ['Camión cargado y listo', '¡Perfecto! Revisa el resumen y envía tu cotización. Te contactaremos a la brevedad.'];
-  }, [sceneCount, serviceType]);
+  }, [sceneCount, serviceType, step]);
 
   // ── Distance (auto-triggers when both addresses geocoded) ───────────────────
 
@@ -289,15 +311,43 @@ export default function LandingView() {
     return inventory.some(item => LARGE_ITEM_IDS.has(item.id) && item.qty > 0);
   }, [inventory]);
 
+  useEffect(() => {
+    if (helpModeManual) return;
+    setHelpMode(invVol > 0 ? suggestHelperMode : 'none');
+    if (suggestHelperMode === 'helpers') setNumHelpers(n => Math.max(1, n));
+  }, [invVol, suggestHelperMode, helpModeManual]);
+
   // Auto-recommend vehicle from inventory (no price shown yet)
   useEffect(() => {
     if (!vehicles.length) return;
     const vol = totalVol(inventory);
     if (vol === 0) return;
-    const recType = recommendVehicleType(vol);
+    const recType = recommendVehicleType(vol, inventory);
     const rec = vehicles.find(v => v.vehicleType === recType) || vehicles[0];
     if (rec) { setSelectedVehicle(rec); }
   }, [inventory, vehicles]);
+
+  // Sync truck boxes with form progress during normal filling
+  useEffect(() => {
+    if (!formGone) setAnimatedLoad(loadedTruck);
+  }, [loadedTruck]);
+
+  // When form submitted: load boxes into truck one by one with 300ms stagger
+  useEffect(() => {
+    if (!formGone) return;
+    setAnimatedLoad([]); // clear truck first so boxes "fly in"
+    const timers = TRUCK_LOAD_ORDER.map((boxIdx, order) =>
+      setTimeout(() => setAnimatedLoad(prev => [...prev, boxIdx]),
+                 950 + order * 300) // 950ms = fly duration, 300ms stagger
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [formGone]);
+
+  // Reveal blur + form only after truck finishes arriving (1.7s matches muveTruckIn duration)
+  useEffect(() => {
+    const t = window.setTimeout(() => setBlurReady(true), 1700);
+    return () => clearTimeout(t);
+  }, []);
 
 
   // ── Submit ──────────────────────────────────────────────────────────────────
@@ -312,24 +362,26 @@ export default function LandingView() {
 
     setSubmitting(true);
     try {
+      const finalFletePrice = Math.max(fleteExact, vehicleBasePrice);
       const quote = await api.createPublicQuote({
         serviceType, clientCompany,
         originAddress: origin.address,      originCoords: origin.lat ? { lat: origin.lat, lng: origin.lng } : null,
         destinationAddress: dest.address,   destinationCoords: dest.lat ? { lat: dest.lat, lng: dest.lng } : null,
         distanceKm: distanceKm || null,
-        vehicleType: selectedVehicle?.vehicleType || '',
+        vehicleType: isFlete ? smartVehicleType : (selectedVehicle?.vehicleType || ''),
         driverHelps: helpMode !== 'none',
         numHelpers: helpMode === 'helpers' ? numHelpers : 0,
         numFloors, needsPacking, isConserjeria,
         itemsDescription: serializeInventory(inventory, inventoryExtras),
-        priceMin: priceRange?.lo || null,
-        priceMax: priceRange?.hi || null,
+        priceMin: isFlete ? (addressesVerified ? finalFletePrice : null) : (priceRange?.lo || null),
+        priceMax: isFlete ? (addressesVerified ? finalFletePrice : null) : (priceRange?.hi || null),
         contactPerson, contactPhone, contactEmail, deliveryDate, deliveryTime,
         clientNotes: isUrgent ? `🚨 URGENTE - SERVICIO INMEDIATO 🚨\n${clientNotes}`.trim() : clientNotes,
         urgent: isUrgent,
       });
-      setDeparted(true);
-      window.setTimeout(() => setSuccess(quote), 2100);
+      setFormGone(true);                                        // form desaparece + cajitas vuelan
+      window.setTimeout(() => setDeparted(true), 4200);        // camión sale cuando ya cargó todo
+      window.setTimeout(() => setSuccess(quote), 6200);        // mensaje tras camión en marcha
     } catch (err) {
       setError(err.message);
     } finally {
@@ -343,7 +395,7 @@ export default function LandingView() {
     <main className="muve-landing">
 
       {/* ── ANIMATION PANEL ──────────────────────────────────────────────── */}
-      <section className="scene-panel" aria-label="Animación de carga MUVE">
+      <section className={`scene-panel${blurReady && !formGone ? ' settled' : ''}`} aria-label="Animación de carga MUVE">
         <div className="skyline">
           {/* Far-background buildings */}
           <div className="building bld-far bld-f1"/><div className="building bld-far bld-f2"/><div className="building bld-far bld-f3"/>
@@ -362,10 +414,6 @@ export default function LandingView() {
         {/* Traffic cones — safety zone around the loading area */}
         <div className="tcone tc1"/><div className="tcone tc2"/><div className="tcone tc3"/>
         <div className="tcone tc4"/><div className="tcone tc5"/><div className="tcone tc6"/>
-        <div className="status-card">
-          <strong>{status[0]}</strong>
-          <p>{status[1]}</p>
-        </div>
         <div className={`truck-stage ${departed ? 'depart' : ''}`}>
           <svg className="truck" viewBox="0 0 900 420" fill="none" xmlns="http://www.w3.org/2000/svg">
             <ellipse cx="430" cy="379" rx="365" ry="18" fill="#94A3B8" opacity="0.24"/>
@@ -402,28 +450,19 @@ export default function LandingView() {
           </div>
           <div className="cargo-space">
             {BOXES.map((_, i) => (
-              <div key={i} className={`box truck-box ${loadedTruck.includes(i) ? 'show' : ''}`}><span>MUVE</span></div>
+              <div key={i} className={`box truck-box ${animatedLoad.includes(i) ? 'show' : ''}`}><span>MUVE</span></div>
             ))}
           </div>
-          <div className={`cart-loader ${departed ? 'hide' : ''}`}>
-            <div className="cart-boxes">
-              {BOXES.map((_, i) => (
-                <div key={i} className={`box cart-box ${unloadedCart.includes(i) ? 'move-out' : ''}`}><span>MUVE</span></div>
-              ))}
-            </div>
-            <svg className="worker-svg" viewBox="0 0 110 120" fill="none">
-              <circle cx="50" cy="103" r="6" fill="#475569"/><circle cx="100" cy="103" r="6" fill="#475569"/>
-              <line x1="30" y1="67" x2="20" y2="52" stroke="#475569" strokeWidth="4" strokeLinecap="round"/>
-              <line x1="20" y1="52" x2="20" y2="34" stroke="#475569" strokeWidth="4" strokeLinecap="round"/>
-              <circle cx="20" cy="22" r="13" fill="#D4A574"/>
-              <ellipse cx="20" cy="14" rx="15" ry="6" fill="#0052FF"/>
-              <rect x="8" y="36" width="25" height="34" rx="8" fill="#FFFFFF" stroke="#E2E8F0" strokeWidth="2"/>
-              <line x1="33" y1="45" x2="42" y2="61" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round"/>
-              <line x1="14" y1="70" x2="9" y2="96" stroke="#3B82F6" strokeWidth="5" strokeLinecap="round"/>
-              <line x1="27" y1="70" x2="31" y2="96" stroke="#3B82F6" strokeWidth="5" strokeLinecap="round"/>
-            </svg>
-          </div>
         </div>
+
+        {/* Coches que pasan de derecha a izquierda — uno a la vez */}
+        <div className="road-traffic">
+          {!blurReady && <TrafficController/>}
+        </div>
+
+        {/* Blur que cubre la escena mientras el formulario está activo */}
+        <div className={`scene-blur${blurReady ? ' active' : ''}${formGone ? ' reveal' : ''}`}/>
+
         <div className={`success ${success ? 'show' : ''}`}>
           <div className="success-box">
             <div className="check">✓</div>
@@ -437,8 +476,20 @@ export default function LandingView() {
         </div>
       </section>
 
-      {/* ── FORM PANEL ───────────────────────────────────────────────────── */}
-      <section className="quote-panel">
+      {/* ── FLOATING FORM OVERLAY ────────────────────────────────────────── */}
+      <div className={`quote-overlay${blurReady ? ' ready' : ''}${formGone ? ' departed' : ''}${step === 3 && isFlete ? ' step-inventory' : ''}`}>
+
+        {/* ── App thought bubble — floats above the white panel ─────────── */}
+        {/*
+          <div className="app-bubble-wrap" key={success ? '__success__' : status[1]}>
+            <div className="app-bubble">
+              {success ? '🎉 ¡Listo! Te contactaremos a la brevedad.' : status[1]}
+            </div>
+            <div className="thought-tail"><span/><span/></div>
+          </div>
+        */}
+
+        <section className="quote-panel">
         <a className="admin-link" href="/login">Acceso admin</a>
 
         {/* Gradient top bar */}
@@ -446,11 +497,11 @@ export default function LandingView() {
 
         {/* ── Fixed header ──────────────────────────────────────────────── */}
         <div className="q-header">
-          <div className="brand-lockup" style={{ marginBottom: 14 }}>
-            <img src="/logo.png" alt="MUVE" style={{ width: 64, height: 64, borderRadius: 14, objectFit: 'contain', background: 'linear-gradient(135deg,#0052FF,#00DAFF)', padding: 6, boxShadow: '0 12px 28px #0052ff33', flexShrink: 0 }} />
-            <div>
+          <div className="brand-lockup" style={{ marginBottom: 8 }}>
+            <img src="/logo.png" alt="MUVE" style={{ width: 46, height: 46, borderRadius: 11, objectFit: 'contain', background: 'linear-gradient(135deg,#0052FF,#00DAFF)', padding: 5, boxShadow: '0 8px 20px #0052ff33', flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div className="brand-name">MUVE</div>
-              <div className="brand-caption">Transporte y logística en Chile</div>
+              <div className="brand-caption">Fácil, rápido y online</div>
             </div>
           </div>
 
@@ -475,15 +526,16 @@ export default function LandingView() {
           {/* Volume bar — static in header, only visible in step 3 with items */}
           {(() => {
             const vol = totalVol(inventory);
-            if (step !== 3 || !isFlete || vol === 0) return null;
+            if (step !== 3 || !isFlete) return null;
             const volPct = Math.min((vol / 18) * 100, 100);
-            const rec = VEHICLE_THRESHOLDS.find(t => vol <= t.maxVol) || VEHICLE_THRESHOLDS[VEHICLE_THRESHOLDS.length - 1];
+            const recType = vol > 0 ? recommendVehicleType(vol, inventory) : 'furgon';
+            const rec = VEHICLE_THRESHOLDS.find(t => t.vehicleType === recType) || VEHICLE_THRESHOLDS[0];
             return (
-              <div style={{ marginTop: 10, background: '#f4f7ff', border: '1px solid #0052FF20', borderRadius: 10, padding: '8px 12px' }}>
+              <div style={{ marginTop: 10, background: '#f4f7ff', border: '1px solid #0052FF20', borderRadius: 10, padding: '8px 12px', visibility: vol > 0 ? 'visible' : 'hidden' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontSize: 15 }}>{rec.icon}</span>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)' }}>{rec.name}</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)' }}>Camión sugerido: {rec.name}</span>
                   </div>
                   <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>{vol.toFixed(1)} m³</span>
                 </div>
@@ -498,12 +550,21 @@ export default function LandingView() {
 
         {/* ── Scrollable step body ───────────────────────────────────────── */}
         <div className="q-body quote-form">
+          {blurReady && !success && (
+            <div className="form-guide-message" key={status[1]}>
+              <span className="form-guide-dot" />
+              <span>
+                <strong>{status[0]}</strong>
+                {status[1]}
+              </span>
+            </div>
+          )}
 
           {/* ── STEP 1: Choose service ──────────────────────────────────── */}
           {step === 1 && (
             <div>
               <h1 style={{ marginBottom: 8 }}>Cotiza tu traslado</h1>
-              <p className="lead">Fletes, mudanzas y paquetería con seguimiento en tiempo real.</p>
+              <p className="lead">Fletes, mudanzas y paquetería — cotiza online en minutos.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 11, marginTop: 6 }}>
                 {SERVICES.map(({ v, icon, label, sub, grad }) => (
                   <button
@@ -550,9 +611,11 @@ export default function LandingView() {
 
           {/* ── STEP 2 – Flete: Addresses + auto distance ──────────────── */}
           {step === 2 && isFlete && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="address-step">
+              <div className="address-grid">
               <label>
                 Dirección de retiro *
+                <span className={`inline-field-note${origin.address && !origin.lat ? ' show' : ''}`}>Selecciona una sugerencia</span>
                 <AddressAutocomplete
                   value={origin.address}
                   onChange={v => { setOrigin({ address: v, lat: null, lng: null }); setDistanceKm(null); setVehicles([]); setError(''); }}
@@ -560,11 +623,12 @@ export default function LandingView() {
                   placeholder="Av. Vitacura 2939, Las Condes…"
                   dropdownFixed
                 />
-                {origin.lat && <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 700 }}>✓ Ubicado en el mapa</span>}
+                <span className={`field-status${origin.lat ? '' : ' is-hidden'}`} style={{ color: 'var(--accent)' }}>✓ Ubicado en el mapa</span>
               </label>
 
               <label>
                 Dirección de entrega *
+                <span className={`inline-field-note${dest.address && !dest.lat ? ' show' : ''}`}>Verifica la direcciÃ³n</span>
                 <AddressAutocomplete
                   value={dest.address}
                   onChange={v => { setDest({ address: v, lat: null, lng: null }); setDistanceKm(null); setVehicles([]); setError(''); }}
@@ -572,19 +636,15 @@ export default function LandingView() {
                   placeholder="Calle Ahumada 100, Santiago…"
                   dropdownFixed
                 />
-                {dest.lat && <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 700 }}>✓ Ubicado en el mapa</span>}
+                <span className={`field-status${dest.lat ? '' : ' is-hidden'}`} style={{ color: 'var(--accent)' }}>✓ Ubicado en el mapa</span>
               </label>
+              </div>
 
-              {!origin.lat && origin.address && (
-                <p style={{ fontSize: 12, color: '#f57c00', margin: 0, textAlign: 'center' }}>
-                  Selecciona una sugerencia de la lista para ubicar el origen
-                </p>
-              )}
-              {!dest.lat && dest.address && origin.lat && (
-                <p style={{ fontSize: 12, color: '#f57c00', margin: 0, textAlign: 'center' }}>
-                  Selecciona una sugerencia para ubicar el destino
-                </p>
-              )}
+              <p className={`form-guidance-slot${(!origin.lat && origin.address) || (!dest.lat && dest.address && origin.lat) ? '' : ' is-hidden'}`}>
+                {!origin.lat && origin.address
+                  ? 'Selecciona una sugerencia de la lista para ubicar el origen'
+                  : 'Selecciona una sugerencia para ubicar el destino'}
+              </p>
 
               {/* Distance result (auto-calculated, no price) */}
               {loadingDist && (
@@ -604,6 +664,14 @@ export default function LandingView() {
                   <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
                     El precio depende de lo que llevas — lo verás al final
                   </div>
+                </div>
+              )}
+
+              {/* Error de cálculo — aparece junto a las direcciones */}
+              {error && (
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: '#fff7f7', border: '1.5px solid #fca5a5', borderRadius: 12, padding: '10px 14px' }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+                  <span style={{ fontSize: 13, color: '#991b1b', fontWeight: 500, lineHeight: 1.4 }}>{error}</span>
                 </div>
               )}
 
@@ -661,7 +729,6 @@ export default function LandingView() {
                 )}
               </div>
 
-              {error && <div className="form-error">{error}</div>}
             </div>
           )}
 
@@ -686,7 +753,7 @@ export default function LandingView() {
                 Notas adicionales
                 <textarea value={clientNotes} onChange={e => setClientNotes(e.target.value)} placeholder="Cantidad de envíos, tipo de productos, destinos…" rows={3} />
               </label>
-              {error && <div className="form-error">{error}</div>}
+              <div className={`form-error form-error-slot${error ? ' show' : ''}`}>{error || 'Sin errores'}</div>
               <button className="submit-quote" type="submit" disabled={submitting || departed}>
                 {submitting ? 'Enviando…' : 'Enviar cotización'}
               </button>
@@ -695,125 +762,13 @@ export default function LandingView() {
 
           {/* ── STEP 3 – Inventory + extras ─────────────────────────────── */}
           {step === 3 && isFlete && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* Vehicle recommendation based on inventory (no price) */}
-              {selectedVehicle && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#f4f7ff', border: '1px solid #0052FF20', borderRadius: 12 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px' }}>Vehículo sugerido</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--accent)', marginTop: 2 }}>
-                      {selectedVehicle.vehicleType === 'furgon' ? '🚐' : selectedVehicle.vehicleType === 'camion34' ? '🚚' : '🚛'} {selectedVehicle.name}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 10, color: '#94a3b8', textAlign: 'right' }}>Se ajusta según<br/>lo que indiques</div>
-                </div>
-              )}
+            <div className="s3-wrap">
 
-              <div style={{ background: '#f8fbff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 16, boxSizing: 'border-box' }}>
-                <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, color: '#64748b', textTransform: 'uppercase', marginBottom: 12 }}>
-                  ¿Qué vas a transportar?
-                </div>
-                <InventoryPicker inventory={inventory} onChange={setInventory} extras={inventoryExtras} onExtrasChange={setInventoryExtras} />
-              </div>
+              {/* ── Left column: what you're moving ─── */}
+              <div className="s3-col">
 
-              {/* ── Live m³ price calculator ────────────────────────────── */}
-              <div style={{
-                background: 'linear-gradient(135deg,#f4f7ff,#e8f0ff)',
-                border: '2px solid #0052FF20', borderRadius: 14, padding: '14px 16px',
-                position: 'sticky', top: 0, zIndex: 5,
-              }}>
-                {/* Precio arriba — estático mientras se mueve la barra */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div>
-                    <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>
-                      Precio estimado
-                    </div>
-                    <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--accent)', letterSpacing: '-.5px', lineHeight: 1 }}>
-                      ${fmt(Math.max(fleteExact, FLETE_BASE_PRICE))}
-                    </div>
-                    <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>El precio final se confirma al contactarte</div>
-                  </div>
-                  {vehicleLabel && (
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 24 }}>{vehicleLabel.icon}</div>
-                      <div style={{ fontSize: 10, fontWeight: 800, color: '#475569' }}>{vehicleLabel.name}</div>
-                      <div style={{ fontSize: 9, color: '#94a3b8' }}>{vehicleLabel.desc}</div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Barra de volumen */}
-                <div style={{ marginBottom: invVol > 0 ? 10 : 0 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginBottom: 4 }}>
-                    <span style={{ fontWeight: 700 }}>{invVol.toFixed(1)} m³</span>
-                    <span>{invVol === 0 ? 'Agrega artículos para calcular' : invVol <= FLETE_BASE_VOL ? `✓ Sin costo adicional por volumen` : `+${(extraVol).toFixed(1)} m³ sobre tarifa base`}</span>
-                  </div>
-                  <div style={{ height: 8, background: '#E2E8F0', borderRadius: 99, overflow: 'hidden' }}>
-                    <div style={{
-                      height: '100%', borderRadius: 99,
-                      width: `${Math.min(invVol / 18 * 100, 100)}%`,
-                      background: invVol > 14 ? '#ef4444' : invVol > 7 ? '#f59e0b' : 'var(--accent)',
-                      transition: 'width .5s cubic-bezier(.2,.8,.25,1), background .3s',
-                    }} />
-                  </div>
-                </div>
-
-                {/* Desglose de precio */}
-                {invVol > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, borderTop: '1px solid #0052FF15', paddingTop: 8 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                      <span>Primeros {FLETE_BASE_VOL} m³ (tarifa base)</span>
-                      <span style={{ fontWeight: 700 }}>${fmt(FLETE_BASE_PRICE)}</span>
-                    </div>
-                    {extraVol > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                        <span>{extraVol.toFixed(1)} m³ adicionales × ${fmt(FLETE_EXTRA_M3)}</span>
-                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(Math.round(extraVol * FLETE_EXTRA_M3 / 1000) * 1000)}</span>
-                      </div>
-                    )}
-                    {numFloors > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                        <span>{numFloors} piso{numFloors > 1 ? 's' : ''} sin ascensor</span>
-                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(floorCost)}</span>
-                      </div>
-                    )}
-                    {helpMode === 'driver' && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                        <span>Ayuda del chofer</span>
-                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(FLETE_DRIVER_HELP)}</span>
-                      </div>
-                    )}
-                    {helpMode === 'helpers' && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                        <span>Chofer + {numHelpers} ayudante{numHelpers > 1 ? 's' : ''}</span>
-                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(helpCost)}</span>
-                      </div>
-                    )}
-                    {needsPacking && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                        <span>Embalaje profesional</span>
-                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(FLETE_PACKING_COST)}</span>
-                      </div>
-                    )}
-                    {helpMode === 'none' && numFloors === 0 && !needsPacking && invVol <= FLETE_BASE_VOL && (
-                      <div style={{ fontSize: 10, color: '#22c55e', fontWeight: 700, textAlign: 'center', marginTop: 2 }}>
-                        ✓ Sin costos adicionales — dejar en recepción no tiene cargo extra
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Auto-sugerencia de ayudante */}
-                {suggestHelperMode !== 'none' && helpMode === 'none' && invVol > 0 && (
-                  <div style={{ marginTop: 8, background: '#fffbe6', border: '1px solid #f59e0b40', borderRadius: 8, padding: '8px 10px', fontSize: 11, color: '#92400e' }}>
-                    💡 Con {invVol.toFixed(1)} m³{hasTallItems ? ' y artículos pesados' : ''} te recomendamos{' '}
-                    <strong>{suggestHelperMode === 'helpers' ? 'chofer + ayudante' : 'ayuda del chofer'}</strong> para una carga segura.
-                  </div>
-                )}
-              </div>
-
-              {/* Large item recommendation banner */}
-              {hasLargeItems && helpMode === 'none' && (
+              {/* 1. Large item recommendation banner */}
+              {false && hasLargeItems && helpMode === 'none' && (
                 <div style={{ background: '#fffbe6', border: '1.5px solid #f59e0b', borderRadius: 12, padding: '12px 14px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                   <span style={{ fontSize: 20 }}>💡</span>
                   <div>
@@ -832,40 +787,79 @@ export default function LandingView() {
                 </div>
               )}
 
-              {/* Help mode selector */}
+              {/* 2. Vehicle suggestion */}
+              {false && vehicleLabel && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#f4f7ff', border: '1px solid #0052FF20', borderRadius: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px' }}>Vehículo sugerido</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--accent)', marginTop: 2 }}>
+                      {vehicleLabel.icon} {vehicleLabel.name}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 10, color: '#94a3b8', textAlign: 'right' }}>Se ajusta según<br/>lo que indiques</div>
+                </div>
+              )}
+
+              {/* 3. Inventory picker */}
+              <div style={{ background: '#f8fbff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 16, boxSizing: 'border-box' }}>
+                <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, color: '#64748b', textTransform: 'uppercase', marginBottom: 12 }}>
+                  ¿Qué vas a transportar?
+                </div>
+                <InventoryPicker inventory={inventory} onChange={setInventory} extras={inventoryExtras} onExtrasChange={setInventoryExtras} />
+              </div>
+
+              </div>
+
+              {/* ── Right column: service options + price ─── */}
+              <div className="s3-col">
+
+              {/* 4. Auto-suggestion tip */}
+              {false && suggestHelperMode !== 'none' && helpMode === 'none' && invVol > 0 && (
+                <div style={{ background: '#fffbe6', border: '1px solid #f59e0b40', borderRadius: 10, padding: '9px 12px', fontSize: 11, color: '#92400e' }}>
+                  💡 Con {invVol.toFixed(1)} m³{hasTallItems ? ' y artículos pesados' : ''} te recomendamos{' '}
+                  <strong>{suggestHelperMode === 'helpers' ? 'chofer + ayudante' : 'ayuda del chofer'}</strong> para una carga segura.
+                </div>
+              )}
+
+              {/* 5. Help mode selector */}
               <div style={{ background: '#f8fbff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, color: '#64748b', textTransform: 'uppercase', marginBottom: 12 }}>
                   Servicio de carga
                 </div>
                 {[
-                  { v: 'none',    title: 'Solo traslado',          desc: 'El chofer conduce, tú cargas' },
-                  { v: 'driver',  title: '+ Ayuda del chofer',     desc: 'El chofer ayuda a cargar y descargar' },
-                  { v: 'helpers', title: '+ Chofer y ayudantes',   desc: 'Equipo completo de carga incluido' },
-                ].map(opt => (
-                  <button key={opt.v} type="button" onClick={() => setHelpMode(opt.v)}
+                  { v: 'none',    title: 'Solo traslado',          desc: 'El chofer solo conduce. Carga y descarga por tu cuenta.' },
+                  { v: 'driver',  title: '+ Ayuda del chofer',     desc: `El chofer ayuda a cargar y descargar. +$${fmt(driverHelpPrice)}` },
+                  { v: 'helpers', title: '+ Chofer y ayudantes',   desc: `Chofer ayuda + ayudantes adicionales. +$${fmt(driverHelpPrice)} + $${fmt(helperUnitPrice)} c/u` },
+                ].map(opt => {
+                  const isRecommended = invVol > 0 && suggestHelperMode !== 'none' && opt.v === suggestHelperMode;
+                  const isActive = helpMode === opt.v;
+                  const recommendedActive = isActive && isRecommended && !helpModeManual;
+                  return (
+                  <button key={opt.v} type="button" onClick={() => { setHelpModeManual(true); setHelpMode(opt.v); }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 12, width: '100%',
                       padding: '10px 12px', marginBottom: 8, borderRadius: 10,
-                      border: `1.5px solid ${helpMode === opt.v ? 'var(--accent)' : '#E2E8F0'}`,
-                      background: helpMode === opt.v ? '#EEF4FF' : '#fff',
+                      border: `1.5px solid ${recommendedActive || (isRecommended && !isActive) ? '#f59e0b' : isActive ? 'var(--accent)' : '#E2E8F0'}`,
+                      background: recommendedActive ? '#fff7ed' : isActive ? '#EEF4FF' : '#fff',
                       cursor: 'pointer', textAlign: 'left', transition: 'all .15s',
                     }}
                   >
                     <div style={{
                       width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                      border: `2px solid ${helpMode === opt.v ? 'var(--accent)' : '#CBD5E1'}`,
-                      background: helpMode === opt.v ? 'var(--accent)' : '#fff',
+                      border: `2px solid ${recommendedActive ? '#f59e0b' : isActive ? 'var(--accent)' : '#CBD5E1'}`,
+                      background: recommendedActive ? '#f59e0b' : isActive ? 'var(--accent)' : '#fff',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                      {helpMode === opt.v && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff' }} />}
+                      {isActive && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff' }} />}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: helpMode === opt.v ? 'var(--accent)' : '#0f172a' }}>{opt.title}</div>
-                      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>{opt.desc}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: recommendedActive ? '#b45309' : isActive ? 'var(--accent)' : '#0f172a' }}>
+                        {isRecommended && <span style={{ color: '#f59e0b', marginRight: 5 }}>★</span>}{opt.title}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>{isRecommended ? `${opt.desc} · Recomendado para lo que llevas` : opt.desc}</div>
                     </div>
                   </button>
-                ))}
-                {/* Stepper for extra helpers, only shown when mode = 'helpers' */}
+                );})}
                 {helpMode === 'helpers' && (
                   <div style={{ marginTop: 4, padding: '10px 12px', background: '#EEF4FF', borderRadius: 10, border: '1px solid #0052FF20' }}>
                     <ExtraRow
@@ -879,6 +873,7 @@ export default function LandingView() {
                 )}
               </div>
 
+              {/* 6. Other extras */}
               <div style={{ background: '#f8fbff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, color: '#64748b', textTransform: 'uppercase', marginBottom: 12 }}>
                   Otros adicionales
@@ -887,6 +882,104 @@ export default function LandingView() {
                   value={numFloors} onDec={() => setNumFloors(n => Math.max(0, n - 1))} onInc={() => setNumFloors(n => n + 1)} />
                 <CheckRow label="Embalaje profesional" sub="Empacamos todo antes de cargar" checked={needsPacking} onChange={setNeedsPacking} />
                 <CheckRow label="Coordinar conserjería" sub="Trámite y aviso en edificio" checked={isConserjeria} onChange={setIsConserjeria} />
+              </div>
+
+              {/* 7. Price calculator — at the bottom, no sticky */}
+              <div style={{
+                background: 'linear-gradient(135deg,#f4f7ff,#e8f0ff)',
+                border: '2px solid #0052FF20', borderRadius: 14, padding: '14px 16px',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>
+                      Precio calculado
+                    </div>
+                    <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--accent)', letterSpacing: '-.5px', lineHeight: 1 }}>
+                      ${fmt(Math.max(fleteExact, vehicleBasePrice))}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>El precio final se confirma al contactarte</div>
+                  </div>
+                  {vehicleLabel && (
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 24 }}>{vehicleLabel.icon}</div>
+                      <div style={{ fontSize: 10, fontWeight: 800, color: '#475569' }}>{vehicleLabel.name}</div>
+                      <div style={{ fontSize: 9, color: '#94a3b8' }}>{vehicleLabel.desc}</div>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ marginBottom: invVol > 0 ? 10 : 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginBottom: 4 }}>
+                    <span style={{ fontWeight: 700 }}>{invVol.toFixed(1)} m³</span>
+                    <span>{invVol === 0 ? 'Agrega artículos para calcular' : `${vehicleLabel?.name || 'Vehículo'} recomendado por volumen`}</span>
+                  </div>
+                  <div style={{ height: 8, background: '#E2E8F0', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%', borderRadius: 99,
+                      width: `${Math.min(invVol / 18 * 100, 100)}%`,
+                      background: invVol > 14 ? '#ef4444' : invVol > 7 ? '#f59e0b' : 'var(--accent)',
+                      transition: 'width .5s cubic-bezier(.2,.8,.25,1), background .3s',
+                    }} />
+                  </div>
+                </div>
+
+                {invVol > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, borderTop: '1px solid #0052FF15', paddingTop: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
+                      <span>Precio base {vehicleLabel?.name || ''}</span>
+                      <span style={{ fontWeight: 700 }}>${fmt(vehicleBasePrice)}</span>
+                    </div>
+                    {extraVol > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
+                        <span>{extraVol.toFixed(2)} m³ adicionales × ${fmt(extraM3Price)}</span>
+                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(extraVolCost)}</span>
+                      </div>
+                    )}
+                    {distanceKm > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
+                        <span>{distanceKm} km × ${fmt(vehicleKmPrice)}/km</span>
+                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(distanceCost)}</span>
+                      </div>
+                    )}
+                    {numFloors > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
+                        <span>{numFloors} piso{numFloors > 1 ? 's' : ''} sin ascensor</span>
+                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(floorCost)}</span>
+                      </div>
+                    )}
+                    {helpMode === 'driver' && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
+                        <span>Ayuda del chofer</span>
+                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(driverHelpPrice)}</span>
+                      </div>
+                    )}
+                    {helpMode === 'helpers' && (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
+                          <span>Ayuda del chofer</span>
+                          <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(driverHelpPrice)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
+                          <span>{numHelpers} ayudante{numHelpers > 1 ? 's' : ''} × ${fmt(helperUnitPrice)}</span>
+                          <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(numHelpers * helperUnitPrice)}</span>
+                        </div>
+                      </>
+                    )}
+                    {needsPacking && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
+                        <span>Embalaje profesional</span>
+                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(packingPrice)}</span>
+                      </div>
+                    )}
+                    {helpMode === 'none' && numFloors === 0 && !needsPacking && extraVol === 0 && (
+                      <div style={{ fontSize: 10, color: '#22c55e', fontWeight: 700, textAlign: 'center', marginTop: 2 }}>
+                        ✓ Sin costos adicionales — dejar en recepción no tiene cargo extra
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               </div>
             </div>
           )}
@@ -905,20 +998,22 @@ export default function LandingView() {
                     textAlign: 'center', boxShadow: '0 4px 24px #0052FF0a',
                   }}>
                     <div style={{ fontSize: 10, color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
-                      Precio estimado para tu {serviceType}
+                      Precio calculado para tu {serviceType}
                     </div>
                     <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--accent)', letterSpacing: '-.5px', lineHeight: 1 }}>
-                      ${fmt(priceRange.lo)} – ${fmt(priceRange.hi)}
+                      {addressesVerified ? `$${fmt(priceRange.exact || priceRange.lo)}` : 'Sujeto a evaluación'}
                     </div>
                     <div style={{ fontSize: 12, color: '#64748b', marginTop: 8, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 10px' }}>
-                      {selectedVehicle && <span>{selectedVehicle.vehicleType === 'furgon' ? '🚐' : selectedVehicle.vehicleType === 'camion34' ? '🚚' : '🚛'} {selectedVehicle.name}</span>}
+                      {vehicleLabel && <span>{vehicleLabel.icon} {vehicleLabel.name}</span>}
                       {distanceKm && <span>· {distanceKm} km</span>}
                       {helpMode === 'driver' && <span>· Ayuda del chofer</span>}
                       {helpMode === 'helpers' && <span>· Chofer + {numHelpers} ayudante{numHelpers !== 1 ? 's' : ''}</span>}
                       {numFloors > 0 && <span>· {numFloors} piso{numFloors > 1 ? 's' : ''}</span>}
                       {needsPacking && <span>· Embalaje incluido</span>}
                     </div>
-                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>El precio final se confirmará al contactarte.</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
+                      {addressesVerified ? 'Este valor llega directo al administrador para confirmar o ajustar detalles.' : 'Falta seleccionar origen o destino desde las sugerencias del mapa.'}
+                    </div>
                   </div>
                 )}
 
@@ -941,7 +1036,7 @@ export default function LandingView() {
                   )}
                   {(() => {
                     const chips = [
-                      selectedVehicle && selectedVehicle.name,
+                      vehicleLabel && vehicleLabel.name,
                       distanceKm && `${distanceKm} km`,
                       helpMode === 'driver' && 'Ayuda del chofer',
                       helpMode === 'helpers' && `+${numHelpers} ayudante${numHelpers !== 1 ? 's' : ''}`,
@@ -991,19 +1086,21 @@ export default function LandingView() {
                     textAlign: 'center',
                   }}>
                     <div style={{ fontSize: 10, color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-                      Precio estimado para tu {serviceType}
+                      Precio calculado para tu {serviceType}
                     </div>
                     <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--accent)', letterSpacing: '-.5px', lineHeight: 1.1 }}>
-                      ${fmt(priceRange.lo)} – ${fmt(priceRange.hi)}
+                      {addressesVerified ? `$${fmt(priceRange.exact || priceRange.lo)}` : 'Sujeto a evaluación'}
                     </div>
                     <div style={{ fontSize: 11, color: '#64748b', marginTop: 6, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '3px 8px' }}>
-                      {selectedVehicle && <span>{selectedVehicle.vehicleType === 'furgon' ? '🚐' : selectedVehicle.vehicleType === 'camion34' ? '🚚' : '🚛'} {selectedVehicle.name}</span>}
+                      {vehicleLabel && <span>{vehicleLabel.icon} {vehicleLabel.name}</span>}
                       {distanceKm && <span>· {distanceKm} km</span>}
                       {helpMode === 'driver' && <span>· Ayuda del chofer</span>}
                       {helpMode === 'helpers' && <span>· +{numHelpers} ayudante{numHelpers !== 1 ? 's' : ''}</span>}
                       {numFloors > 0 && <span>· {numFloors} piso{numFloors > 1 ? 's' : ''}</span>}
                     </div>
-                    <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>El precio final se confirma al contactarte.</div>
+                    <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
+                      {addressesVerified ? 'Lo revisaremos contigo antes de coordinar.' : 'Selecciona direcciones sugeridas para cerrar el cálculo automático.'}
+                    </div>
                   </div>
                 )}
 
@@ -1026,7 +1123,7 @@ export default function LandingView() {
                   </label>
                 </div>
 
-                {error && <div className="form-error">{error}</div>}
+                <div className={`form-error form-error-slot${error ? ' show' : ''}`}>{error || 'Sin errores'}</div>
                 <button className="submit-quote" type="submit" disabled={submitting || departed}>
                   {submitting ? 'Enviando cotización…' : 'Enviar cotización →'}
                 </button>
@@ -1042,11 +1139,11 @@ export default function LandingView() {
             <button
               type="button"
               onClick={() => {
-                setStep(1); setServiceType(''); setSuccess(null); setDeparted(false);
+                setStep(1); setServiceType(''); setSuccess(null); setFormGone(false); setDeparted(false);
                 setOrigin({ address: '', lat: null, lng: null });
                 setDest({ address: '', lat: null, lng: null });
                 setDistanceKm(null); setDurationMin(null); setVehicles([]);
-                setSelectedVehicle(null); setHelpMode('none'); setNumHelpers(1);
+                setSelectedVehicle(null); setHelpMode('none'); setHelpModeManual(false); setNumHelpers(1);
                 setNumFloors(0); setNeedsPacking(false); setIsConserjeria(false);
                 setInventory([]); setInventoryExtras('');
                 setContactPerson(''); setContactPhone(''); setContactEmail('');
@@ -1087,8 +1184,70 @@ export default function LandingView() {
           </div>
         )}
       </section>
+      </div>{/* end .quote-overlay */}
 
     </main>
+  );
+}
+
+// ── Traffic controller — one car at a time ────────────────────────────────────
+function TrafficController() {
+  const [car, setCar] = React.useState(null);
+  const timerRef = useRef(null);
+
+  React.useEffect(() => {
+    function spawnNext() {
+      const duration = 10 + Math.random() * 5;
+      const color = CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)];
+      setCar({ id: Date.now(), color, duration });
+      const gap = 2 + Math.random() * 4;
+      timerRef.current = window.setTimeout(spawnNext, (duration + gap) * 1000);
+    }
+    timerRef.current = window.setTimeout(spawnNext, 800);
+    return () => clearTimeout(timerRef.current);
+  }, []);
+
+  if (!car) return null;
+  return <PassingCar key={car.id} c={car.color} d={`${car.duration.toFixed(1)}s`}/>;
+}
+
+// ── Passing car SVG ───────────────────────────────────────────────────────────
+function PassingCar({ c, d }) {
+  return (
+    <div className="passing-car" style={{ animationDuration: d }}>
+      <svg viewBox="0 0 220 84" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* Shadow */}
+        <ellipse cx="110" cy="82" rx="98" ry="5" fill="#000" opacity=".10"/>
+        {/* Body */}
+        <rect x="4" y="42" width="212" height="34" rx="10" fill={c}/>
+        {/* Cabin roof — front on left (car moves left) */}
+        <path d="M50 42 L68 16 L152 16 L170 42Z" fill={c} opacity=".88"/>
+        {/* Front windshield (left side) */}
+        <path d="M54 40 L70 18 L104 18 L104 40Z" fill="#CCE8F4" opacity=".85"/>
+        {/* Rear window (right side) */}
+        <path d="M166 40 L150 18 L116 18 L116 40Z" fill="#CCE8F4" opacity=".72"/>
+        {/* Door line */}
+        <line x1="110" y1="16" x2="110" y2="76" stroke="#00000018" strokeWidth="2"/>
+        {/* Headlights — left (front) */}
+        <rect x="4" y="48" width="10" height="12" rx="4" fill="#FFFDE7" opacity=".98"/>
+        <rect x="4" y="48" width="10" height="12" rx="4" fill="white" opacity=".55"/>
+        {/* Taillights — right (rear) */}
+        <rect x="206" y="48" width="10" height="12" rx="4" fill="#F44336" opacity=".90"/>
+        {/* Front wheel (left) */}
+        <circle cx="56" cy="72" r="14" fill="#1a1a1a"/>
+        <circle cx="56" cy="72" r="8" fill="#3d3d3d"/>
+        <circle cx="56" cy="72" r="3" fill="#888"/>
+        {/* Rear wheel (right) */}
+        <circle cx="164" cy="72" r="14" fill="#1a1a1a"/>
+        <circle cx="164" cy="72" r="8" fill="#3d3d3d"/>
+        <circle cx="164" cy="72" r="3" fill="#888"/>
+        {/* Side mirror */}
+        <rect x="6" y="41" width="9" height="5" rx="2" fill={c} opacity=".75"/>
+        {/* Wheel arch highlights */}
+        <path d="M44 76 A14 14 0 0 1 68 76" stroke="#ffffff18" strokeWidth="3" fill="none"/>
+        <path d="M152 76 A14 14 0 0 1 176 76" stroke="#ffffff18" strokeWidth="3" fill="none"/>
+      </svg>
+    </div>
   );
 }
 

@@ -28,10 +28,14 @@ export const CATALOG = [
 ];
 
 export const VEHICLE_THRESHOLDS = [
-  { vehicleType: 'furgon',      name: 'Furgón',       icon: '🚐', maxVol: 7,   desc: 'Carga ligera, pocos muebles' },
-  { vehicleType: 'camion34',    name: 'Camión 3/4',   icon: '🚚', maxVol: 18,  desc: 'Mudanza familiar completa' },
-  { vehicleType: 'camionLargo', name: 'Camión Largo', icon: '🚛', maxVol: 999, desc: 'Mudanza grande o a regiones' },
+  { vehicleType: 'furgon',      name: 'Furgón',       icon: '🚐', maxVol: 5.5, desc: 'Carga baja y liviana' },
+  { vehicleType: 'camion34',    name: 'Camión 3/4',   icon: '🚚', maxVol: 16,  desc: 'Muebles altos o mudanza mediana' },
+  { vehicleType: 'camionLargo', name: 'Camión Largo', icon: '🚛', maxVol: 32, desc: 'Mudanza grande o a regiones' },
 ];
+
+export const MAX_MOVE_VOL = VEHICLE_THRESHOLDS[2].maxVol;
+
+export const TALL_ITEM_IDS = new Set(['cama2p', 'camaQueen', 'closet', 'nevera', 'lavadora', 'secadora', 'sofa3p']);
 
 const CATS = [...new Set(CATALOG.map(c => c.cat))];
 
@@ -42,7 +46,13 @@ export function totalVol(inventory) {
   }, 0);
 }
 
-export function recommendVehicleType(vol) {
+export function inventoryHasTallItems(inventory = []) {
+  return inventory.some(item => TALL_ITEM_IDS.has(item.id) && item.qty > 0);
+}
+
+export function recommendVehicleType(vol, inventory = []) {
+  if (vol > VEHICLE_THRESHOLDS[1].maxVol) return 'camionLargo';
+  if (inventoryHasTallItems(inventory)) return 'camion34';
   const v = VEHICLE_THRESHOLDS.find(t => vol <= t.maxVol);
   return (v || VEHICLE_THRESHOLDS[VEHICLE_THRESHOLDS.length - 1]).vehicleType;
 }
@@ -69,6 +79,7 @@ export default function InventoryPicker({ inventory, onChange, extras, onExtrasC
   const [collapsed, setCollapsed] = React.useState({});
 
   const getQty = id => inventory.find(i => i.id === id)?.qty || 0;
+  const currentVol = totalVol(inventory);
 
   const setQty = (id, qty) => {
     const next = inventory.filter(i => i.id !== id);
@@ -105,35 +116,37 @@ export default function InventoryPicker({ inventory, onChange, extras, onExtrasC
               transition: 'transform .2s ease',
             }}>▼</span>
           </button>
-          {isOpen && <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {isOpen && <div className="inventory-item-grid">
             {CATALOG.filter(c => c.cat === cat).map(item => {
               const qty = getQty(item.id);
+              const wouldExceedLimit = currentVol + item.vol > MAX_MOVE_VOL;
               return (
                 <div
                   key={item.id}
                   style={{
                     background: qty > 0 ? '#0052FF08' : '#fff',
                     border: `1.5px solid ${qty > 0 ? 'var(--accent)' : '#e2e8f0'}`,
-                    borderRadius: 10, padding: '7px 10px',
-                    display: 'flex', alignItems: 'center', gap: 8,
+                    borderRadius: 9, padding: '5px 7px',
+                    display: 'flex', alignItems: 'center', gap: 5,
                   }}
                 >
-                  <span style={{ fontSize: 18, flexShrink: 0, lineHeight: 1 }}>{item.icon}</span>
-                  <span style={{ flex: 1, fontSize: 12, fontWeight: qty > 0 ? 700 : 500, color: qty > 0 ? 'var(--accent)' : '#475569', lineHeight: 1.2 }}>
+                  <span style={{ fontSize: 15, flexShrink: 0, lineHeight: 1 }}>{item.icon}</span>
+                  <span style={{ flex: 1, fontSize: 11, fontWeight: qty > 0 ? 700 : 500, color: qty > 0 ? 'var(--accent)' : '#475569', lineHeight: 1.2, minWidth: 0 }}>
                     {item.name}
                   </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
                     <button
                       type="button"
                       onClick={() => !disabled && setQty(item.id, Math.max(0, qty - 1))}
                       disabled={disabled || qty === 0}
-                      style={{ width: 26, height: 26, borderRadius: '50%', border: '1.5px solid #e2e8f0', background: '#fff', fontSize: 15, fontWeight: 700, cursor: (disabled || qty === 0) ? 'not-allowed' : 'pointer', color: qty === 0 ? '#cbd5e1' : '#0f172a', lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}>−</button>
-                    <span style={{ fontSize: 13, fontWeight: 800, minWidth: 18, textAlign: 'center', color: qty > 0 ? 'var(--accent)' : '#94a3b8' }}>{qty}</span>
+                      style={{ width: 22, height: 22, borderRadius: '50%', border: '1.5px solid #e2e8f0', background: '#fff', fontSize: 13, fontWeight: 700, cursor: (disabled || qty === 0) ? 'not-allowed' : 'pointer', color: qty === 0 ? '#cbd5e1' : '#0f172a', lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}>−</button>
+                    <span style={{ fontSize: 12, fontWeight: 800, minWidth: 14, textAlign: 'center', color: qty > 0 ? 'var(--accent)' : '#94a3b8' }}>{qty}</span>
                     <button
                       type="button"
                       onClick={() => !disabled && setQty(item.id, qty + 1)}
-                      disabled={disabled}
-                      style={{ width: 26, height: 26, borderRadius: '50%', border: '1.5px solid #e2e8f0', background: qty > 0 ? 'var(--accent)' : '#fff', fontSize: 15, fontWeight: 700, cursor: disabled ? 'not-allowed' : 'pointer', color: qty > 0 ? '#fff' : '#0f172a', lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}>+</button>
+                      disabled={disabled || wouldExceedLimit}
+                      title={wouldExceedLimit ? 'Límite de volumen para cotización online' : undefined}
+                      style={{ width: 22, height: 22, borderRadius: '50%', border: '1.5px solid #e2e8f0', background: qty > 0 ? 'var(--accent)' : '#fff', fontSize: 13, fontWeight: 700, cursor: (disabled || wouldExceedLimit) ? 'not-allowed' : 'pointer', color: (disabled || wouldExceedLimit) ? '#cbd5e1' : qty > 0 ? '#fff' : '#0f172a', lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}>+</button>
                   </div>
                 </div>
               );
@@ -152,7 +165,7 @@ export default function InventoryPicker({ inventory, onChange, extras, onExtrasC
           placeholder="Piano, moto, bicicleta, cuadros frágiles, herramientas, colchón…"
           rows={2}
           disabled={disabled}
-          style={{ width: '100%', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 9, color: '#0f172a', fontSize: 13, padding: '9px 11px', outline: 'none', display: 'block', boxSizing: 'border-box', resize: 'vertical' }}
+          style={{ width: '100%', height: 72, maxHeight: 72, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 9, color: '#0f172a', fontSize: 13, padding: '9px 11px', outline: 'none', display: 'block', boxSizing: 'border-box', resize: 'none', overflow: 'auto' }}
         />
       </div>
     </div>

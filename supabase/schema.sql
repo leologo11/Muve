@@ -103,6 +103,7 @@ create table if not exists routes (
   client_company jsonb not null default '{}'::jsonb,
   invoice jsonb not null default '{}'::jsonb,
   driver_payout numeric,
+  driver_settlement jsonb not null default '{"status":"pending","mode":"proportional_delivered","baseAmount":0,"adjustment":0}'::jsonb,
   start_point jsonb not null default '{}'::jsonb,
   distance_km numeric,
   share_token text unique,
@@ -122,7 +123,8 @@ alter table quotes
 create table if not exists packages (
   id uuid primary key default gen_random_uuid(),
   tracking_id text not null unique,
-  route_id uuid not null references routes(id) on delete cascade,
+  company_id uuid references companies(id) on delete set null,
+  route_id uuid references routes(id) on delete set null,
   customer_name text not null,
   customer_last_name text,
   customer_phone text,
@@ -144,8 +146,10 @@ create table if not exists packages (
   photo2_public_id text,
   photo2_uploaded_at timestamptz,
   ai_flags text[] not null default '{}',
+  history jsonb not null default '[]'::jsonb,
   delivered_at timestamptz,
   delivered_by uuid references app_users(id) on delete set null,
+  delivery_meta jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
