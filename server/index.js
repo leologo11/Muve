@@ -144,7 +144,7 @@ if (fs.existsSync(clientDist)) {
   console.log('📦 Sirviendo frontend desde:', clientDist);
   app.use(express.static(clientDist));
   app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api')) return next();
+    if (req.path.startsWith('/api') || req.path.startsWith('/storage')) return next();
     res.sendFile(path.join(clientDist, 'index.html'), err => { if (err) next(err); });
   });
 }
