@@ -376,7 +376,7 @@ export default function LandingView() {
   ) && displayMudanzaComparePrice < activeComparePrice;
   const shouldRecommendFlete = serviceType === 'mudanza' && invVol > 0 && vehicleLoadPct <= 35 && selectedCategories.size <= 2 && displayFleteComparePrice < activeComparePrice;
   const movingServiceRecommendation = shouldRecommendMudanza
-    ? { type: 'mudanza', title: 'Te conviene cotizar como mudanza', desc: 'Con los mismos articulos, en mudanza pagas por el camion completo y evitas que el volumen suba el flete.', price: displayMudanzaComparePrice, savings: mudanzaSavings }
+    ? { type: 'mudanza', title: 'Te conviene cotizar como mudanza', desc: 'Con los mismos articulos, en mudanza pagas por el camion completo. Incluso podrias aprovechar el espacio restante si quieres agregar mas cosas.', price: displayMudanzaComparePrice, savings: mudanzaSavings }
     : shouldRecommendFlete
       ? { type: 'flete', title: 'Te conviene cotizar como flete', desc: 'Con los mismos articulos usas menos espacio y pagas por volumen, no por el camion completo.', price: displayFleteComparePrice, savings: fleteSavings }
       : null;
