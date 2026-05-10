@@ -35,6 +35,12 @@ function roundToThousand(n) {
   return Math.round(Number(n || 0) / 1000) * 1000;
 }
 
+function marketPrice(n) {
+  const value = Number(n || 0);
+  if (value <= 0) return 0;
+  return Math.max(990, Math.ceil(value / 1000) * 1000 - 10);
+}
+
 const STEP_TITLES = {
   flete:      ['Tipo de servicio', '¿De dónde a dónde?', '¿Qué llevas?',   'Tus datos'],
   mudanza:    ['Tipo de servicio', '¿De dónde a dónde?', '¿Qué llevas?',   'Tus datos'],
@@ -179,7 +185,7 @@ export default function LandingView() {
     // Precio m³ al pasar de step 3 → 4
     if (step === 3 && isFlete) {
       const vol2 = totalVol(inventory, catalog);
-      const finalExact = Math.max(fleteExact, vehicleBasePrice);
+      const finalExact = displayFletePrice;
       setPriceRange({ exact: finalExact, lo: finalExact, hi: finalExact });
       // Recomendación de vehículo (solo si hay distancia calculada)
       if (distanceKm) {
@@ -255,6 +261,7 @@ export default function LandingView() {
     setHelpMode('driver');
     setNumHelpers(1);
     setPriceRange(null);
+    setStep(3);
   };
 
   // ── Animation progress ──────────────────────────────────────────────────────
@@ -330,7 +337,8 @@ export default function LandingView() {
   const extraVolCost = serviceType === 'mudanza' ? 0 : roundToThousand(extraVol * extraM3Price);
   const fleteExact   = roundToThousand(vehicleBasePrice + distanceCost + extraVolCost + floorCost + helpCost + packCost);
   const fleteExactBeforeDiscount = roundToThousand(rawVehicleBasePrice + distanceCost + extraVolCost + floorCost + helpCost + packCost);
-  const displayFletePrice = Math.max(fleteExact, vehicleBasePrice);
+  const displayFletePrice = marketPrice(Math.max(fleteExact, vehicleBasePrice));
+  const displayFletePriceBeforeDiscount = partialDiscount > 0 ? marketPrice(Math.max(fleteExactBeforeDiscount, rawVehicleBasePrice)) : 0;
   const selectedCategories = new Set(inventory.filter(i => i.qty > 0).map(i => catalog.find(c => c.id === i.id)?.cat).filter(Boolean));
   const compareMovingPrice = (type) => {
     const cfg = findVehicleConfig(smartVehicleType, type);
@@ -355,17 +363,50 @@ export default function LandingView() {
   };
   const fleteComparePrice = compareMovingPrice('flete');
   const mudanzaComparePrice = compareMovingPrice('mudanza');
+  const displayFleteComparePrice = marketPrice(fleteComparePrice);
+  const displayMudanzaComparePrice = marketPrice(mudanzaComparePrice);
+  const activeComparePrice = serviceType === 'mudanza' ? displayMudanzaComparePrice : displayFleteComparePrice;
+  const mudanzaSavings = Math.max(0, activeComparePrice - displayMudanzaComparePrice);
+  const fleteSavings = Math.max(0, activeComparePrice - displayFleteComparePrice);
   const shouldRecommendMudanza = serviceType === 'flete' && invVol > 0 && (
     (selectedCategories.size >= 4 && vehicleLoadPct >= 55) ||
     vehicleLoadPct >= 75 ||
     invVol >= Math.max(includedM3 * 2, 8)
-  );
-  const shouldRecommendFlete = serviceType === 'mudanza' && invVol > 0 && vehicleLoadPct <= 35 && selectedCategories.size <= 2 && fleteComparePrice < mudanzaComparePrice;
+  ) && displayMudanzaComparePrice < activeComparePrice;
+  const shouldRecommendFlete = serviceType === 'mudanza' && invVol > 0 && vehicleLoadPct <= 35 && selectedCategories.size <= 2 && displayFleteComparePrice < activeComparePrice;
   const movingServiceRecommendation = shouldRecommendMudanza
-    ? { type: 'mudanza', title: 'Parece una mudanza', desc: 'Como llevas muchas cosas variadas, puede convenir cotizar como mudanza para usar tarifa de camion completo.', price: mudanzaComparePrice }
+    ? { type: 'mudanza', title: 'Te conviene cotizar como mudanza', desc: 'Con los mismos articulos, en mudanza pagas por el camion completo y evitas que el volumen suba el flete.', price: displayMudanzaComparePrice, savings: mudanzaSavings }
     : shouldRecommendFlete
-      ? { type: 'flete', title: 'Podrias ahorrar con flete', desc: 'Como son pocas cosas, el flete puede salir mas conveniente que una mudanza completa.', price: fleteComparePrice }
+      ? { type: 'flete', title: 'Te conviene cotizar como flete', desc: 'Con los mismos articulos usas menos espacio y pagas por volumen, no por el camion completo.', price: displayFleteComparePrice, savings: fleteSavings }
       : null;
+  const recommendationCard = movingServiceRecommendation && (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', padding: '12px 14px', borderRadius: 14, border: '1.5px solid #f59e0b60', background: '#fff7ed', color: '#9a3412' }}>
+      <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+        <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: .8, textTransform: 'uppercase', color: '#c2410c', marginBottom: 4 }}>
+          Recomendacion para ahorrar
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 900, marginBottom: 4 }}>{movingServiceRecommendation.title}</div>
+        <div style={{ fontSize: 11, lineHeight: 1.45 }}>{movingServiceRecommendation.desc}</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 900, padding: '4px 8px', borderRadius: 999, background: '#fff', border: '1px solid #fed7aa' }}>
+            Si llevas lo mismo en {movingServiceRecommendation.type === 'mudanza' ? 'mudanza' : 'flete'}: ${fmt(movingServiceRecommendation.price)}
+          </span>
+          {movingServiceRecommendation.savings > 0 && (
+            <span style={{ fontSize: 11, fontWeight: 900, padding: '4px 8px', borderRadius: 999, background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}>
+              Ahorras ${fmt(movingServiceRecommendation.savings)}
+            </span>
+          )}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => switchMovingService(movingServiceRecommendation.type)}
+        style={{ flex: '1 1 130px', minHeight: 42, border: 'none', borderRadius: 10, background: '#f59e0b', color: '#fff', padding: '9px 12px', fontSize: 11, fontWeight: 900, cursor: 'pointer' }}
+      >
+        Cambiar a {movingServiceRecommendation.type === 'mudanza' ? 'mudanza' : 'flete'}
+      </button>
+    </div>
+  );
 
   const status = useMemo(() => {
     if (!serviceType)    return ['¿Listo para mover?', 'Elige el tipo de servicio que necesitas para comenzar tu cotización.'];
@@ -375,7 +416,7 @@ export default function LandingView() {
       return ['¡Listo!', 'Revisa los datos y envía tu cotización.'];
     }
     if (step === 2) return ['¿De dónde a dónde?', 'Ingresa la dirección de retiro y la dirección de entrega. Usamos GPS para calcular la distancia exacta.'];
-    if (step === 3) return ['¿Qué llevas?', 'Selecciona artículos, servicio de carga y adicionales. Abajo verás el precio calculado.'];
+    if (step === 3) return ['¿Qué llevas?', 'Selecciona artículos, servicio de carga y adicionales. Verás el precio final en el siguiente paso.'];
     if (step === 4) return ['Tus datos', 'Ingresa tu nombre y teléfono para enviar esta cotización al administrador.'];
     return ['Camión cargado y listo', '¡Perfecto! Revisa el resumen y envía tu cotización. Te contactaremos a la brevedad.'];
   }, [sceneCount, serviceType, step]);
@@ -479,7 +520,7 @@ export default function LandingView() {
 
     setSubmitting(true);
     try {
-      const finalFletePrice = Math.max(fleteExact, vehicleBasePrice);
+      const finalFletePrice = displayFletePrice;
       const quote = await api.createPublicQuote({
         serviceType, clientCompany,
         originAddress: origin.address,      originCoords: origin.lat ? { lat: origin.lat, lng: origin.lng } : null,
@@ -1048,8 +1089,9 @@ export default function LandingView() {
                 <CheckRow label="Coordinar conserjería" sub="Trámite y aviso en edificio" checked={isConserjeria} onChange={setIsConserjeria} />
               </div>
 
-              {/* 7. Price calculator — at the bottom, no sticky */}
+              {/* 7. Price calculator — shown in final step */}
               <div style={{
+                display: 'none',
                 background: 'linear-gradient(135deg,#f4f7ff,#e8f0ff)',
                 border: '2px solid #0052FF20', borderRadius: 14, padding: '14px 16px',
               }}>
@@ -1060,7 +1102,7 @@ export default function LandingView() {
                     </div>
                     {partialDiscount > 0 && (
                       <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 800, textDecoration: 'line-through', marginBottom: 2 }}>
-                        ${fmt(fleteExactBeforeDiscount)}
+                        ${fmt(displayFletePriceBeforeDiscount)}
                       </div>
                     )}
                     <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--accent)', letterSpacing: '-.5px', lineHeight: 1, transition: 'color .2s ease' }}>
@@ -1164,7 +1206,7 @@ export default function LandingView() {
                 )}
               </div>
 
-              {movingServiceRecommendation && (
+              {false && movingServiceRecommendation && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 14px', borderRadius: 14, border: '1.5px solid #f59e0b60', background: '#fff7ed', color: '#9a3412' }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 3 }}>{movingServiceRecommendation.title}</div>
@@ -1209,7 +1251,7 @@ export default function LandingView() {
                     <div style={{ fontSize: 12, color: '#64748b', marginTop: 8, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 10px' }}>
                       {vehicleLabel && <span>{vehicleLabel.icon} {vehicleLabel.name}</span>}
                       {distanceKm && <span>· {distanceKm} km</span>}
-                      {helpMode === 'driver' && <span>· Chofer ayuda incluido</span>}
+                      {helpMode === 'driver' && <span>· {serviceType === 'mudanza' ? 'Chofer ayuda' : 'Chofer ayuda incluido'}</span>}
                       {helpMode === 'helpers' && <span>· Chofer + {numHelpers} ayudante{numHelpers !== 1 ? 's' : ''}</span>}
                       {numFloors > 0 && <span>· {numFloors} piso{numFloors > 1 ? 's' : ''}</span>}
                       {needsPacking && <span>· Embalaje incluido</span>}
@@ -1241,7 +1283,7 @@ export default function LandingView() {
                     const chips = [
                       vehicleLabel && vehicleLabel.name,
                       distanceKm && `${distanceKm} km`,
-                      helpMode === 'driver' && 'Chofer ayuda incluido',
+                      helpMode === 'driver' && (serviceType === 'mudanza' ? 'Chofer ayuda' : 'Chofer ayuda incluido'),
                       helpMode === 'helpers' && `+${numHelpers} ayudante${numHelpers !== 1 ? 's' : ''}`,
                       numFloors > 0 && `${numFloors} piso${numFloors > 1 ? 's' : ''}`,
                       needsPacking && 'Embalaje',
@@ -1297,7 +1339,7 @@ export default function LandingView() {
                     <div style={{ fontSize: 11, color: '#64748b', marginTop: 6, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '3px 8px' }}>
                       {vehicleLabel && <span>{vehicleLabel.icon} {vehicleLabel.name}</span>}
                       {distanceKm && <span>· {distanceKm} km</span>}
-                      {helpMode === 'driver' && <span>· Chofer ayuda incluido</span>}
+                      {helpMode === 'driver' && <span>· {serviceType === 'mudanza' ? 'Chofer ayuda' : 'Chofer ayuda incluido'}</span>}
                       {helpMode === 'helpers' && <span>· +{numHelpers} ayudante{numHelpers !== 1 ? 's' : ''}</span>}
                       {numFloors > 0 && <span>· {numFloors} piso{numFloors > 1 ? 's' : ''}</span>}
                     </div>
@@ -1308,6 +1350,8 @@ export default function LandingView() {
                 )}
 
                 {/* Contact — name + phone in grid, email below */}
+                {recommendationCard}
+
                 <div style={{ background: '#f8fbff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: '#64748b', textTransform: 'uppercase' }}>Tus datos</div>
                   <div className="form-grid" style={{ gap: 10 }}>
