@@ -116,6 +116,8 @@ alter table quotes add column if not exists destination_coords jsonb;
 alter table quotes add column if not exists driver_helps boolean default false;
 alter table quotes add column if not exists num_helpers integer default 0;
 alter table quotes add column if not exists num_floors integer default 0;
+alter table quotes add column if not exists origin_floors integer default 0;
+alter table quotes add column if not exists destination_floors integer default 0;
 alter table quotes add column if not exists needs_packing boolean default false;
 alter table quotes add column if not exists is_conserjeria boolean default false;
 alter table quotes add column if not exists items_description text;

@@ -239,7 +239,9 @@ router.post('/quotes', async (req, res) => {
     const destinationCoords = req.body.destinationCoords || null;
     const driverHelps      = Boolean(req.body.driverHelps);
     const numHelpers       = Number(req.body.numHelpers || 0);
-    const numFloors        = Number(req.body.numFloors || 0);
+    const originFloors     = Number(req.body.originFloors || 0);
+    const destinationFloors = Number(req.body.destinationFloors || 0);
+    const numFloors        = Number(req.body.numFloors ?? (originFloors + destinationFloors) ?? 0);
     const needsPacking     = Boolean(req.body.needsPacking);
     const isConserjeria    = Boolean(req.body.isConserjeria);
     const itemsDescription = clean(req.body.itemsDescription || '');
@@ -282,6 +284,8 @@ router.post('/quotes', async (req, res) => {
       payload.driver_helps = driverHelps;
       payload.num_helpers = numHelpers;
       payload.num_floors = numFloors;
+      payload.origin_floors = originFloors;
+      payload.destination_floors = destinationFloors;
       payload.needs_packing = needsPacking;
       payload.is_conserjeria = isConserjeria;
       if (itemsDescription) payload.items_description = itemsDescription;
@@ -289,7 +293,16 @@ router.post('/quotes', async (req, res) => {
       if (priceMax !== null) payload.price_max = priceMax;
     }
 
-    const quoteRows = await supabaseRequest('/quotes', { method: 'POST', body: JSON.stringify(payload) });
+    let quoteRows;
+    try {
+      quoteRows = await supabaseRequest('/quotes', { method: 'POST', body: JSON.stringify(payload) });
+    } catch (schemaErr) {
+      if (!schemaErr.message.includes('origin_floors') && !schemaErr.message.includes('destination_floors') && !schemaErr.message.includes('schema cache')) throw schemaErr;
+      const legacyPayload = { ...payload };
+      delete legacyPayload.origin_floors;
+      delete legacyPayload.destination_floors;
+      quoteRows = await supabaseRequest('/quotes', { method: 'POST', body: JSON.stringify(legacyPayload) });
+    }
     const quote = quoteRows?.[0];
 
     const noteParts = [];
@@ -298,7 +311,10 @@ router.post('/quotes', async (req, res) => {
     if (vehicleType) noteParts.push(`Vehiculo: ${vehicleType}`);
     if (driverHelps) noteParts.push('Ayuda del chofer');
     if (numHelpers > 0) noteParts.push(`${numHelpers} ayudante(s) adicional(es)`);
-    if (numFloors > 0) noteParts.push(`${numFloors} piso(s)`);
+    if (numFloors > 0) {
+      const floorDetail = originFloors || destinationFloors ? `: retiro ${originFloors}, entrega ${destinationFloors}` : '';
+      noteParts.push(`${numFloors} piso(s)${floorDetail}`);
+    }
     if (needsPacking) noteParts.push('Embalaje');
     if (isConserjeria) noteParts.push('Conserjeria');
     if (priceMin && priceMax) noteParts.push(`Precio: $${priceMin.toLocaleString('es-CL')} - $${priceMax.toLocaleString('es-CL')}`);

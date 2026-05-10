@@ -123,18 +123,18 @@ export default function InventoryPicker({ inventory, onChange, extras, onExtrasC
               return (
                 <div
                   key={item.id}
+                  className="inventory-item"
                   style={{
                     background: qty > 0 ? '#0052FF08' : '#fff',
                     border: `1.5px solid ${qty > 0 ? 'var(--accent)' : '#e2e8f0'}`,
-                    borderRadius: 9, padding: '5px 7px',
-                    display: 'flex', alignItems: 'center', gap: 5,
+                    borderRadius: 9,
                   }}
                 >
-                  <span style={{ fontSize: 15, flexShrink: 0, lineHeight: 1 }}>{item.icon}</span>
-                  <span style={{ flex: 1, fontSize: 11, fontWeight: qty > 0 ? 700 : 500, color: qty > 0 ? 'var(--accent)' : '#475569', lineHeight: 1.2, minWidth: 0 }}>
+                  <span className="inventory-item-icon">{item.icon}</span>
+                  <span className="inventory-item-name" style={{ fontWeight: qty > 0 ? 700 : 500, color: qty > 0 ? 'var(--accent)' : '#475569' }}>
                     {item.name}
                   </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+                  <div className="inventory-stepper">
                     <button
                       type="button"
                       onClick={() => !disabled && setQty(item.id, Math.max(0, qty - 1))}

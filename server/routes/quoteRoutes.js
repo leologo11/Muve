@@ -89,6 +89,8 @@ router.patch('/:id', async (req, res) => {
     if (req.body.distanceKm !== undefined) payload.distance_km = req.body.distanceKm != null ? Number(req.body.distanceKm) : null;
     if (req.body.numHelpers !== undefined) payload.num_helpers = Number(req.body.numHelpers || 0);
     if (req.body.numFloors !== undefined) payload.num_floors = Number(req.body.numFloors || 0);
+    if (req.body.originFloors !== undefined) payload.origin_floors = Number(req.body.originFloors || 0);
+    if (req.body.destinationFloors !== undefined) payload.destination_floors = Number(req.body.destinationFloors || 0);
     if (req.body.needsPacking !== undefined) payload.needs_packing = Boolean(req.body.needsPacking);
     if (req.body.isConserjeria !== undefined) payload.is_conserjeria = Boolean(req.body.isConserjeria);
     if (req.body.itemsDescription !== undefined) payload.items_description = req.body.itemsDescription || '';
@@ -104,7 +106,7 @@ router.patch('/:id', async (req, res) => {
     } catch (schemaErr) {
       if (schemaErr.message.includes('column') || schemaErr.message.includes('schema cache')) {
         const safe = {};
-        const BASE = ['client_company','contact_person','contact_email','contact_phone','delivery_date','admin_notes','client_notes','status','updated_at'];
+        const BASE = ['client_company','contact_person','contact_email','contact_phone','delivery_date','admin_notes','client_notes','status','updated_at','driver_helps','vehicle_type','distance_km','num_helpers','num_floors','needs_packing','is_conserjeria','items_description','price_min','price_max'];
         BASE.forEach(k => { if (payload[k] !== undefined) safe[k] = payload[k]; });
         rows = await supabaseRequest(`/quotes${qs({ id: `eq.${req.params.id}` })}`, {
           method: 'PATCH',

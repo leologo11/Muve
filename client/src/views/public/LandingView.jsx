@@ -123,7 +123,8 @@ export default function LandingView() {
   const [helpMode,        setHelpMode]        = useState('none'); // 'none' | 'driver' | 'helpers'
   const [helpModeManual,  setHelpModeManual]  = useState(false);
   const [numHelpers,      setNumHelpers]      = useState(1);
-  const [numFloors,       setNumFloors]       = useState(0);
+  const [originFloors,    setOriginFloors]    = useState(0);
+  const [destinationFloors, setDestinationFloors] = useState(0);
   const [needsPacking,    setNeedsPacking]    = useState(false);
   const [isConserjeria,   setIsConserjeria]   = useState(false);
   const [inventory,       setInventory]       = useState([]);
@@ -210,7 +211,8 @@ export default function LandingView() {
     setHelpMode('none');
     setHelpModeManual(false);
     setNumHelpers(1);
-    setNumFloors(0);
+    setOriginFloors(0);
+    setDestinationFloors(0);
     setNeedsPacking(false);
     setIsConserjeria(false);
     setInventory([]);
@@ -264,6 +266,7 @@ export default function LandingView() {
 
   // ── Live m³ price (flete/mudanza) ──────────────────────────────────────────
   const invVol       = totalVol(inventory);
+  const numFloors    = originFloors + destinationFloors;
   const extraVol     = Math.max(0, invVol - FLETE_BASE_VOL);
   const hasTallItems = inventoryHasTallItems(inventory);
   const smartVehicleType = invVol > 0 ? recommendVehicleType(invVol, inventory) : 'furgon';
@@ -404,7 +407,7 @@ export default function LandingView() {
         vehicleType: isFlete ? smartVehicleType : (selectedVehicle?.vehicleType || ''),
         driverHelps: helpMode !== 'none',
         numHelpers: helpMode === 'helpers' ? numHelpers : 0,
-        numFloors, needsPacking, isConserjeria,
+        numFloors, originFloors, destinationFloors, needsPacking, isConserjeria,
         itemsDescription: serializeInventory(inventory, inventoryExtras),
         priceMin: isFlete ? (addressesVerified ? finalFletePrice : null) : (priceRange?.lo || null),
         priceMax: isFlete ? (addressesVerified ? finalFletePrice : null) : (priceRange?.hi || null),
@@ -911,8 +914,10 @@ export default function LandingView() {
                 <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, color: '#64748b', textTransform: 'uppercase', marginBottom: 12 }}>
                   Otros adicionales
                 </div>
-                <ExtraRow label="Pisos sin ascensor" sub="Subir o bajar escaleras"
-                  value={numFloors} onDec={() => setNumFloors(n => Math.max(0, n - 1))} onInc={() => setNumFloors(n => n + 1)} onSet={v => setNumFloors(Math.max(0, Number(v) || 0))} />
+                <ExtraRow label="Pisos en retiro" sub={`Escaleras al cargar${floorUnitPrice ? ` · +$${fmt(floorUnitPrice)} c/piso` : ''}`}
+                  value={originFloors} onDec={() => setOriginFloors(n => Math.max(0, n - 1))} onInc={() => setOriginFloors(n => n + 1)} onSet={v => setOriginFloors(Math.max(0, Number(v) || 0))} />
+                <ExtraRow label="Pisos en entrega" sub={`Escaleras al descargar${floorUnitPrice ? ` · +$${fmt(floorUnitPrice)} c/piso` : ''}`}
+                  value={destinationFloors} onDec={() => setDestinationFloors(n => Math.max(0, n - 1))} onInc={() => setDestinationFloors(n => n + 1)} onSet={v => setDestinationFloors(Math.max(0, Number(v) || 0))} />
                 <CheckRow label="Embalaje profesional" sub="Empacamos todo antes de cargar" checked={needsPacking} onChange={setNeedsPacking} />
                 <CheckRow label="Coordinar conserjería" sub="Trámite y aviso en edificio" checked={isConserjeria} onChange={setIsConserjeria} />
               </div>
@@ -976,7 +981,7 @@ export default function LandingView() {
                     )}
                     {numFloors > 0 && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                        <span>{numFloors} piso{numFloors > 1 ? 's' : ''} sin ascensor</span>
+                        <span>{numFloors} piso{numFloors > 1 ? 's' : ''} sin ascensor ({originFloors} retiro + {destinationFloors} entrega)</span>
                         <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(floorCost)}</span>
                       </div>
                     )}
@@ -1223,12 +1228,12 @@ export default function LandingView() {
 
 function ExtraRow({ label, sub, value, onDec, onInc, onSet }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-      <div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+      <div style={{ flex: '1 1 160px', minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{label}</div>
         {sub && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{sub}</div>}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: '0 0 auto', marginLeft: 'auto' }}>
         <button type="button" onClick={onDec} disabled={value === 0}
           style={{ width: 32, height: 32, borderRadius: '50%', border: '1.5px solid #dbe3ef', background: '#fff', fontSize: 18, fontWeight: 700, cursor: value === 0 ? 'not-allowed' : 'pointer', color: value === 0 ? '#cbd5e1' : '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}>
           −

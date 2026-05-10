@@ -106,6 +106,8 @@ export function normalizeQuote(row, items = []) {
     driverHelps: row.driver_helps || false,
     numHelpers: row.num_helpers || 0,
     numFloors: row.num_floors || 0,
+    originFloors: row.origin_floors || 0,
+    destinationFloors: row.destination_floors || 0,
     needsPacking: row.needs_packing || false,
     isConserjeria: row.is_conserjeria || false,
     itemsDescription: row.items_description || null,

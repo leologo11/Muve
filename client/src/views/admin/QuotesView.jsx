@@ -66,7 +66,12 @@ function printQuotePDF(q, priceMin, priceMax, cfg) {
   const km = Number(q.distanceKm) || 0;
   const dh = q.driverHelps || false;
   const nh = q.numHelpers || 0;
-  const bd = cfg && km > 0 ? calcBreakdown(cfg, km, dh, nh, q.numFloors || 0, q.needsPacking || false) : null;
+  const storedOriginFloors = Number(q.originFloors || 0);
+  const storedDestinationFloors = Number(q.destinationFloors || 0);
+  const originFloors = storedOriginFloors || storedDestinationFloors ? storedOriginFloors : Number(q.numFloors || 0);
+  const destinationFloors = storedOriginFloors || storedDestinationFloors ? storedDestinationFloors : 0;
+  const totalFloors = Number(q.numFloors ?? (originFloors + destinationFloors)) || 0;
+  const bd = cfg && km > 0 ? calcBreakdown(cfg, km, dh, nh, totalFloors, q.needsPacking || false) : null;
   const exactTotal = bd?.total || (Number(priceMin) === Number(priceMax) ? Number(priceMin) : 0);
   const priceText = exactTotal > 0
     ? `$${fmt(exactTotal)}`
@@ -85,7 +90,7 @@ function printQuotePDF(q, priceMin, priceMax, cfg) {
 <div class="row"><span class="lbl">Distancia: ${km} km × $${fmt(bd.ppk)}/km</span><span class="val">$${fmt(bd.kmCost)}</span></div>
 ${bd.dvCost > 0 ? `<div class="row"><span class="lbl">Ayuda del chofer</span><span class="val">$${fmt(bd.dvCost)}</span></div>` : ''}
 ${bd.hlCost > 0 ? `<div class="row"><span class="lbl">Ayudantes adicionales (${nh} × $${fmt(cfg?.extras?.helper)})</span><span class="val">$${fmt(bd.hlCost)}</span></div>` : ''}
-${bd.flCost > 0 ? `<div class="row"><span class="lbl">Pisos sin ascensor (${q.numFloors || 0})</span><span class="val">$${fmt(bd.flCost)}</span></div>` : ''}
+${bd.flCost > 0 ? `<div class="row"><span class="lbl">Pisos sin ascensor (${originFloors} retiro + ${destinationFloors} entrega)</span><span class="val">$${fmt(bd.flCost)}</span></div>` : ''}
 ${bd.pkCost > 0 ? `<div class="row"><span class="lbl">Embalaje profesional</span><span class="val">$${fmt(bd.pkCost)}</span></div>` : ''}
 <div class="row" style="margin-top:4px;border-top:2px solid #0052FF20"><span class="lbl" style="font-weight:700;color:#0f172a">Total de referencia</span><span class="val" style="color:#0052FF">$${fmt(bd.total)}</span></div>
 ` : '';
@@ -129,7 +134,7 @@ ${isFlete ? `
 ${q.distanceKm ? `<div class="row"><span class="lbl">Distancia estimada</span><span class="val">${q.distanceKm} km</span></div>` : ''}
 ${q.vehicleType ? `<div class="row"><span class="lbl">Vehiculo</span><span class="val">${VEHICLE_ICONS[q.vehicleType] || ''} ${VEHICLE_NAMES[q.vehicleType] || q.vehicleType}</span></div>` : ''}
 <div class="row"><span class="lbl">Servicio de carga</span><span class="val">${helpLabel}</span></div>
-${q.numFloors > 0 ? `<div class="row"><span class="lbl">Pisos sin ascensor</span><span class="val">${q.numFloors} piso(s)</span></div>` : ''}
+${totalFloors > 0 ? `<div class="row"><span class="lbl">Pisos sin ascensor</span><span class="val">${totalFloors} piso(s): ${originFloors} retiro + ${destinationFloors} entrega</span></div>` : ''}
 ${q.needsPacking ? `<div class="row"><span class="lbl">Embalaje profesional</span><span class="val"><span class="badge">Incluido</span></span></div>` : ''}
 ${q.isConserjeria ? `<div class="row"><span class="lbl">Coordinacion conserjeria</span><span class="val">Si</span></div>` : ''}
 ${(() => {
@@ -407,7 +412,13 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
     : 'none';
   const [helpMode,         setHelpMode]        = useState(initHelpMode);
   const [helpers,          setHelpers]         = useState(q.numHelpers || recovered?.hl || 1);
-  const [floors,           setFloors]          = useState(q.numFloors  || recovered?.fl || 0);
+  const storedOriginFloors = Number(q.originFloors || 0);
+  const storedDestinationFloors = Number(q.destinationFloors || 0);
+  const initialOriginFloors = storedOriginFloors || storedDestinationFloors ? storedOriginFloors : (q.numFloors || recovered?.fl || 0);
+  const initialDestinationFloors = storedOriginFloors || storedDestinationFloors ? storedDestinationFloors : 0;
+  const [originFloors,      setOriginFloors]   = useState(initialOriginFloors);
+  const [destinationFloors, setDestinationFloors] = useState(initialDestinationFloors);
+  const floors = Number(originFloors || 0) + Number(destinationFloors || 0);
   const [packing,          setPacking]         = useState(q.needsPacking || recovered?.pk || false);
   const [conserjeria,      setConserjeria]     = useState(q.isConserjeria || recovered?.cs || false);
   const { inventory: parsedInv, extras: parsedExtras } = parseInventoryStr(q.itemsDescription || recovered?.items || '');
@@ -464,7 +475,7 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
       helpMode === 'none'    ? '🚗 Solo traslado (sin ayuda de carga)' : '',
       helpMode === 'driver'  ? '👷 Con ayuda del chofer (+$20.000)' : '',
       helpMode === 'helpers' ? `👷 Chofer + ${helpers} ayudante${helpers !== 1 ? 's' : ''} adicionale${helpers !== 1 ? 's' : ''}` : '',
-      floors  > 0 ? `🏢 Pisos: ${floors}` : '',
+      floors  > 0 ? `🏢 Pisos: ${floors} (retiro ${originFloors}, entrega ${destinationFloors})` : '',
       packing ? '📦 Embalaje profesional' : '',
       conserjeria ? '🔑 Coordinación conserjería' : '',
       inventory.length > 0 ? `\n📋 *Artículos confirmados:*\n${inventory.map(i => `• ${i.name}: ${i.qty}`).join('\n')}` : '',
@@ -489,7 +500,7 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
         distanceKm: km || null, vehicleType,
         driverHelps: helpMode !== 'none',
         numHelpers: helpMode === 'helpers' ? helpers : 0,
-        numFloors: floors, needsPacking: packing,
+        numFloors: floors, originFloors, destinationFloors, needsPacking: packing,
         isConserjeria: conserjeria, itemsDescription: serializeInventory(inventory, inventoryExtras),
         clientNotes, adminNotes,
         deliveryDate: deliveryDate || null,
@@ -650,11 +661,19 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
           </div>
 
           <ExtraRow
-            label="Pisos sin ascensor"
-            sub={`Subir / bajar escaleras${cfg?.extras?.floor ? ` · +$${fmt(cfg.extras.floor)} c/piso` : ''}`}
-            value={floors}
-            onDec={() => setFloors(n => Math.max(0, n - 1))}
-            onInc={() => setFloors(n => n + 1)}
+            label="Pisos en retiro"
+            sub={`Escaleras al cargar${cfg?.extras?.floor ? ` · +$${fmt(cfg.extras.floor)} c/piso` : ''}`}
+            value={originFloors}
+            onDec={() => setOriginFloors(n => Math.max(0, n - 1))}
+            onInc={() => setOriginFloors(n => n + 1)}
+            disabled={isDone}
+          />
+          <ExtraRow
+            label="Pisos en entrega"
+            sub={`Escaleras al descargar${cfg?.extras?.floor ? ` · +$${fmt(cfg.extras.floor)} c/piso` : ''}`}
+            value={destinationFloors}
+            onDec={() => setDestinationFloors(n => Math.max(0, n - 1))}
+            onInc={() => setDestinationFloors(n => n + 1)}
             disabled={isDone}
           />
           <CheckRow
@@ -693,7 +712,7 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
             {bd.kmCost > 0 && <BDRow label={`Distancia (${km} km × $${fmt(bd.ppk)}/km)`} val={bd.kmCost} />}
             {bd.dvCost > 0 && <BDRow label="Ayuda del chofer" val={bd.dvCost} />}
             {bd.hlCost > 0 && <BDRow label={`Ayudantes adicionales (${actualHelpers} × $${fmt(cfg?.extras?.helper)})`} val={bd.hlCost} />}
-            {bd.flCost > 0 && <BDRow label={`Pisos (${floors} × $${fmt(cfg?.extras?.floor)})`} val={bd.flCost} />}
+            {bd.flCost > 0 && <BDRow label={`Pisos (${originFloors} retiro + ${destinationFloors} entrega) × $${fmt(cfg?.extras?.floor)}`} val={bd.flCost} />}
             {bd.pkCost > 0 && <BDRow label="Embalaje" val={bd.pkCost} />}
             <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, marginTop: 4, borderTop: '1px solid var(--border)', fontSize: 13, fontWeight: 800 }}>
               <span>Total exacto</span>
@@ -755,7 +774,7 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
             </button>
           )}
           <button
-            onClick={() => printQuotePDF({ ...q, contactPerson: name, contactPhone: phone, originAddress: originAddr, destinationAddress: destAddr, distanceKm: km, vehicleType, driverHelps: helpMode !== 'none', numHelpers: helpMode === 'helpers' ? helpers : 0, numFloors: floors, needsPacking: packing, isConserjeria: conserjeria, itemsDescription: serializeInventory(inventory, inventoryExtras) }, priceMin, priceMax, cfg)}
+            onClick={() => printQuotePDF({ ...q, contactPerson: name, contactPhone: phone, originAddress: originAddr, destinationAddress: destAddr, distanceKm: km, vehicleType, driverHelps: helpMode !== 'none', numHelpers: helpMode === 'helpers' ? helpers : 0, numFloors: floors, originFloors, destinationFloors, needsPacking: packing, isConserjeria: conserjeria, itemsDescription: serializeInventory(inventory, inventoryExtras) }, priceMin, priceMax, cfg)}
             style={{ flex: 1, padding: '11px', borderRadius: 10, border: '1px solid #0052FF30', background: '#0052FF10', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
           >
             📄 Generar PDF
@@ -1043,12 +1062,12 @@ function Chip({ children, color, bold }) {
 
 function ExtraRow({ label, sub, value, onDec, onInc, disabled }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', background: '#fff', borderRadius: 9, border: '1px solid var(--border)' }}>
-      <div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', padding: '8px 10px', background: '#fff', borderRadius: 9, border: '1px solid var(--border)' }}>
+      <div style={{ flex: '1 1 150px', minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 700 }}>{label}</div>
         <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{sub}</div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '0 0 auto', marginLeft: 'auto' }}>
         <button type="button" onClick={onDec} disabled={disabled || value === 0} style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid var(--border)', background: '#fff', fontSize: 16, cursor: (disabled || value === 0) ? 'not-allowed' : 'pointer', color: value === 0 ? '#ccc' : '#0f172a', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
         <span style={{ fontSize: 15, fontWeight: 800, minWidth: 18, textAlign: 'center' }}>{value}</span>
         <button type="button" onClick={onInc} disabled={disabled} style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid var(--border)', background: '#fff', fontSize: 16, cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>＋</button>
