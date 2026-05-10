@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { api } from '../../api/index.js';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
 import InventoryPicker, { CATALOG, totalVol, recommendVehicleType, serializeInventory, VEHICLE_THRESHOLDS, inventoryHasTallItems } from '../../components/InventoryPicker.jsx';
@@ -7,8 +7,6 @@ const LARGE_ITEM_IDS = new Set(['camaQueen', 'cama2p', 'sofa3p', 'sofa2p', 'clos
 
 const BOXES = Array.from({ length: 8 });
 const TRUCK_LOAD_ORDER = [7, 6, 5, 4, 3, 2, 1, 0];
-
-const CAR_COLORS = ['#c0392b','#1a3a5c','#2c6e3a','#8e44ad','#d35400','#2980b9','#7f8c8d','#922b21','#1a5276','#145a32'];
 
 // Ítems altos/voluminosos que requieren camión 3/4
 // ── Flete m³ pricing ──────────────────────────────────────────────────────────
@@ -196,10 +194,42 @@ export default function LandingView() {
   };
   const goBack = () => setStep(s => Math.max(1, s - 1));
 
-  const selectServiceType = (v) => {
-    setServiceType(v);
+  const resetQuoteFlow = () => {
+    setStep(1);
+    setServiceType('');
+    setSuccess(null);
+    setFormGone(false);
+    setDeparted(false);
+    setOrigin({ address: '', lat: null, lng: null });
+    setDest({ address: '', lat: null, lng: null });
+    setDistanceKm(null);
+    setDurationMin(null);
+    setLoadingDist(false);
+    setVehicles([]);
+    setSelectedVehicle(null);
+    setHelpMode('none');
     setHelpModeManual(false);
+    setNumHelpers(1);
+    setNumFloors(0);
+    setNeedsPacking(false);
+    setIsConserjeria(false);
+    setInventory([]);
+    setInventoryExtras('');
+    setContactPerson('');
+    setContactPhone('');
+    setContactEmail('');
+    setDeliveryDate(new Date().toISOString().split('T')[0]);
+    setDeliveryTime('');
+    setClientNotes('');
+    setClientCompany('');
+    setPriceRange(null);
     setError('');
+    setIsUrgent(false);
+  };
+
+  const selectServiceType = (v) => {
+    resetQuoteFlow();
+    setServiceType(v);
     setStep(2);
   };
 
@@ -455,11 +485,6 @@ export default function LandingView() {
           </div>
         </div>
 
-        {/* Coches que pasan de derecha a izquierda — uno a la vez */}
-        <div className="road-traffic">
-          {!blurReady && <TrafficController/>}
-        </div>
-
         {/* Blur que cubre la escena mientras el formulario está activo */}
         <div className={`scene-blur${blurReady ? ' active' : ''}${formGone ? ' reveal' : ''}`}/>
 
@@ -502,6 +527,11 @@ export default function LandingView() {
               <div className="brand-name">MUVE</div>
               <div className="brand-caption">Fácil, rápido y online</div>
             </div>
+            {step > 1 && !success && (
+              <button type="button" className="quote-home-btn" onClick={resetQuoteFlow}>
+                Inicio
+              </button>
+            )}
           </div>
 
           {/* Always rendered — keeps header height stable across all steps */}
@@ -1138,18 +1168,7 @@ export default function LandingView() {
           <div className="q-foot">
             <button
               type="button"
-              onClick={() => {
-                setStep(1); setServiceType(''); setSuccess(null); setFormGone(false); setDeparted(false);
-                setOrigin({ address: '', lat: null, lng: null });
-                setDest({ address: '', lat: null, lng: null });
-                setDistanceKm(null); setDurationMin(null); setVehicles([]);
-                setSelectedVehicle(null); setHelpMode('none'); setHelpModeManual(false); setNumHelpers(1);
-                setNumFloors(0); setNeedsPacking(false); setIsConserjeria(false);
-                setInventory([]); setInventoryExtras('');
-                setContactPerson(''); setContactPhone(''); setContactEmail('');
-                setDeliveryDate(new Date().toISOString().split('T')[0]); setDeliveryTime('');
-                setClientNotes(''); setClientCompany(''); setPriceRange(null); setError(''); setIsUrgent(false);
-              }}
+              onClick={resetQuoteFlow}
               style={{ flex: 1, padding: '13px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#0052FF,#0077FF)', color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer', boxShadow: '0 8px 20px #0052FF28' }}
             >
               Nueva cotización
@@ -1157,6 +1176,13 @@ export default function LandingView() {
           </div>
         ) : step > 1 && (
           <div className="q-foot">
+            <button
+              type="button"
+              onClick={resetQuoteFlow}
+              style={{ padding: '12px 14px', borderRadius: 12, border: '1.5px solid #dbe3ef', background: '#f8fbff', color: '#475569', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}
+            >
+              Inicio
+            </button>
             <button
               type="button"
               onClick={goBack}
@@ -1187,67 +1213,6 @@ export default function LandingView() {
       </div>{/* end .quote-overlay */}
 
     </main>
-  );
-}
-
-// ── Traffic controller — one car at a time ────────────────────────────────────
-function TrafficController() {
-  const [car, setCar] = React.useState(null);
-  const timerRef = useRef(null);
-
-  React.useEffect(() => {
-    function spawnNext() {
-      const duration = 10 + Math.random() * 5;
-      const color = CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)];
-      setCar({ id: Date.now(), color, duration });
-      const gap = 2 + Math.random() * 4;
-      timerRef.current = window.setTimeout(spawnNext, (duration + gap) * 1000);
-    }
-    timerRef.current = window.setTimeout(spawnNext, 800);
-    return () => clearTimeout(timerRef.current);
-  }, []);
-
-  if (!car) return null;
-  return <PassingCar key={car.id} c={car.color} d={`${car.duration.toFixed(1)}s`}/>;
-}
-
-// ── Passing car SVG ───────────────────────────────────────────────────────────
-function PassingCar({ c, d }) {
-  return (
-    <div className="passing-car" style={{ animationDuration: d }}>
-      <svg viewBox="0 0 220 84" fill="none" xmlns="http://www.w3.org/2000/svg">
-        {/* Shadow */}
-        <ellipse cx="110" cy="82" rx="98" ry="5" fill="#000" opacity=".10"/>
-        {/* Body */}
-        <rect x="4" y="42" width="212" height="34" rx="10" fill={c}/>
-        {/* Cabin roof — front on left (car moves left) */}
-        <path d="M50 42 L68 16 L152 16 L170 42Z" fill={c} opacity=".88"/>
-        {/* Front windshield (left side) */}
-        <path d="M54 40 L70 18 L104 18 L104 40Z" fill="#CCE8F4" opacity=".85"/>
-        {/* Rear window (right side) */}
-        <path d="M166 40 L150 18 L116 18 L116 40Z" fill="#CCE8F4" opacity=".72"/>
-        {/* Door line */}
-        <line x1="110" y1="16" x2="110" y2="76" stroke="#00000018" strokeWidth="2"/>
-        {/* Headlights — left (front) */}
-        <rect x="4" y="48" width="10" height="12" rx="4" fill="#FFFDE7" opacity=".98"/>
-        <rect x="4" y="48" width="10" height="12" rx="4" fill="white" opacity=".55"/>
-        {/* Taillights — right (rear) */}
-        <rect x="206" y="48" width="10" height="12" rx="4" fill="#F44336" opacity=".90"/>
-        {/* Front wheel (left) */}
-        <circle cx="56" cy="72" r="14" fill="#1a1a1a"/>
-        <circle cx="56" cy="72" r="8" fill="#3d3d3d"/>
-        <circle cx="56" cy="72" r="3" fill="#888"/>
-        {/* Rear wheel (right) */}
-        <circle cx="164" cy="72" r="14" fill="#1a1a1a"/>
-        <circle cx="164" cy="72" r="8" fill="#3d3d3d"/>
-        <circle cx="164" cy="72" r="3" fill="#888"/>
-        {/* Side mirror */}
-        <rect x="6" y="41" width="9" height="5" rx="2" fill={c} opacity=".75"/>
-        {/* Wheel arch highlights */}
-        <path d="M44 76 A14 14 0 0 1 68 76" stroke="#ffffff18" strokeWidth="3" fill="none"/>
-        <path d="M152 76 A14 14 0 0 1 176 76" stroke="#ffffff18" strokeWidth="3" fill="none"/>
-      </svg>
-    </div>
   );
 }
 

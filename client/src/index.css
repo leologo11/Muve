@@ -315,6 +315,18 @@ mark {
   font-weight: 600;
 }
 
+.quote-home-btn {
+  border: 1px solid #dbe3ef;
+  border-radius: 999px;
+  background: #f8fbff;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 7px 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 .quote-panel h1 {
   font-size: 38px;
   line-height: 1.02;
@@ -1844,6 +1856,8 @@ mark {
   scrollbar-gutter: stable;
   box-sizing: border-box;
   width: 100%;
+  contain: layout paint;
+  will-change: scroll-position;
 }
 
 .form-guide-message {
