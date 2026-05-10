@@ -1587,6 +1587,47 @@ mark {
   overflow: hidden;
 }
 
+.landing-whatsapp {
+  position: fixed;
+  right: max(18px, env(safe-area-inset-right));
+  top: max(18px, env(safe-area-inset-top));
+  z-index: 80;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: #25d366;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  text-decoration: none;
+  box-shadow: 0 12px 30px rgba(37, 211, 102, .35);
+}
+
+.seo-service-areas {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.seo-service-areas h2 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  line-height: 1.25;
+  color: #0f172a;
+}
+
+.seo-service-areas p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #64748b;
+}
+
 /* Scene fills the entire viewport */
 .muve-landing .scene-panel {
   position: absolute;
@@ -2060,6 +2101,14 @@ mark {
   .q-header { padding: 14px 20px 10px; }
   .q-body   { padding: 12px 20px 8px;  }
   .q-foot   { padding: 6px 20px 14px;  }
+
+  .landing-whatsapp {
+    right: max(12px, env(safe-area-inset-right));
+    top: max(12px, env(safe-area-inset-top));
+    min-height: 40px;
+    padding: 0 13px;
+    font-size: 12px;
+  }
 
   .address-grid {
     grid-template-columns: 1fr;

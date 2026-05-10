@@ -18,6 +18,7 @@ const FLETE_DRIVER_HELP  = 10_000; // ayuda del chofer
 const FLETE_HELPER_COST  = 15_000; // por ayudante adicional
 const FLETE_PACKING_COST = 22_000; // embalaje profesional
 const fmt = n => Number(n || 0).toLocaleString('es-CL');
+const WHATSAPP_DIRECT_URL = 'https://wa.me/56952023504?text=Hola%20MUVE%2C%20quiero%20cotizar%20un%20flete%20o%20mudanza';
 const makeRange = (exact) => ({
   exact,
   lo: Math.round(exact * 0.88 / 1000) * 1000,
@@ -267,7 +268,6 @@ export default function LandingView() {
   // ── Live m³ price (flete/mudanza) ──────────────────────────────────────────
   const invVol       = totalVol(inventory);
   const numFloors    = originFloors + destinationFloors;
-  const extraVol     = Math.max(0, invVol - FLETE_BASE_VOL);
   const hasTallItems = inventoryHasTallItems(inventory);
   const smartVehicleType = invVol > 0 ? recommendVehicleType(invVol, inventory) : 'furgon';
   const vehicleLabel = VEHICLE_THRESHOLDS.find(t => t.vehicleType === smartVehicleType);
@@ -283,7 +283,9 @@ export default function LandingView() {
   const helperUnitPrice = Number(cfgExtras.helper ?? FLETE_HELPER_COST);
   const floorUnitPrice = Number(cfgExtras.floor ?? FLETE_FLOOR_COST);
   const packingPrice = Number(cfgExtras.packing ?? FLETE_PACKING_COST);
+  const includedM3 = Number(cfgExtras.included_m3 ?? FLETE_BASE_VOL);
   const extraM3Price = Number(cfgExtras.extra_m3 ?? FLETE_EXTRA_M3);
+  const extraVol     = Math.max(0, invVol - includedM3);
   // Ayudante sugerido: vol>6 o ítems pesados → chofer+ayudante, vol>2 → solo chofer
   const suggestHelperMode = invVol > 6 || hasTallItems ? 'helpers' : invVol > 2 ? 'driver' : 'none';
   // Costos extras
@@ -429,6 +431,9 @@ export default function LandingView() {
 
   return (
     <main className="muve-landing">
+      <a className="landing-whatsapp" href={WHATSAPP_DIRECT_URL} target="_blank" rel="noreferrer">
+        WhatsApp
+      </a>
 
       {/* ── ANIMATION PANEL ──────────────────────────────────────────────── */}
       <section className={`scene-panel${blurReady && !formGone ? ' settled' : ''}`} aria-label="Animación de carga MUVE">
@@ -640,6 +645,13 @@ export default function LandingView() {
                     <IconChevron />
                   </button>
                 ))}
+              </div>
+              <div className="seo-service-areas" aria-label="Zonas de servicio MUVE">
+                <h2>Fletes y mudanzas en Santiago</h2>
+                <p>
+                  Servicio de fletes economicos, mudanzas y traslados en Santiago, Providencia, Las Condes,
+                  Nunoa, La Florida, Maipu, Vitacura, La Reina, Macul y comunas cercanas.
+                </p>
               </div>
             </div>
           )}
@@ -969,7 +981,7 @@ export default function LandingView() {
                     </div>
                     {serviceType !== 'mudanza' && extraVol > 0 && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                        <span>{extraVol.toFixed(2)} m³ adicionales × ${fmt(extraM3Price)}</span>
+                        <span>{extraVol.toFixed(2)} m³ adicionales sobre {includedM3} m³ × ${fmt(extraM3Price)}</span>
                         <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(extraVolCost)}</span>
                       </div>
                     )}

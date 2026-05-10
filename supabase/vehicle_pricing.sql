@@ -10,7 +10,7 @@ create table if not exists vehicle_configs (
   description text not null default '',
   base_price numeric not null default 0,
   km_tiers jsonb not null default '[{"max_km":50,"price_per_km":1000},{"max_km":150,"price_per_km":800},{"max_km":400,"price_per_km":600},{"max_km":9999,"price_per_km":400}]',
-  extras jsonb not null default '{"driver_help":20000,"helper":15000,"floor":5000,"packing":15000}',
+  extras jsonb not null default '{"driver_help":20000,"helper":15000,"floor":5000,"packing":15000,"included_m3":3,"extra_m3":16000}',
   active boolean not null default true,
   only_regions boolean not null default false,
   sort_order integer not null default 0,
@@ -39,7 +39,7 @@ values
   'Ideal para cajas, muebles pequeños y cargas de poco volumen. Carga máxima ~1 ton.',
   20000,
   '[{"max_km":50,"price_per_km":1000},{"max_km":150,"price_per_km":800},{"max_km":400,"price_per_km":600},{"max_km":9999,"price_per_km":400}]',
-  '{"driver_help":20000,"helper":15000,"floor":5000,"packing":15000,"extra_m3":16000}',
+  '{"driver_help":20000,"helper":15000,"floor":5000,"packing":15000,"included_m3":3,"extra_m3":16000}',
   true, false, 1
 ),
 (
@@ -47,7 +47,7 @@ values
   'Recomendado para mudanzas familiares. Nevera, cama, sofá y más. Carga máxima ~3 ton.',
   35000,
   '[{"max_km":50,"price_per_km":1000},{"max_km":150,"price_per_km":800},{"max_km":400,"price_per_km":600},{"max_km":9999,"price_per_km":400}]',
-  '{"driver_help":20000,"helper":15000,"floor":5000,"packing":15000,"extra_m3":16000}',
+  '{"driver_help":20000,"helper":15000,"floor":5000,"packing":15000,"included_m3":3,"extra_m3":16000}',
   true, false, 2
 ),
 (
@@ -55,7 +55,7 @@ values
   'Para mudanzas completas a regiones desde Santiago. Solo disponible para trayectos de más de 100 km.',
   80000,
   '[{"max_km":200,"price_per_km":700},{"max_km":500,"price_per_km":550},{"max_km":9999,"price_per_km":400}]',
-  '{"driver_help":20000,"helper":15000,"floor":6000,"packing":20000,"extra_m3":16000}',
+  '{"driver_help":20000,"helper":15000,"floor":6000,"packing":20000,"included_m3":3,"extra_m3":16000}',
   true, true, 3
 )
 on conflict (service_type, vehicle_type) do update set

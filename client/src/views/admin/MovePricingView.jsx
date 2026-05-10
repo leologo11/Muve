@@ -210,6 +210,7 @@ function VehicleCard({ config: c, serviceType = 'flete', onEdit, onToggleActive 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             <ExtraStat icon="🏢" label="Piso sin ascensor" value={ex.floor} />
             <ExtraStat icon="📦" label="Embalaje profesional" value={ex.packing} />
+            {!isMudanza && <ExtraStat icon="m3" label="m3 incluido" value={ex.included_m3 ?? 3} unit=" m3" money={false} />}
             {!isMudanza && <ExtraStat icon="m3" label="m3 adicional" value={ex.extra_m3} unit="/m3" />}
           </div>
         </div>
@@ -218,12 +219,12 @@ function VehicleCard({ config: c, serviceType = 'flete', onEdit, onToggleActive 
   );
 }
 
-function ExtraStat({ icon, label, value, unit = '' }) {
+function ExtraStat({ icon, label, value, unit = '', money = true }) {
   return (
     <div style={{ textAlign: 'center', padding: '8px 6px', background: '#fff', border: '1px solid var(--border)', borderRadius: 9 }}>
       <div style={{ fontSize: 16 }}>{icon}</div>
       <div style={{ fontSize: 9, color: 'var(--muted)', margin: '2px 0' }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)' }}>${fmt(value)}<span style={{ fontSize: 10, fontWeight: 500, color: 'var(--muted)' }}>{unit}</span></div>
+      <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)' }}>{money ? '$' : ''}{fmt(value)}<span style={{ fontSize: 10, fontWeight: 500, color: 'var(--muted)' }}>{unit}</span></div>
     </div>
   );
 }
@@ -245,6 +246,7 @@ function EditModal({ config: c, onClose, onSaved }) {
     helper:      c.extras?.helper      ?? 15000,
     floor:       c.extras?.floor       ?? 5000,
     packing:     c.extras?.packing     ?? 15000,
+    included_m3: c.extras?.included_m3 ?? 3,
     extra_m3:    c.extras?.extra_m3    ?? 16000,
   });
   const [saving, setSaving] = useState(false);
@@ -395,10 +397,17 @@ function EditModal({ config: c, onClose, onSaved }) {
               <input type="number" value={extras.packing} onChange={e => setExtra('packing', e.target.value)} style={inp} />
             </div>
             {!isMudanza && (
-              <div style={{ gridColumn: '1 / -1' }}>
-                <FL>m3 adicional</FL>
-                <input type="number" value={extras.extra_m3} onChange={e => setExtra('extra_m3', e.target.value)} style={inp} />
-                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Se cobra solo en fletes cuando la carga excede el volumen incluido.</div>
+              <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <FL>m3 incluidos gratis</FL>
+                  <input type="number" min="0" step="0.1" value={extras.included_m3} onChange={e => setExtra('included_m3', e.target.value)} style={inp} />
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Volumen incluido antes de cobrar adicional.</div>
+                </div>
+                <div>
+                  <FL>m3 adicional</FL>
+                  <input type="number" value={extras.extra_m3} onChange={e => setExtra('extra_m3', e.target.value)} style={inp} />
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Precio por cada m3 sobre el volumen incluido.</div>
+                </div>
               </div>
             )}
             {isMudanza && (

@@ -50,7 +50,10 @@ select
     else round(base_price * 1.35)
   end,
   km_tiers,
-  jsonb_set(coalesce(extras, '{}'::jsonb), '{extra_m3}', '0'::jsonb, true),
+  jsonb_set(
+    jsonb_set(coalesce(extras, '{}'::jsonb), '{extra_m3}', '0'::jsonb, true),
+    '{included_m3}', '0'::jsonb, true
+  ),
   active,
   only_regions,
   sort_order
