@@ -401,10 +401,15 @@ export default function LandingView() {
       </div>
       <button
         type="button"
+        className="recommendation-cta"
         onClick={() => switchMovingService(movingServiceRecommendation.type)}
-        style={{ flex: '1 1 132px', minHeight: 46, border: 'none', borderRadius: 12, background: 'linear-gradient(135deg,#f59e0b,#ea580c)', color: '#fff', padding: '10px 12px', fontSize: 12, fontWeight: 900, cursor: 'pointer', boxShadow: '0 8px 18px #f9731630' }}
+        style={{ flex: '1 1 148px', minHeight: 58, border: 'none', borderRadius: 12, background: 'linear-gradient(135deg,#f59e0b,#ea580c)', color: '#fff', padding: '10px 12px', fontSize: 12, fontWeight: 900, cursor: 'pointer', boxShadow: '0 8px 18px #f9731630', position: 'relative', overflow: 'hidden' }}
       >
-        Cambiar a {movingServiceRecommendation.type === 'mudanza' ? 'mudanza' : 'flete'}
+        <span className="recommendation-spark spark-a">✦</span>
+        <span className="recommendation-spark spark-b">✧</span>
+        <span style={{ display: 'block', fontSize: 10, opacity: .92, textTransform: 'uppercase', letterSpacing: .7 }}>Pagarías</span>
+        <span style={{ display: 'block', fontSize: 18, lineHeight: 1.1 }}>${fmt(movingServiceRecommendation.price)}</span>
+        <span style={{ display: 'block', fontSize: 10, opacity: .95, marginTop: 2 }}>Cambiar a {movingServiceRecommendation.type === 'mudanza' ? 'mudanza' : 'flete'}</span>
       </button>
     </div>
   );

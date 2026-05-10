@@ -1952,6 +1952,52 @@ mark {
   background: #fff;
 }
 
+.recommendation-cta::before {
+  content: "";
+  position: absolute;
+  inset: -40% -80%;
+  background: linear-gradient(115deg, transparent 42%, rgba(255,255,255,.42) 50%, transparent 58%);
+  animation: recommendationShine 2.8s ease-in-out infinite;
+}
+
+.recommendation-cta > span:not(.recommendation-spark) {
+  position: relative;
+  z-index: 1;
+}
+
+.recommendation-spark {
+  position: absolute;
+  z-index: 1;
+  color: #fff7ed;
+  text-shadow: 0 0 10px rgba(255,255,255,.75);
+  pointer-events: none;
+  animation: recommendationSpark 1.9s ease-in-out infinite;
+}
+
+.recommendation-spark.spark-a {
+  top: 8px;
+  right: 12px;
+  font-size: 13px;
+}
+
+.recommendation-spark.spark-b {
+  left: 12px;
+  bottom: 8px;
+  font-size: 11px;
+  animation-delay: .65s;
+}
+
+@keyframes recommendationShine {
+  0%, 45% { transform: translateX(-45%); opacity: 0; }
+  55% { opacity: 1; }
+  100% { transform: translateX(45%); opacity: 0; }
+}
+
+@keyframes recommendationSpark {
+  0%, 100% { transform: scale(.75) rotate(0deg); opacity: .45; }
+  50% { transform: scale(1.18) rotate(18deg); opacity: 1; }
+}
+
 /* Admin link */
 .admin-link { z-index: 11; }
 
