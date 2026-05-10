@@ -319,6 +319,8 @@ export default function LandingView() {
   const packCost     = needsPacking ? packingPrice : 0;
   const extraVolCost = serviceType === 'mudanza' ? 0 : roundToThousand(extraVol * extraM3Price);
   const fleteExact   = roundToThousand(vehicleBasePrice + distanceCost + extraVolCost + floorCost + helpCost + packCost);
+  const fleteExactBeforeDiscount = roundToThousand(rawVehicleBasePrice + distanceCost + extraVolCost + floorCost + helpCost + packCost);
+  const displayFletePrice = Math.max(fleteExact, vehicleBasePrice);
 
   const status = useMemo(() => {
     if (!serviceType)    return ['¿Listo para mover?', 'Elige el tipo de servicio que necesitas para comenzar tu cotización.'];
@@ -993,10 +995,19 @@ export default function LandingView() {
                     <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>
                       Precio calculado
                     </div>
-                    <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--accent)', letterSpacing: '-.5px', lineHeight: 1 }}>
-                      ${fmt(Math.max(fleteExact, vehicleBasePrice))}
+                    {partialDiscount > 0 && (
+                      <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 800, textDecoration: 'line-through', marginBottom: 2 }}>
+                        ${fmt(fleteExactBeforeDiscount)}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--accent)', letterSpacing: '-.5px', lineHeight: 1, transition: 'color .2s ease' }}>
+                      ${fmt(displayFletePrice)}
                     </div>
-                    <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>El precio final se confirma al contactarte</div>
+                    <div style={{ fontSize: 10, color: partialDiscount > 0 ? '#16a34a' : '#94a3b8', marginTop: 2, fontWeight: partialDiscount > 0 ? 800 : 500 }}>
+                      {partialDiscount > 0
+                        ? `Ahorras $${fmt(partialDiscount)} por ${partialDiscountStage}; al sumar carga el descuento baja.`
+                        : 'El precio final se confirma al contactarte'}
+                    </div>
                   </div>
                   {vehicleLabel && (
                     <div style={{ textAlign: 'right' }}>
@@ -1022,7 +1033,7 @@ export default function LandingView() {
                   </div>
                   {partialDiscount > 0 && (
                     <div style={{ fontSize: 10, color: '#16a34a', fontWeight: 700, marginTop: 6 }}>
-                      Tramo de {partialDiscountStage}: descuento progresivo por usar poco espacio del camión.
+                      Tramo de {partialDiscountStage}: mientras menos espacio ocupas, mayor descuento; al llenar el camión el descuento llega a $0.
                     </div>
                   )}
                 </div>
