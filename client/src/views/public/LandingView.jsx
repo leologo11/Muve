@@ -237,7 +237,7 @@ export default function LandingView() {
   const selectServiceType = (v) => {
     resetQuoteFlow();
     setServiceType(v);
-    if (v === 'flete') setHelpMode('driver');
+    if (v === 'flete' || v === 'mudanza') setHelpMode('driver');
     setStep(2);
   };
 
@@ -246,7 +246,15 @@ export default function LandingView() {
     setInventoryExtras('');
     setHelpModeManual(false);
     setNumHelpers(1);
-    setHelpMode(serviceType === 'flete' ? 'driver' : 'none');
+    setHelpMode(isFlete ? 'driver' : 'none');
+  };
+
+  const switchMovingService = (nextType) => {
+    setServiceType(nextType);
+    setHelpModeManual(false);
+    setHelpMode('driver');
+    setNumHelpers(1);
+    setPriceRange(null);
   };
 
   // ── Animation progress ──────────────────────────────────────────────────────
@@ -287,9 +295,10 @@ export default function LandingView() {
   const volumeVehicleType = invVol > 0 ? recommendVehicleTypeByVolume(invVol) : 'furgon';
   const vehicleLabel = VEHICLE_THRESHOLDS.find(t => t.vehicleType === smartVehicleType);
   const configServiceType = serviceType === 'mudanza' ? 'mudanza' : 'flete';
-  const activeVehicleConfig =
-    vehicleConfigs.find(c => c.vehicleType === smartVehicleType && (c.serviceType || 'flete') === configServiceType) ||
-    vehicleConfigs.find(c => c.vehicleType === smartVehicleType);
+  const findVehicleConfig = (vehicleType, type) =>
+    vehicleConfigs.find(c => c.vehicleType === vehicleType && (c.serviceType || 'flete') === type) ||
+    vehicleConfigs.find(c => c.vehicleType === vehicleType);
+  const activeVehicleConfig = findVehicleConfig(smartVehicleType, configServiceType);
   const rawVehicleBasePrice = Number(activeVehicleConfig?.basePrice ?? FLETE_BASE_PRICE);
   const vehicleKmPrice = tierPricePerKm(activeVehicleConfig?.kmTiers || [], distanceKm || 0);
   const distanceCost = distanceKm ? roundToThousand(distanceKm * vehicleKmPrice) : 0;
@@ -321,6 +330,40 @@ export default function LandingView() {
   const fleteExact   = roundToThousand(vehicleBasePrice + distanceCost + extraVolCost + floorCost + helpCost + packCost);
   const fleteExactBeforeDiscount = roundToThousand(rawVehicleBasePrice + distanceCost + extraVolCost + floorCost + helpCost + packCost);
   const displayFletePrice = Math.max(fleteExact, vehicleBasePrice);
+  const selectedCategories = new Set(inventory.filter(i => i.qty > 0).map(i => catalog.find(c => c.id === i.id)?.cat).filter(Boolean));
+  const compareMovingPrice = (type) => {
+    const cfg = findVehicleConfig(smartVehicleType, type);
+    const ex = cfg?.extras || {};
+    const base = Number(cfg?.basePrice ?? FLETE_BASE_PRICE);
+    const ppk = tierPricePerKm(cfg?.kmTiers || [], distanceKm || 0);
+    const kmCost = distanceKm ? roundToThousand(distanceKm * ppk) : 0;
+    const included = Number(ex.included_m3 ?? FLETE_BASE_VOL);
+    const extraM3 = Number(ex.extra_m3 ?? FLETE_EXTRA_M3);
+    const extraCost = type === 'mudanza' ? 0 : roundToThousand(Math.max(0, invVol - included) * extraM3);
+    const maxDiscount = Number(ex.partial_discount_pct ?? 30);
+    const discountPct = type === 'flete' && smartVehicleType !== volumeVehicleType && invVol > 0 && vehicleCapacityM3 > 0
+      ? Math.max(0, Math.min(maxDiscount, maxDiscount * (1 - (invVol / vehicleCapacityM3))))
+      : 0;
+    const discount = roundToThousand(base * discountPct / 100);
+    const helper = helpMode === 'helpers' ? numHelpers * Number(ex.helper ?? FLETE_HELPER_COST) : 0;
+    const floors = numFloors * Number(ex.floor ?? FLETE_FLOOR_COST);
+    const packing = needsPacking ? Number(ex.packing ?? FLETE_PACKING_COST) : 0;
+    const discountedBase = Math.max(0, base - discount);
+    return roundToThousand(discountedBase + kmCost + extraCost + helper + floors + packing);
+  };
+  const fleteComparePrice = compareMovingPrice('flete');
+  const mudanzaComparePrice = compareMovingPrice('mudanza');
+  const shouldRecommendMudanza = serviceType === 'flete' && invVol > 0 && (
+    (selectedCategories.size >= 4 && vehicleLoadPct >= 55) ||
+    vehicleLoadPct >= 75 ||
+    invVol >= Math.max(includedM3 * 2, 8)
+  );
+  const shouldRecommendFlete = serviceType === 'mudanza' && invVol > 0 && vehicleLoadPct <= 35 && selectedCategories.size <= 2 && fleteComparePrice < mudanzaComparePrice;
+  const movingServiceRecommendation = shouldRecommendMudanza
+    ? { type: 'mudanza', title: 'Parece una mudanza', desc: 'Como llevas muchas cosas variadas, puede convenir cotizar como mudanza para usar tarifa de camion completo.', price: mudanzaComparePrice }
+    : shouldRecommendFlete
+      ? { type: 'flete', title: 'Podrias ahorrar con flete', desc: 'Como son pocas cosas, el flete puede salir mas conveniente que una mudanza completa.', price: fleteComparePrice }
+      : null;
 
   const status = useMemo(() => {
     if (!serviceType)    return ['¿Listo para mover?', 'Elige el tipo de servicio que necesitas para comenzar tu cotización.'];
@@ -375,19 +418,19 @@ export default function LandingView() {
   }, [inventory]);
 
   useEffect(() => {
-    if (requiredHelpers > 0) {
+    if (requiredHelpers > 0 && !helpModeManual) {
       setHelpMode('helpers');
       setNumHelpers(n => Math.max(requiredHelpers, n));
       return;
     }
     if (helpModeManual) return;
-    if (serviceType === 'flete' && invVol === 0) {
+    if (isFlete && invVol === 0) {
       setHelpMode('driver');
       return;
     }
     setHelpMode(invVol > 0 ? suggestHelperMode : 'none');
     if (suggestHelperMode === 'helpers') setNumHelpers(n => Math.max(requiredHelpers || 1, n));
-  }, [invVol, suggestHelperMode, helpModeManual, requiredHelpers, serviceType]);
+  }, [invVol, suggestHelperMode, helpModeManual, requiredHelpers, isFlete]);
 
   // Auto-recommend vehicle from inventory (no price shown yet)
   useEffect(() => {
@@ -589,8 +632,13 @@ export default function LandingView() {
             }}/>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, minHeight: 18, visibility: (step > 1 && serviceType) ? 'visible' : 'hidden' }}>
-            <span style={{ fontSize: 13, fontWeight: 800, color: success ? '#15803d' : 'var(--accent)' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 800, color: success ? '#15803d' : 'var(--accent)' }}>
               {success ? '✅ Enviado' : stepTitle}
+              {isFlete && step > 1 && !success && (
+                <span style={{ padding: '2px 8px', borderRadius: 999, background: serviceType === 'mudanza' ? '#fff7ed' : '#EEF4FF', color: serviceType === 'mudanza' ? '#c2410c' : 'var(--accent)', border: `1px solid ${serviceType === 'mudanza' ? '#fed7aa' : '#bfdbfe'}`, fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: .8 }}>
+                  {serviceType === 'mudanza' ? 'Mudanza' : 'Flete'}
+                </span>
+              )}
             </span>
             <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>
               {success ? '' : `Paso ${step}/${maxSteps}`}
@@ -844,6 +892,24 @@ export default function LandingView() {
           {/* ── STEP 3 – Inventory + extras ─────────────────────────────── */}
           {step === 3 && isFlete && (
             <div className="s3-wrap">
+              {movingServiceRecommendation && (
+                <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 14px', borderRadius: 14, border: '1.5px solid #f59e0b60', background: '#fff7ed', color: '#9a3412' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 3 }}>{movingServiceRecommendation.title}</div>
+                    <div style={{ fontSize: 11, lineHeight: 1.45 }}>{movingServiceRecommendation.desc}</div>
+                    {movingServiceRecommendation.price > 0 && (
+                      <div style={{ fontSize: 11, fontWeight: 800, marginTop: 4 }}>Estimado como {movingServiceRecommendation.type === 'mudanza' ? 'mudanza' : 'flete'}: ${fmt(movingServiceRecommendation.price)}</div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => switchMovingService(movingServiceRecommendation.type)}
+                    style={{ flexShrink: 0, border: 'none', borderRadius: 10, background: '#f59e0b', color: '#fff', padding: '9px 12px', fontSize: 11, fontWeight: 900, cursor: 'pointer' }}
+                  >
+                    Usar {movingServiceRecommendation.type === 'mudanza' ? 'mudanza' : 'flete'}
+                  </button>
+                </div>
+              )}
 
               {/* ── Left column: what you're moving ─── */}
               <div className="s3-col">
@@ -920,18 +986,13 @@ export default function LandingView() {
                   { v: 'none',    title: 'Solo traslado',          desc: 'El chofer conduce. Carga y descarga por tu cuenta.' },
                   { v: 'driver',  title: 'Chofer ayuda',           desc: 'El chofer ayuda a cargar y descargar. Incluido en precio base.' },
                   { v: 'helpers', title: 'Chofer + ayudante',      desc: `Chofer incluido + ayudante adicional. +$${fmt(helperUnitPrice)} c/u` },
-                ].map(opt => {
+                ].filter(opt => !(serviceType === 'mudanza' && opt.v === 'none')).map(opt => {
                   const isRecommended = invVol > 0 && suggestHelperMode !== 'none' && opt.v === suggestHelperMode;
                   const isActive = helpMode === opt.v;
                   const recommendedActive = isActive && isRecommended && !helpModeManual;
                   return (
                   <button key={opt.v} type="button" onClick={() => {
                     setHelpModeManual(true);
-                    if (requiredHelpers > 0 && opt.v !== 'helpers') {
-                      setHelpMode('helpers');
-                      setNumHelpers(n => Math.max(requiredHelpers, n));
-                      return;
-                    }
                     setHelpMode(opt.v);
                   }}
                     style={{
@@ -962,11 +1023,11 @@ export default function LandingView() {
                   <div style={{ marginTop: 4, padding: '10px 12px', background: '#EEF4FF', borderRadius: 10, border: '1px solid #0052FF20' }}>
                     <ExtraRow
                       label="Número de ayudantes"
-                      sub={requiredHelpers > 0 ? `Minimo recomendado por tus articulos: ${requiredHelpers}` : 'Ademas del chofer'}
+                      sub={requiredHelpers > 0 ? `Recomendado por tus articulos: ${requiredHelpers}` : 'Ademas del chofer'}
                       value={numHelpers}
-                      onDec={() => setNumHelpers(n => Math.max(requiredHelpers || 1, n - 1))}
+                      onDec={() => setNumHelpers(n => Math.max(1, n - 1))}
                       onInc={() => setNumHelpers(n => n + 1)}
-                      onSet={v => setNumHelpers(Math.max(requiredHelpers || 1, Number(v) || 1))}
+                      onSet={v => setNumHelpers(Math.max(1, Number(v) || 1))}
                     />
                   </div>
                 )}

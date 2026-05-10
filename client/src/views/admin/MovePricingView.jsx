@@ -22,6 +22,7 @@ export default function MovePricingView() {
   const [serviceTab, setServiceTab] = useState('flete');
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
+  const [openSections, setOpenSections] = useState({ furgon: true, camion34: false, camionLargo: false, items: false });
 
   useEffect(() => {
     Promise.all([api.getVehicleConfigs(), api.getInventoryConfigs().catch(() => [])])
@@ -86,8 +87,14 @@ export default function MovePricingView() {
       )}
 
       {visibleConfigs.map(cfg => (
-        <VehicleCard
+        <AccordionSection
           key={cfg._id || cfg.id}
+          title={`${VEHICLE_ICONS[cfg.vehicleType] || 'ðŸšš'} ${cfg.name}`}
+          subtitle={`Base $${fmt(cfg.basePrice)} · ${cfg.active ? 'Activo' : 'Inactivo'}`}
+          open={Boolean(openSections[cfg.vehicleType])}
+          onToggle={() => setOpenSections(s => ({ ...s, [cfg.vehicleType]: !s[cfg.vehicleType] }))}
+        >
+        <VehicleCard
           config={cfg}
           serviceType={serviceTab}
           onEdit={() => setEditing(cfg)}
@@ -99,10 +106,18 @@ export default function MovePricingView() {
             } catch (err) { toast('❌ ' + err.message); }
           }}
         />
+        </AccordionSection>
       ))}
 
       {serviceTab === 'flete' && (
-        <InventoryConfigSection items={items} onSaved={reloadItems} />
+        <AccordionSection
+          title="Articulos del cotizador"
+          subtitle={`${items.length} articulos configurables`}
+          open={Boolean(openSections.items)}
+          onToggle={() => setOpenSections(s => ({ ...s, items: !s.items }))}
+        >
+          <InventoryConfigSection items={items} onSaved={reloadItems} />
+        </AccordionSection>
       )}
 
       {editing && (
@@ -112,6 +127,25 @@ export default function MovePricingView() {
           onSaved={() => { setEditing(null); reload(); toast('✅ Precios actualizados'); }}
         />
       )}
+    </div>
+  );
+}
+
+function AccordionSection({ title, subtitle, open, onToggle, children }) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 16, marginBottom: 10, overflow: 'hidden' }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '13px 14px', border: 'none', background: open ? '#f8fbff' : '#fff', cursor: 'pointer', textAlign: 'left' }}
+      >
+        <span style={{ minWidth: 0 }}>
+          <span style={{ display: 'block', fontSize: 14, fontWeight: 900, color: '#0f172a' }}>{title}</span>
+          {subtitle && <span style={{ display: 'block', fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{subtitle}</span>}
+        </span>
+        <span style={{ fontSize: 16, color: 'var(--accent)', fontWeight: 900, transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform .18s ease' }}>⌄</span>
+      </button>
+      {open && <div style={{ padding: '0 10px 10px' }}>{children}</div>}
     </div>
   );
 }
@@ -181,10 +215,12 @@ function VehicleCard({ config: c, serviceType = 'flete', onEdit, onToggleActive 
         <div style={{ background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 11, padding: '10px 12px', gridColumn: '1 / -1' }}>
           <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.5, color: 'var(--muted)', marginBottom: 8 }}>SERVICIO DE CARGA</div>
           <div style={{ display: 'flex', gap: 6 }}>
-            <div style={{ flex: 1, textAlign: 'center', padding: '8px 6px', background: '#fff', border: '1px solid var(--border)', borderRadius: 9 }}>
-              <div style={{ fontSize: 9, color: 'var(--muted)', margin: '2px 0 4px', lineHeight: 1.3 }}>Solo traslado<br/><span style={{color:'#94a3b8'}}>chofer solo conduce</span></div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: '#475569' }}>$0</div>
-            </div>
+            {!isMudanza && (
+              <div style={{ flex: 1, textAlign: 'center', padding: '8px 6px', background: '#fff', border: '1px solid var(--border)', borderRadius: 9 }}>
+                <div style={{ fontSize: 9, color: 'var(--muted)', margin: '2px 0 4px', lineHeight: 1.3 }}>Solo traslado<br/><span style={{color:'#94a3b8'}}>chofer solo conduce</span></div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: '#475569' }}>$0</div>
+              </div>
+            )}
             <div style={{ flex: 1, textAlign: 'center', padding: '8px 6px', background: '#EEF4FF', border: '2px solid #0052FF40', borderRadius: 9 }}>
               <div style={{ fontSize: 9, color: '#0052FF90', margin: '2px 0 4px', lineHeight: 1.3 }}>Chofer ayuda<br/><span style={{color:'#0052FF70'}}>incluido en base</span></div>
               <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--accent)' }}>$0</div>
@@ -202,7 +238,7 @@ function VehicleCard({ config: c, serviceType = 'flete', onEdit, onToggleActive 
             return (
               <div style={{ marginTop: 8, padding: '8px 10px', background: '#0052FF06', borderRadius: 8, fontSize: 10, color: '#475569', lineHeight: 1.9 }}>
                 <strong style={{ color: '#0052FF' }}>Ejemplos a 30 km:</strong><br/>
-                🚗 Solo traslado: <strong>${fmt(km30)}</strong><br/>
+                {!isMudanza && <>🚗 Solo traslado: <strong>${fmt(km30)}</strong><br/></>}
                 👷 Chofer ayuda: <strong>${fmt(km30)}</strong><br/>
                 👷👷 Chofer + 1 ayudante: <strong>${fmt(km30 + Number(ex.helper || 0))}</strong>
               </div>
@@ -479,13 +515,17 @@ function EditModal({ config: c, onClose, onSaved }) {
         <div style={{ background: '#f8fbff', border: '1px solid #0052FF20', borderRadius: 12, padding: '13px 13px', marginBottom: 12 }}>
           <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.2, color: 'var(--accent)', marginBottom: 4 }}>SERVICIO DE CARGA</div>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.5 }}>
-            El cliente elige el nivel de servicio. "Solo traslado" no tiene costo extra — el precio es base + km.
+            {isMudanza
+              ? 'En mudanzas el chofer va incluido como parte del servicio. Solo se cobran ayudantes adicionales.'
+              : 'El cliente elige el nivel de servicio. "Solo traslado" no tiene costo extra — el precio es base + km.'}
           </div>
-          <div>
-            <FL>🚗 Solo traslado (costo adicional)</FL>
-            <input type="number" value={0} disabled style={{ ...inp, background: '#f1f5f9', color: '#94a3b8' }} />
-            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, marginBottom: 10 }}>Sin cobro extra — cliente carga y descarga por su cuenta</div>
-          </div>
+          {!isMudanza && (
+            <div>
+              <FL>🚗 Solo traslado (costo adicional)</FL>
+              <input type="number" value={0} disabled style={{ ...inp, background: '#f1f5f9', color: '#94a3b8' }} />
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, marginBottom: 10 }}>Sin cobro extra — cliente carga y descarga por su cuenta</div>
+            </div>
+          )}
           <div style={{ padding: '9px 11px', background: '#fff', border: '1px solid var(--border)', borderRadius: 9, marginBottom: 10 }}>
             <div style={{ fontSize: 11, fontWeight: 800, color: '#0f172a' }}>Chofer incluido en precio base</div>
             <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Si el chofer ayuda a cargar, no se suma costo extra. Solo se cobran ayudantes adicionales.</div>
@@ -498,7 +538,7 @@ function EditModal({ config: c, onClose, onSaved }) {
           {/* Live preview */}
           <div style={{ marginTop: 12, padding: '10px 12px', background: '#EEF4FF', borderRadius: 10, fontSize: 11, color: '#0052FF', lineHeight: 2 }}>
             <strong>Vista previa del servicio de carga:</strong><br/>
-            🚗 Solo traslado → +$0<br/>
+            {!isMudanza && <>🚗 Solo traslado → +$0<br/></>}
             👷 Chofer ayuda → +$0<br/>
             👷👷 Chofer y 2 ayudantes → +${fmt(2 * Number(extras.helper))}
           </div>
