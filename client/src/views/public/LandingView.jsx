@@ -292,8 +292,10 @@ export default function LandingView() {
   const includedM3 = Number(cfgExtras.included_m3 ?? FLETE_BASE_VOL);
   const extraM3Price = Number(cfgExtras.extra_m3 ?? FLETE_EXTRA_M3);
   const extraVol     = Math.max(0, invVol - includedM3);
-  const partialDiscountPct = serviceType === 'flete' && smartVehicleType !== volumeVehicleType && invVol > 0 && invVol <= Number(cfgExtras.partial_discount_max_m3 ?? 4)
-    ? Number(cfgExtras.partial_discount_pct ?? 20)
+  const vehicleCapacityM3 = Number(vehicleLabel?.maxVol || 0);
+  const partialDiscountMaxPct = Number(cfgExtras.partial_discount_pct ?? 30);
+  const partialDiscountPct = serviceType === 'flete' && smartVehicleType !== volumeVehicleType && invVol > 0 && vehicleCapacityM3 > 0
+    ? Math.max(0, Math.min(partialDiscountMaxPct, partialDiscountMaxPct * (1 - (invVol / vehicleCapacityM3))))
     : 0;
   const partialDiscount = roundToThousand(rawVehicleBasePrice * partialDiscountPct / 100);
   const vehicleBasePrice = Math.max(0, rawVehicleBasePrice - partialDiscount);
@@ -1004,7 +1006,7 @@ export default function LandingView() {
                     </div>
                     {partialDiscount > 0 && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#16a34a' }}>
-                        <span>Descuento por carga parcial</span>
+                        <span>Descuento por carga parcial ({partialDiscountPct.toFixed(0)}%)</span>
                         <span style={{ fontWeight: 700 }}>-${fmt(partialDiscount)}</span>
                       </div>
                     )}

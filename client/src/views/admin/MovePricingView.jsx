@@ -368,8 +368,7 @@ function EditModal({ config: c, onClose, onSaved }) {
     packing:     c.extras?.packing     ?? 15000,
     included_m3: c.extras?.included_m3 ?? 3,
     extra_m3:    c.extras?.extra_m3    ?? 16000,
-    partial_discount_pct: c.extras?.partial_discount_pct ?? 20,
-    partial_discount_max_m3: c.extras?.partial_discount_max_m3 ?? 4,
+    partial_discount_pct: c.extras?.partial_discount_pct ?? 30,
   });
   const [saving, setSaving] = useState(false);
 
@@ -530,14 +529,12 @@ function EditModal({ config: c, onClose, onSaved }) {
                   <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Precio por cada m3 sobre el volumen incluido.</div>
                 </div>
                 <div>
-                  <FL>Descuento carga parcial (%)</FL>
+                  <FL>Descuento max carga parcial (%)</FL>
                   <input type="number" min="0" max="80" value={extras.partial_discount_pct} onChange={e => setExtra('partial_discount_pct', e.target.value)} style={inp} />
-                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Aplica si sube de camion por alto/largo pero lleva poco.</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Empieza con este descuento cuando lleva poco. Se reduce automaticamente hasta 0% al llenar el camion.</div>
                 </div>
-                <div>
-                  <FL>Max m3 para descuento</FL>
-                  <input type="number" min="0" step="0.1" value={extras.partial_discount_max_m3} onChange={e => setExtra('partial_discount_max_m3', e.target.value)} style={inp} />
-                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Hasta este volumen se considera carga parcial.</div>
+                <div style={{ padding: '9px 11px', borderRadius: 10, border: '1px solid #bfdbfe', background: '#eff6ff', color: '#1d4ed8', fontSize: 10, lineHeight: 1.45 }}>
+                  Si un articulo obliga a usar un camion mas grande por ser alto, largo o delicado, pero ocupa poco volumen, MUVE descuenta parte del precio base. Mientras mas se llena el camion, menor es el descuento.
                 </div>
               </div>
             )}
