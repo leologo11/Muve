@@ -935,25 +935,6 @@ export default function LandingView() {
           {/* ── STEP 3 – Inventory + extras ─────────────────────────────── */}
           {step === 3 && isFlete && (
             <div className="s3-wrap">
-              {false && movingServiceRecommendation && (
-                <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 14px', borderRadius: 14, border: '1.5px solid #f59e0b60', background: '#fff7ed', color: '#9a3412' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 3 }}>{movingServiceRecommendation.title}</div>
-                    <div style={{ fontSize: 11, lineHeight: 1.45 }}>{movingServiceRecommendation.desc}</div>
-                    {movingServiceRecommendation.price > 0 && (
-                      <div style={{ fontSize: 11, fontWeight: 800, marginTop: 4 }}>Estimado como {movingServiceRecommendation.type === 'mudanza' ? 'mudanza' : 'flete'}: ${fmt(movingServiceRecommendation.price)}</div>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => switchMovingService(movingServiceRecommendation.type)}
-                    style={{ flexShrink: 0, border: 'none', borderRadius: 10, background: '#f59e0b', color: '#fff', padding: '9px 12px', fontSize: 11, fontWeight: 900, cursor: 'pointer' }}
-                  >
-                    Usar {movingServiceRecommendation.type === 'mudanza' ? 'mudanza' : 'flete'}
-                  </button>
-                </div>
-              )}
-
               {/* ── Left column: what you're moving ─── */}
               <div className="s3-col">
 
@@ -1205,25 +1186,6 @@ export default function LandingView() {
                   </div>
                 )}
               </div>
-
-              {false && movingServiceRecommendation && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 14px', borderRadius: 14, border: '1.5px solid #f59e0b60', background: '#fff7ed', color: '#9a3412' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 3 }}>{movingServiceRecommendation.title}</div>
-                    <div style={{ fontSize: 11, lineHeight: 1.45 }}>{movingServiceRecommendation.desc}</div>
-                    {movingServiceRecommendation.price > 0 && (
-                      <div style={{ fontSize: 11, fontWeight: 800, marginTop: 4 }}>Estimado como {movingServiceRecommendation.type === 'mudanza' ? 'mudanza' : 'flete'}: ${fmt(movingServiceRecommendation.price)}</div>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => switchMovingService(movingServiceRecommendation.type)}
-                    style={{ flexShrink: 0, border: 'none', borderRadius: 10, background: '#f59e0b', color: '#fff', padding: '9px 12px', fontSize: 11, fontWeight: 900, cursor: 'pointer' }}
-                  >
-                    Usar {movingServiceRecommendation.type === 'mudanza' ? 'mudanza' : 'flete'}
-                  </button>
-                </div>
-              )}
 
               </div>
             </div>
