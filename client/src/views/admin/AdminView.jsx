@@ -238,7 +238,7 @@ export default function AdminView() {
   const addrCountMap = useMemo(() => {
     const map = {};
     activePackages.forEach(p => {
-      const key = (p.address || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
+      const key = (p.address || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
       if (key) map[key] = (map[key] || 0) + 1;
     });
     return map;
@@ -655,7 +655,7 @@ export default function AdminView() {
                 onStatusChange={handleStatusChange}
                 onDelete={handleDelete}
                 onRestore={handleRestore}
-                sameAddressCount={addrCountMap[(pkg.address || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ')] || 1}
+                sameAddressCount={addrCountMap[(pkg.address || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ')] || 1}
               />
             ))}
           </div>
@@ -669,22 +669,6 @@ export default function AdminView() {
                 <span style={{ fontSize: 12, color: '#d4650a', fontWeight: 600 }}>
                   {noGeoCount} paquete{noGeoCount > 1 ? 's' : ''} sin geocodificar — borde naranja en la tabla
                 </span>
-                {p.deliveryMeta?.distanceMeters != null && (
-                  <div style={{ fontSize: 11, fontWeight: 800, color: p.deliveryMeta.onPoint === false ? 'var(--danger)' : 'var(--accent)', marginTop: 4 }}>
-                    GPS: {p.deliveryMeta.onPoint === false ? 'Lejos del punto' : 'En punto'} · {Math.round(p.deliveryMeta.distanceMeters)}m
-                  </div>
-                )}
-                {p.deliveryMeta?.payStatus && (
-                  <div style={{ fontSize: 11, fontWeight: 800, color: p.deliveryMeta.payStatus === 'rejected' ? 'var(--danger)' : 'var(--accent)', marginTop: 4 }}>
-                    Pago: {p.deliveryMeta.payStatus === 'rejected' ? 'rechazado' : 'aprobado'}
-                  </div>
-                )}
-                {p.status === 'no-entregado' && (
-                  <div style={{ display: 'flex', gap: 6, marginTop: 7, flexWrap: 'wrap' }}>
-                    <button onClick={() => reviewPackagePay(p, 'approved')} style={actBtn('var(--accent)')}>Aprobar pago</button>
-                    <button onClick={() => reviewPackagePay(p, 'rejected')} style={actBtn('var(--danger)')}>Rechazar pago</button>
-                  </div>
-                )}
               </div>
             )}
             <PackageTable
@@ -1459,6 +1443,22 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
                 </div>
                 {p.note && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>📝 {p.note}</div>}
                 {p.failReason && <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 2 }}>↳ {p.failReason}</div>}
+                {p.deliveryMeta?.distanceMeters != null && (
+                  <div style={{ fontSize: 11, fontWeight: 800, color: p.deliveryMeta.onPoint === false ? 'var(--danger)' : 'var(--accent)', marginTop: 4 }}>
+                    GPS: {p.deliveryMeta.onPoint === false ? 'Lejos del punto' : 'En punto'} - {Math.round(p.deliveryMeta.distanceMeters)}m
+                  </div>
+                )}
+                {p.deliveryMeta?.payStatus && (
+                  <div style={{ fontSize: 11, fontWeight: 800, color: p.deliveryMeta.payStatus === 'rejected' ? 'var(--danger)' : 'var(--accent)', marginTop: 4 }}>
+                    Pago: {p.deliveryMeta.payStatus === 'rejected' ? 'rechazado' : 'aprobado'}
+                  </div>
+                )}
+                {p.status === 'no-entregado' && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 7, flexWrap: 'wrap' }}>
+                    <button onClick={() => reviewPackagePay(p, 'approved')} style={actBtn('var(--accent)')}>Aprobar pago</button>
+                    <button onClick={() => reviewPackagePay(p, 'rejected')} style={actBtn('var(--danger)')}>Rechazar pago</button>
+                  </div>
+                )}
               </div>
               {(p.photoUrl || p.photo2Url) && (
                 <div style={{ display: 'flex', gap: 4, marginLeft: 8 }}>

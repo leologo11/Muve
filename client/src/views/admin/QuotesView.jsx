@@ -67,6 +67,13 @@ function printQuotePDF(q, priceMin, priceMax, cfg) {
   const dh = q.driverHelps || false;
   const nh = q.numHelpers || 0;
   const bd = cfg && km > 0 ? calcBreakdown(cfg, km, dh, nh, q.numFloors || 0, q.needsPacking || false) : null;
+  const exactTotal = bd?.total || (Number(priceMin) === Number(priceMax) ? Number(priceMin) : 0);
+  const priceText = exactTotal > 0
+    ? `$${fmt(exactTotal)}`
+    : `$${fmt(priceMin)} - $${fmt(priceMax)}`;
+  const priceNote = exactTotal > 0
+    ? 'Precio calculado con la configuracion vigente.'
+    : 'Precio sujeto a evaluacion por direcciones o detalles pendientes.';
 
   const helpLabel = dh
     ? (nh > 0 ? `Traslado + chofer + ${nh} ayudante${nh !== 1 ? 's' : ''}` : 'Traslado + ayuda del chofer')
@@ -141,8 +148,8 @@ ${breakdownHtml}
 
 <div class="price-box">
   <div class="price-lbl">Precio estimado para el cliente</div>
-  <div class="price-num">$${fmt(priceMin)} – $${fmt(priceMax)}</div>
-  <div class="price-note">El precio final se confirma al agendar el servicio.</div>
+  <div class="price-num">${priceText}</div>
+  <div class="price-note">${priceNote}</div>
 </div>
 
 ${q.clientNotes ? `<h2>Notas del cliente</h2><div style="font-size:13px;color:#475569;padding:10px 0;line-height:1.6">${q.clientNotes}</div>` : ''}

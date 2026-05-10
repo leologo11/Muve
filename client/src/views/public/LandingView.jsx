@@ -490,7 +490,6 @@ export default function LandingView() {
         */}
 
         <section className="quote-panel">
-        <a className="admin-link" href="/login">Acceso admin</a>
 
         {/* Gradient top bar */}
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: 'linear-gradient(90deg,#0052FF,#00DAFF)', zIndex: 2 }} />
@@ -628,7 +627,7 @@ export default function LandingView() {
 
               <label>
                 Dirección de entrega *
-                <span className={`inline-field-note${dest.address && !dest.lat ? ' show' : ''}`}>Verifica la direcciÃ³n</span>
+                <span className={`inline-field-note${dest.address && !dest.lat ? ' show' : ''}`}>Selecciona una sugerencia</span>
                 <AddressAutocomplete
                   value={dest.address}
                   onChange={v => { setDest({ address: v, lat: null, lng: null }); setDistanceKm(null); setVehicles([]); setError(''); }}
@@ -868,6 +867,7 @@ export default function LandingView() {
                       value={numHelpers}
                       onDec={() => setNumHelpers(n => Math.max(1, n - 1))}
                       onInc={() => setNumHelpers(n => n + 1)}
+                      onSet={v => setNumHelpers(Math.max(1, Number(v) || 1))}
                     />
                   </div>
                 )}
@@ -879,7 +879,7 @@ export default function LandingView() {
                   Otros adicionales
                 </div>
                 <ExtraRow label="Pisos sin ascensor" sub="Subir o bajar escaleras"
-                  value={numFloors} onDec={() => setNumFloors(n => Math.max(0, n - 1))} onInc={() => setNumFloors(n => n + 1)} />
+                  value={numFloors} onDec={() => setNumFloors(n => Math.max(0, n - 1))} onInc={() => setNumFloors(n => n + 1)} onSet={v => setNumFloors(Math.max(0, Number(v) || 0))} />
                 <CheckRow label="Embalaje profesional" sub="Empacamos todo antes de cargar" checked={needsPacking} onChange={setNeedsPacking} />
                 <CheckRow label="Coordinar conserjería" sub="Trámite y aviso en edificio" checked={isConserjeria} onChange={setIsConserjeria} />
               </div>
@@ -1253,7 +1253,7 @@ function PassingCar({ c, d }) {
 
 // ── Extra row (stepper) ────────────────────────────────────────────────────────
 
-function ExtraRow({ label, sub, value, onDec, onInc }) {
+function ExtraRow({ label, sub, value, onDec, onInc, onSet }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
       <div>
@@ -1265,7 +1265,17 @@ function ExtraRow({ label, sub, value, onDec, onInc }) {
           style={{ width: 32, height: 32, borderRadius: '50%', border: '1.5px solid #dbe3ef', background: '#fff', fontSize: 18, fontWeight: 700, cursor: value === 0 ? 'not-allowed' : 'pointer', color: value === 0 ? '#cbd5e1' : '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}>
           −
         </button>
-        <span style={{ fontSize: 16, fontWeight: 900, minWidth: 22, textAlign: 'center' }}>{value}</span>
+        <input
+          type="number"
+          min="0"
+          value={value}
+          onChange={e => onSet?.(e.target.value)}
+          style={{
+            width: 42, height: 32, minHeight: 32, padding: 0, border: '1px solid transparent',
+            background: 'transparent', textAlign: 'center', fontSize: 16, fontWeight: 900,
+            color: '#0f172a', MozAppearance: 'textfield'
+          }}
+        />
         <button type="button" onClick={onInc}
           style={{ width: 32, height: 32, borderRadius: '50%', border: '1.5px solid #dbe3ef', background: '#fff', fontSize: 18, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}>
           ＋

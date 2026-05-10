@@ -1,5 +1,22 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 
+function streetNumberFrom(text) {
+  return String(text || '').match(/\b\d+[A-Za-z]?\b/)?.[0] || '';
+}
+
+function hasStreetNumber(text) {
+  return /\b\d+[A-Za-z]?\b/.test(String(text || ''));
+}
+
+function mergeTypedStreetNumber(address, typed) {
+  const number = streetNumberFrom(typed);
+  if (!number || hasStreetNumber(address)) return address;
+  const parts = String(address || '').split(',').map(p => p.trim()).filter(Boolean);
+  if (!parts.length) return address;
+  parts[0] = `${parts[0]} ${number}`;
+  return parts.join(', ');
+}
+
 const KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || '';
 
 // ── Google Places API (New) ───────────────────────────────────────────────────
@@ -13,11 +30,14 @@ async function googleSearch(q) {
   if (!res.ok) throw new Error(data?.error?.message || `Google ${res.status}`);
   return (data.suggestions || []).map(s => {
     const p = s.placePrediction || {};
+    const fullText = p.text?.text || '';
     return {
-      main:      p.structuredFormat?.mainText?.text      || p.text?.text || '',
+      main:      mergeTypedStreetNumber(p.structuredFormat?.mainText?.text || fullText || '', q),
       secondary: p.structuredFormat?.secondaryText?.text || '',
       placeId:   p.placeId,
       source:    'google',
+      typed:     q,
+      fullText,
     };
   });
 }
@@ -55,17 +75,19 @@ async function nominatimSearch(q) {
   return list.map(r => {
     const a      = r.address || {};
     const road   = [a.road, a.house_number].filter(Boolean).join(' ');
-    const main   = road || a.pedestrian || r.display_name.split(',')[0];
+    const main   = mergeTypedStreetNumber(road || a.pedestrian || r.display_name.split(',')[0], q);
     const commune = a.suburb || a.city_district || a.town || a.municipality || a.county || '';
     const city    = a.city || a.state_district || '';
+    const address = mergeTypedStreetNumber([road || main, commune, city, 'Chile'].filter(Boolean).join(', '), q);
     return {
       main,
       secondary: [commune, city, 'Chile'].filter(Boolean).join(', '),
       commune,
       lat:       parseFloat(r.lat),
       lng:       parseFloat(r.lon),
-      address:   [road, commune, city, 'Chile'].filter(Boolean).join(', '),
+      address,
       source:    'osm',
+      typed:     q,
     };
   });
 }
@@ -166,16 +188,20 @@ export default function AddressAutocomplete({
     if (sugg.source === 'google' && sugg.placeId) {
       try {
         const detail = await googleDetails(sugg.placeId);
-        setQuery(detail.address);
-        onChange?.(detail.address);
-        onSelect?.(detail);
+        const address = mergeTypedStreetNumber(detail.address, sugg.typed || query);
+        setQuery(address);
+        onChange?.(address);
+        onSelect?.({ ...detail, address });
       } catch (e) {
         console.warn('[Google details]', e.message);
-        onSelect?.({ address: sugg.main, commune: '', lat: null, lng: null });
+        const address = mergeTypedStreetNumber(sugg.fullText || sugg.main, sugg.typed || query);
+        setQuery(address);
+        onChange?.(address);
+        onSelect?.({ address, commune: '', lat: null, lng: null });
       }
     } else {
       // OSM ya tiene todo
-      const addr = sugg.address || sugg.main;
+      const addr = mergeTypedStreetNumber(sugg.address || sugg.main, sugg.typed || query);
       setQuery(addr);
       onChange?.(addr);
       onSelect?.({ address: addr, commune: sugg.commune || '', lat: sugg.lat, lng: sugg.lng });
