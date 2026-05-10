@@ -323,8 +323,9 @@ export default function LandingView() {
   const suggestHelperMode = requiredHelpers > 0 ? 'helpers' : invVol > 2 ? 'driver' : 'none';
   // Costos extras
   const floorCost    = numFloors * floorUnitPrice;
-  const helpCost     = helpMode === 'helpers' ? numHelpers * helperUnitPrice
-                     : 0;
+  const driverHelpCost = serviceType === 'mudanza' && helpMode !== 'none' ? driverHelpPrice : 0;
+  const helpersCost  = helpMode === 'helpers' ? numHelpers * helperUnitPrice : 0;
+  const helpCost     = driverHelpCost + helpersCost;
   const packCost     = needsPacking ? packingPrice : 0;
   const extraVolCost = serviceType === 'mudanza' ? 0 : roundToThousand(extraVol * extraM3Price);
   const fleteExact   = roundToThousand(vehicleBasePrice + distanceCost + extraVolCost + floorCost + helpCost + packCost);
@@ -345,11 +346,12 @@ export default function LandingView() {
       ? Math.max(0, Math.min(maxDiscount, maxDiscount * (1 - (invVol / vehicleCapacityM3))))
       : 0;
     const discount = roundToThousand(base * discountPct / 100);
+    const driverHelp = type === 'mudanza' && helpMode !== 'none' ? Number(ex.driver_help ?? FLETE_DRIVER_HELP) : 0;
     const helper = helpMode === 'helpers' ? numHelpers * Number(ex.helper ?? FLETE_HELPER_COST) : 0;
     const floors = numFloors * Number(ex.floor ?? FLETE_FLOOR_COST);
     const packing = needsPacking ? Number(ex.packing ?? FLETE_PACKING_COST) : 0;
     const discountedBase = Math.max(0, base - discount);
-    return roundToThousand(discountedBase + kmCost + extraCost + helper + floors + packing);
+    return roundToThousand(discountedBase + kmCost + extraCost + driverHelp + helper + floors + packing);
   };
   const fleteComparePrice = compareMovingPrice('flete');
   const mudanzaComparePrice = compareMovingPrice('mudanza');
@@ -892,7 +894,7 @@ export default function LandingView() {
           {/* ── STEP 3 – Inventory + extras ─────────────────────────────── */}
           {step === 3 && isFlete && (
             <div className="s3-wrap">
-              {movingServiceRecommendation && (
+              {false && movingServiceRecommendation && (
                 <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 14px', borderRadius: 14, border: '1.5px solid #f59e0b60', background: '#fff7ed', color: '#9a3412' }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 3 }}>{movingServiceRecommendation.title}</div>
@@ -984,7 +986,7 @@ export default function LandingView() {
                 </div>
                 {[
                   { v: 'none',    title: 'Solo traslado',          desc: 'El chofer conduce. Carga y descarga por tu cuenta.' },
-                  { v: 'driver',  title: 'Chofer ayuda',           desc: 'El chofer ayuda a cargar y descargar. Incluido en precio base.' },
+                  { v: 'driver',  title: 'Chofer ayuda',           desc: serviceType === 'mudanza' ? `El chofer ayuda a cargar y descargar. +$${fmt(driverHelpPrice)}` : 'El chofer ayuda a cargar y descargar. Incluido en precio base.' },
                   { v: 'helpers', title: 'Chofer + ayudante',      desc: `Chofer incluido + ayudante adicional. +$${fmt(helperUnitPrice)} c/u` },
                 ].filter(opt => !(serviceType === 'mudanza' && opt.v === 'none')).map(opt => {
                   const isRecommended = invVol > 0 && suggestHelperMode !== 'none' && opt.v === suggestHelperMode;
@@ -1131,19 +1133,19 @@ export default function LandingView() {
                     )}
                     {helpMode === 'driver' && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                        <span>Ayuda del chofer incluida</span>
-                        <span style={{ fontWeight: 700, color: '#22c55e' }}>$0</span>
+                        <span>{serviceType === 'mudanza' ? 'Ayuda del chofer' : 'Ayuda del chofer incluida'}</span>
+                        <span style={{ fontWeight: 700, color: serviceType === 'mudanza' ? '#f59e0b' : '#22c55e' }}>{serviceType === 'mudanza' ? `+$${fmt(driverHelpCost)}` : '$0'}</span>
                       </div>
                     )}
                     {helpMode === 'helpers' && (
                       <>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                          <span>Ayuda del chofer incluida</span>
-                          <span style={{ fontWeight: 700, color: '#22c55e' }}>$0</span>
+                          <span>{serviceType === 'mudanza' ? 'Ayuda del chofer' : 'Ayuda del chofer incluida'}</span>
+                          <span style={{ fontWeight: 700, color: serviceType === 'mudanza' ? '#f59e0b' : '#22c55e' }}>{serviceType === 'mudanza' ? `+$${fmt(driverHelpCost)}` : '$0'}</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
                           <span>{numHelpers} ayudante{numHelpers > 1 ? 's' : ''} × ${fmt(helperUnitPrice)}</span>
-                          <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(numHelpers * helperUnitPrice)}</span>
+                          <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(helpersCost)}</span>
                         </div>
                       </>
                     )}
@@ -1161,6 +1163,25 @@ export default function LandingView() {
                   </div>
                 )}
               </div>
+
+              {movingServiceRecommendation && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 14px', borderRadius: 14, border: '1.5px solid #f59e0b60', background: '#fff7ed', color: '#9a3412' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 3 }}>{movingServiceRecommendation.title}</div>
+                    <div style={{ fontSize: 11, lineHeight: 1.45 }}>{movingServiceRecommendation.desc}</div>
+                    {movingServiceRecommendation.price > 0 && (
+                      <div style={{ fontSize: 11, fontWeight: 800, marginTop: 4 }}>Estimado como {movingServiceRecommendation.type === 'mudanza' ? 'mudanza' : 'flete'}: ${fmt(movingServiceRecommendation.price)}</div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => switchMovingService(movingServiceRecommendation.type)}
+                    style={{ flexShrink: 0, border: 'none', borderRadius: 10, background: '#f59e0b', color: '#fff', padding: '9px 12px', fontSize: 11, fontWeight: 900, cursor: 'pointer' }}
+                  >
+                    Usar {movingServiceRecommendation.type === 'mudanza' ? 'mudanza' : 'flete'}
+                  </button>
+                </div>
+              )}
 
               </div>
             </div>
