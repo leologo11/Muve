@@ -72,7 +72,8 @@ function printQuotePDF(q, priceMin, priceMax, cfg) {
   const destinationFloors = storedOriginFloors || storedDestinationFloors ? storedDestinationFloors : 0;
   const totalFloors = Number(q.numFloors ?? (originFloors + destinationFloors)) || 0;
   const bd = cfg && km > 0 ? calcBreakdown(cfg, km, dh, nh, totalFloors, q.needsPacking || false) : null;
-  const exactTotal = bd?.total || (Number(priceMin) === Number(priceMax) ? Number(priceMin) : 0);
+  const savedExactTotal = Number(priceMin) === Number(priceMax) ? Number(priceMin) : 0;
+  const exactTotal = savedExactTotal || bd?.total || 0;
   const priceText = exactTotal > 0
     ? `$${fmt(exactTotal)}`
     : `$${fmt(priceMin)} - $${fmt(priceMax)}`;
@@ -92,7 +93,7 @@ ${dh ? `<div class="row"><span class="lbl">Ayuda del chofer incluida</span><span
 ${bd.hlCost > 0 ? `<div class="row"><span class="lbl">Ayudantes adicionales (${nh} × $${fmt(cfg?.extras?.helper)})</span><span class="val">$${fmt(bd.hlCost)}</span></div>` : ''}
 ${bd.flCost > 0 ? `<div class="row"><span class="lbl">Pisos sin ascensor (${originFloors} retiro + ${destinationFloors} entrega)</span><span class="val">$${fmt(bd.flCost)}</span></div>` : ''}
 ${bd.pkCost > 0 ? `<div class="row"><span class="lbl">Embalaje profesional</span><span class="val">$${fmt(bd.pkCost)}</span></div>` : ''}
-<div class="row" style="margin-top:4px;border-top:2px solid #0052FF20"><span class="lbl" style="font-weight:700;color:#0f172a">Total de referencia</span><span class="val" style="color:#0052FF">$${fmt(bd.total)}</span></div>
+<div class="row" style="margin-top:4px;border-top:2px solid #0052FF20"><span class="lbl" style="font-weight:700;color:#0f172a">Total de referencia</span><span class="val" style="color:#0052FF">$${fmt(exactTotal || bd.total)}</span></div>
 ` : '';
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Cotizacion MUVE ${q.quoteCode}</title>

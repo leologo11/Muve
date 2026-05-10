@@ -237,7 +237,16 @@ export default function LandingView() {
   const selectServiceType = (v) => {
     resetQuoteFlow();
     setServiceType(v);
+    if (v === 'flete') setHelpMode('driver');
     setStep(2);
+  };
+
+  const resetInventoryLoad = () => {
+    setInventory([]);
+    setInventoryExtras('');
+    setHelpModeManual(false);
+    setNumHelpers(1);
+    setHelpMode(serviceType === 'flete' ? 'driver' : 'none');
   };
 
   // ── Animation progress ──────────────────────────────────────────────────────
@@ -299,6 +308,8 @@ export default function LandingView() {
     : 0;
   const partialDiscount = roundToThousand(rawVehicleBasePrice * partialDiscountPct / 100);
   const vehicleBasePrice = Math.max(0, rawVehicleBasePrice - partialDiscount);
+  const vehicleLoadPct = vehicleCapacityM3 > 0 ? Math.min(100, Math.round((invVol / vehicleCapacityM3) * 100)) : 0;
+  const partialDiscountStage = vehicleLoadPct <= 35 ? 'poca carga' : vehicleLoadPct <= 70 ? 'carga media' : 'carga alta';
   // Ayudante sugerido: vol>6 o ítems pesados → chofer+ayudante, vol>2 → solo chofer
   const suggestHelperMode = requiredHelpers > 0 ? 'helpers' : invVol > 2 ? 'driver' : 'none';
   // Costos extras
@@ -368,9 +379,13 @@ export default function LandingView() {
       return;
     }
     if (helpModeManual) return;
+    if (serviceType === 'flete' && invVol === 0) {
+      setHelpMode('driver');
+      return;
+    }
     setHelpMode(invVol > 0 ? suggestHelperMode : 'none');
     if (suggestHelperMode === 'helpers') setNumHelpers(n => Math.max(requiredHelpers || 1, n));
-  }, [invVol, suggestHelperMode, helpModeManual, requiredHelpers]);
+  }, [invVol, suggestHelperMode, helpModeManual, requiredHelpers, serviceType]);
 
   // Auto-recommend vehicle from inventory (no price shown yet)
   useEffect(() => {
@@ -869,6 +884,15 @@ export default function LandingView() {
                 <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, color: '#64748b', textTransform: 'uppercase', marginBottom: 12 }}>
                   ¿Qué vas a transportar?
                 </div>
+                {(inventory.some(i => i.qty > 0) || inventoryExtras.trim()) && (
+                  <button
+                    type="button"
+                    onClick={resetInventoryLoad}
+                    style={{ width: '100%', marginBottom: 10, border: '1px solid #bfdbfe', background: '#fff', color: 'var(--accent)', borderRadius: 9, padding: '8px 10px', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    Reiniciar carga
+                  </button>
+                )}
                 <InventoryPicker inventory={inventory} onChange={setInventory} extras={inventoryExtras} onExtrasChange={setInventoryExtras} catalog={catalog} />
               </div>
 
@@ -986,27 +1010,32 @@ export default function LandingView() {
                 <div style={{ marginBottom: invVol > 0 ? 10 : 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginBottom: 4 }}>
                     <span style={{ fontWeight: 700 }}>{invVol.toFixed(1)} m³</span>
-                    <span>{invVol === 0 ? 'Agrega artículos para calcular' : `${vehicleLabel?.name || 'Vehículo'} recomendado por volumen`}</span>
+                    <span>{invVol === 0 ? 'Agrega artículos para calcular' : `${vehicleLoadPct}% de ${vehicleLabel?.name || 'vehículo'}`}</span>
                   </div>
                   <div style={{ height: 8, background: '#E2E8F0', borderRadius: 99, overflow: 'hidden' }}>
                     <div style={{
                       height: '100%', borderRadius: 99,
-                      width: `${Math.min(invVol / 18 * 100, 100)}%`,
-                      background: invVol > 14 ? '#ef4444' : invVol > 7 ? '#f59e0b' : 'var(--accent)',
+                      width: `${vehicleLoadPct}%`,
+                      background: vehicleLoadPct > 85 ? '#ef4444' : vehicleLoadPct > 55 ? '#f59e0b' : 'var(--accent)',
                       transition: 'width .5s cubic-bezier(.2,.8,.25,1), background .3s',
                     }} />
                   </div>
+                  {partialDiscount > 0 && (
+                    <div style={{ fontSize: 10, color: '#16a34a', fontWeight: 700, marginTop: 6 }}>
+                      Tramo de {partialDiscountStage}: descuento progresivo por usar poco espacio del camión.
+                    </div>
+                  )}
                 </div>
 
                 {invVol > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3, borderTop: '1px solid #0052FF15', paddingTop: 8 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
                       <span>Precio base {vehicleLabel?.name || ''}</span>
-                      <span style={{ fontWeight: 700 }}>${fmt(vehicleBasePrice)}</span>
+                      <span style={{ fontWeight: 700 }}>${fmt(rawVehicleBasePrice)}</span>
                     </div>
                     {partialDiscount > 0 && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#16a34a' }}>
-                        <span>Descuento por carga parcial ({partialDiscountPct.toFixed(0)}%)</span>
+                        <span>Descuento {partialDiscountStage} ({partialDiscountPct.toFixed(0)}%)</span>
                         <span style={{ fontWeight: 700 }}>-${fmt(partialDiscount)}</span>
                       </div>
                     )}
