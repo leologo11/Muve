@@ -14,7 +14,7 @@ function calcVehiclePrice(config, distanceKm, numHelpers = 0, numFloors = 0, nee
   const ppk = tier ? Number(tier.price_per_km || 0) : 0;
   const extras = config.extras || {};
   const kmCost = distanceKm * ppk;
-  const driverHelpCost = driverHelps ? Number(extras.driver_help ?? 20000) : 0;
+  const driverHelpCost = 0; // El chofer va incluido en el precio base.
   const helperCost = numHelpers * Number(extras.helper || 0);
   const floorCost = numFloors * Number(extras.floor || 0);
   const packingCost = needsPacking ? Number(extras.packing || 0) : 0;
@@ -34,6 +34,20 @@ function normalizePublicVehicleConfig(r) {
     extras: r.extras || {},
     active: r.active,
     onlyRegions: r.only_regions,
+  };
+}
+
+function normalizeInventoryItem(r) {
+  return {
+    id: r.item_key,
+    name: r.name,
+    icon: r.icon || '📦',
+    cat: r.category || 'Otros',
+    vol: Number(r.volume_m3 || 0),
+    minVehicleType: r.min_vehicle_type || 'furgon',
+    requiredHelpers: Number(r.required_helpers || 0),
+    active: r.active !== false,
+    sortOrder: r.sort_order || 0,
   };
 }
 
@@ -60,6 +74,17 @@ router.get('/vehicle-configs', async (req, res) => {
     if (err.message.includes('vehicle_configs') || err.message.includes('schema cache')) {
       return res.json([]);
     }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/public/inventory-configs — active moving item catalog (no auth)
+router.get('/inventory-configs', async (_req, res) => {
+  try {
+    const rows = await supabaseRequest(`/inventory_item_configs${qs({ active: 'eq.true', select: '*', order: 'category.asc,sort_order.asc,name.asc' })}`);
+    res.json(rows.map(normalizeInventoryItem));
+  } catch (err) {
+    if (err.message.includes('inventory_item_configs') || err.message.includes('schema cache')) return res.json([]);
     res.status(500).json({ error: err.message });
   }
 });
@@ -309,7 +334,7 @@ router.post('/quotes', async (req, res) => {
     if (originAddress) noteParts.push(`Origen: ${originAddress}`);
     if (distanceKm) noteParts.push(`Distancia: ${distanceKm} km`);
     if (vehicleType) noteParts.push(`Vehiculo: ${vehicleType}`);
-    if (driverHelps) noteParts.push('Ayuda del chofer');
+    if (driverHelps) noteParts.push('Ayuda del chofer incluida');
     if (numHelpers > 0) noteParts.push(`${numHelpers} ayudante(s) adicional(es)`);
     if (numFloors > 0) {
       const floorDetail = originFloors || destinationFloors ? `: retiro ${originFloors}, entrega ${destinationFloors}` : '';

@@ -29,7 +29,7 @@ function calcExactPrice(cfg, distKm, driverHelps, helpers, floors, packing) {
   return Math.round((
     Number(cfg.basePrice || 0)
     + distKm * ppk
-    + (driverHelps ? Number(ex.driver_help ?? 20000) : 0)
+    + 0
     + helpers * Number(ex.helper || 0)
     + floors  * Number(ex.floor  || 0)
     + (packing ? Number(ex.packing || 0) : 0)
@@ -50,7 +50,7 @@ function calcBreakdown(cfg, distKm, driverHelps, helpers, floors, packing) {
   const ex     = cfg.extras || {};
   const base   = Number(cfg.basePrice || 0);
   const kmCost = Math.round(distKm * ppk);
-  const dvCost = driverHelps ? Number(ex.driver_help ?? 20000) : 0;
+  const dvCost = 0;
   const hlCost = helpers * Number(ex.helper || 0);
   const flCost = floors  * Number(ex.floor  || 0);
   const pkCost = packing ? Number(ex.packing || 0) : 0;
@@ -81,14 +81,14 @@ function printQuotePDF(q, priceMin, priceMax, cfg) {
     : 'Precio sujeto a evaluacion por direcciones o detalles pendientes.';
 
   const helpLabel = dh
-    ? (nh > 0 ? `Traslado + chofer + ${nh} ayudante${nh !== 1 ? 's' : ''}` : 'Traslado + ayuda del chofer')
+    ? (nh > 0 ? `Traslado + chofer + ${nh} ayudante${nh !== 1 ? 's' : ''}` : 'Traslado + ayuda del chofer incluida')
     : 'Solo traslado';
 
   const breakdownHtml = bd ? `
 <h2>Detalle del precio</h2>
 <div class="row"><span class="lbl">Precio base (${VEHICLE_NAMES[q.vehicleType] || q.vehicleType})</span><span class="val">$${fmt(bd.base)}</span></div>
 <div class="row"><span class="lbl">Distancia: ${km} km × $${fmt(bd.ppk)}/km</span><span class="val">$${fmt(bd.kmCost)}</span></div>
-${bd.dvCost > 0 ? `<div class="row"><span class="lbl">Ayuda del chofer</span><span class="val">$${fmt(bd.dvCost)}</span></div>` : ''}
+${dh ? `<div class="row"><span class="lbl">Ayuda del chofer incluida</span><span class="val">$0</span></div>` : ''}
 ${bd.hlCost > 0 ? `<div class="row"><span class="lbl">Ayudantes adicionales (${nh} × $${fmt(cfg?.extras?.helper)})</span><span class="val">$${fmt(bd.hlCost)}</span></div>` : ''}
 ${bd.flCost > 0 ? `<div class="row"><span class="lbl">Pisos sin ascensor (${originFloors} retiro + ${destinationFloors} entrega)</span><span class="val">$${fmt(bd.flCost)}</span></div>` : ''}
 ${bd.pkCost > 0 ? `<div class="row"><span class="lbl">Embalaje profesional</span><span class="val">$${fmt(bd.pkCost)}</span></div>` : ''}
@@ -473,7 +473,7 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
       km ? `• Distancia: ~${km} km` : '',
       `\n🚚 *Vehículo recomendado:* ${vName}`,
       helpMode === 'none'    ? '🚗 Solo traslado (sin ayuda de carga)' : '',
-      helpMode === 'driver'  ? '👷 Con ayuda del chofer (+$20.000)' : '',
+      helpMode === 'driver'  ? '👷 Con ayuda del chofer incluida' : '',
       helpMode === 'helpers' ? `👷 Chofer + ${helpers} ayudante${helpers !== 1 ? 's' : ''} adicionale${helpers !== 1 ? 's' : ''}` : '',
       floors  > 0 ? `🏢 Pisos: ${floors} (retiro ${originFloors}, entrega ${destinationFloors})` : '',
       packing ? '📦 Embalaje profesional' : '',
@@ -621,8 +621,8 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>Servicio de carga</div>
             {[
               { v: 'none',    title: 'Solo traslado',         desc: 'El chofer solo conduce el camión', cost: null },
-              { v: 'driver',  title: '+ Ayuda del chofer',    desc: 'El chofer ayuda a cargar y descargar', cost: cfg?.extras?.driver_help },
-              { v: 'helpers', title: '+ Chofer y ayudantes',  desc: 'Equipo completo — chofer + extra', cost: null },
+              { v: 'driver',  title: 'Chofer ayuda',          desc: 'Incluido en precio base', cost: null },
+              { v: 'helpers', title: 'Chofer + ayudantes',    desc: 'Chofer incluido + ayudantes extra', cost: null },
             ].map(opt => (
               <button key={opt.v} type="button" onClick={() => !isDone && setHelpMode(opt.v)}
                 style={{
@@ -710,7 +710,7 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.3, color: 'var(--muted)', marginBottom: 8 }}>DESGLOSE DEL CALCULO</div>
             <BDRow label={`Precio base ${VEHICLE_NAMES[vehicleType] || ''}`} val={bd.base} />
             {bd.kmCost > 0 && <BDRow label={`Distancia (${km} km × $${fmt(bd.ppk)}/km)`} val={bd.kmCost} />}
-            {bd.dvCost > 0 && <BDRow label="Ayuda del chofer" val={bd.dvCost} />}
+            {driverHelps && <BDRow label="Ayuda del chofer incluida" val={0} />}
             {bd.hlCost > 0 && <BDRow label={`Ayudantes adicionales (${actualHelpers} × $${fmt(cfg?.extras?.helper)})`} val={bd.hlCost} />}
             {bd.flCost > 0 && <BDRow label={`Pisos (${originFloors} retiro + ${destinationFloors} entrega) × $${fmt(cfg?.extras?.floor)}`} val={bd.flCost} />}
             {bd.pkCost > 0 && <BDRow label="Embalaje" val={bd.pkCost} />}

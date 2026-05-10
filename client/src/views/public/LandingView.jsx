@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { api } from '../../api/index.js';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
-import InventoryPicker, { CATALOG, totalVol, recommendVehicleType, serializeInventory, VEHICLE_THRESHOLDS, inventoryHasTallItems } from '../../components/InventoryPicker.jsx';
+import InventoryPicker, { CATALOG, totalVol, recommendVehicleType, serializeInventory, VEHICLE_THRESHOLDS, inventoryHasTallItems, requiredHelpersForInventory } from '../../components/InventoryPicker.jsx';
 
 const LARGE_ITEM_IDS = new Set(['camaQueen', 'cama2p', 'sofa3p', 'sofa2p', 'closet', 'nevera', 'lavadora', 'cocina']);
 
@@ -119,6 +119,7 @@ export default function LandingView() {
   const [vehicles,        setVehicles]        = useState([]);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [vehicleConfigs,  setVehicleConfigs]  = useState([]);
+  const [catalog,         setCatalog]         = useState(CATALOG);
 
   // Extras
   const [helpMode,        setHelpMode]        = useState('none'); // 'none' | 'driver' | 'helpers'
@@ -161,6 +162,9 @@ export default function LandingView() {
     api.getPublicVehicleConfigs()
       .then(cfgs => setVehicleConfigs(Array.isArray(cfgs) ? cfgs : []))
       .catch(() => setVehicleConfigs([]));
+    api.getPublicInventoryConfigs()
+      .then(rows => { if (Array.isArray(rows) && rows.length) setCatalog(rows); })
+      .catch(() => {});
   }, []);
 
   // ── Navigation ──────────────────────────────────────────────────────────────
@@ -174,7 +178,7 @@ export default function LandingView() {
     if (!canGoNext() || step >= maxSteps) return;
     // Precio m³ al pasar de step 3 → 4
     if (step === 3 && isFlete) {
-      const vol2 = totalVol(inventory);
+      const vol2 = totalVol(inventory, catalog);
       const finalExact = Math.max(fleteExact, vehicleBasePrice);
       setPriceRange({ exact: finalExact, lo: finalExact, hi: finalExact });
       // Recomendación de vehículo (solo si hay distancia calculada)
@@ -185,7 +189,7 @@ export default function LandingView() {
             driverHelps: helpMode !== 'none', numFloors, needsPacking,
           });
           if (vs?.length) {
-            const recType = vol2 > 0 ? recommendVehicleType(vol2, inventory) : null;
+            const recType = vol2 > 0 ? recommendVehicleType(vol2, inventory, catalog) : null;
             const rec = (recType && vs.find(v => v.vehicleType === recType)) || vs[0];
             if (rec) setSelectedVehicle(rec);
           }
@@ -266,10 +270,11 @@ export default function LandingView() {
   const loadedTruck = TRUCK_LOAD_ORDER.slice(0, sceneCount);
 
   // ── Live m³ price (flete/mudanza) ──────────────────────────────────────────
-  const invVol       = totalVol(inventory);
+  const invVol       = totalVol(inventory, catalog);
   const numFloors    = originFloors + destinationFloors;
-  const hasTallItems = inventoryHasTallItems(inventory);
-  const smartVehicleType = invVol > 0 ? recommendVehicleType(invVol, inventory) : 'furgon';
+  const hasTallItems = inventoryHasTallItems(inventory, catalog);
+  const requiredHelpers = requiredHelpersForInventory(inventory, catalog);
+  const smartVehicleType = invVol > 0 ? recommendVehicleType(invVol, inventory, catalog) : 'furgon';
   const vehicleLabel = VEHICLE_THRESHOLDS.find(t => t.vehicleType === smartVehicleType);
   const configServiceType = serviceType === 'mudanza' ? 'mudanza' : 'flete';
   const activeVehicleConfig =
@@ -287,11 +292,10 @@ export default function LandingView() {
   const extraM3Price = Number(cfgExtras.extra_m3 ?? FLETE_EXTRA_M3);
   const extraVol     = Math.max(0, invVol - includedM3);
   // Ayudante sugerido: vol>6 o ítems pesados → chofer+ayudante, vol>2 → solo chofer
-  const suggestHelperMode = invVol > 6 || hasTallItems ? 'helpers' : invVol > 2 ? 'driver' : 'none';
+  const suggestHelperMode = requiredHelpers > 0 ? 'helpers' : invVol > 2 ? 'driver' : 'none';
   // Costos extras
   const floorCost    = numFloors * floorUnitPrice;
-  const helpCost     = helpMode === 'driver'  ? driverHelpPrice
-                     : helpMode === 'helpers' ? driverHelpPrice + numHelpers * helperUnitPrice
+  const helpCost     = helpMode === 'helpers' ? numHelpers * helperUnitPrice
                      : 0;
   const packCost     = needsPacking ? packingPrice : 0;
   const extraVolCost = serviceType === 'mudanza' ? 0 : roundToThousand(extraVol * extraM3Price);
@@ -350,20 +354,25 @@ export default function LandingView() {
   }, [inventory]);
 
   useEffect(() => {
+    if (requiredHelpers > 0) {
+      setHelpMode('helpers');
+      setNumHelpers(n => Math.max(requiredHelpers, n));
+      return;
+    }
     if (helpModeManual) return;
     setHelpMode(invVol > 0 ? suggestHelperMode : 'none');
-    if (suggestHelperMode === 'helpers') setNumHelpers(n => Math.max(1, n));
-  }, [invVol, suggestHelperMode, helpModeManual]);
+    if (suggestHelperMode === 'helpers') setNumHelpers(n => Math.max(requiredHelpers || 1, n));
+  }, [invVol, suggestHelperMode, helpModeManual, requiredHelpers]);
 
   // Auto-recommend vehicle from inventory (no price shown yet)
   useEffect(() => {
     if (!vehicles.length) return;
-    const vol = totalVol(inventory);
+    const vol = totalVol(inventory, catalog);
     if (vol === 0) return;
-    const recType = recommendVehicleType(vol, inventory);
+    const recType = recommendVehicleType(vol, inventory, catalog);
     const rec = vehicles.find(v => v.vehicleType === recType) || vehicles[0];
     if (rec) { setSelectedVehicle(rec); }
-  }, [inventory, vehicles]);
+  }, [inventory, vehicles, catalog]);
 
   // Sync truck boxes with form progress during normal filling
   useEffect(() => {
@@ -565,10 +574,10 @@ export default function LandingView() {
 
           {/* Volume bar — static in header, only visible in step 3 with items */}
           {(() => {
-            const vol = totalVol(inventory);
+            const vol = totalVol(inventory, catalog);
             if (step !== 3 || !isFlete) return null;
             const volPct = Math.min((vol / 18) * 100, 100);
-            const recType = vol > 0 ? recommendVehicleType(vol, inventory) : 'furgon';
+            const recType = vol > 0 ? recommendVehicleType(vol, inventory, catalog) : 'furgon';
             const rec = VEHICLE_THRESHOLDS.find(t => t.vehicleType === recType) || VEHICLE_THRESHOLDS[0];
             return (
               <div style={{ marginTop: 10, background: '#f4f7ff', border: '1px solid #0052FF20', borderRadius: 10, padding: '8px 12px', visibility: vol > 0 ? 'visible' : 'hidden' }}>
@@ -852,7 +861,7 @@ export default function LandingView() {
                 <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, color: '#64748b', textTransform: 'uppercase', marginBottom: 12 }}>
                   ¿Qué vas a transportar?
                 </div>
-                <InventoryPicker inventory={inventory} onChange={setInventory} extras={inventoryExtras} onExtrasChange={setInventoryExtras} />
+                <InventoryPicker inventory={inventory} onChange={setInventory} extras={inventoryExtras} onExtrasChange={setInventoryExtras} catalog={catalog} />
               </div>
 
               </div>
@@ -874,15 +883,23 @@ export default function LandingView() {
                   Servicio de carga
                 </div>
                 {[
-                  { v: 'none',    title: 'Solo traslado',          desc: 'El chofer solo conduce. Carga y descarga por tu cuenta.' },
-                  { v: 'driver',  title: '+ Ayuda del chofer',     desc: `El chofer ayuda a cargar y descargar. +$${fmt(driverHelpPrice)}` },
-                  { v: 'helpers', title: '+ Chofer y ayudantes',   desc: `Chofer ayuda + ayudantes adicionales. +$${fmt(driverHelpPrice)} + $${fmt(helperUnitPrice)} c/u` },
+                  { v: 'none',    title: 'Solo traslado',          desc: 'El chofer conduce. Carga y descarga por tu cuenta.' },
+                  { v: 'driver',  title: 'Chofer ayuda',           desc: 'El chofer ayuda a cargar y descargar. Incluido en precio base.' },
+                  { v: 'helpers', title: 'Chofer + ayudante',      desc: `Chofer incluido + ayudante adicional. +$${fmt(helperUnitPrice)} c/u` },
                 ].map(opt => {
                   const isRecommended = invVol > 0 && suggestHelperMode !== 'none' && opt.v === suggestHelperMode;
                   const isActive = helpMode === opt.v;
                   const recommendedActive = isActive && isRecommended && !helpModeManual;
                   return (
-                  <button key={opt.v} type="button" onClick={() => { setHelpModeManual(true); setHelpMode(opt.v); }}
+                  <button key={opt.v} type="button" onClick={() => {
+                    setHelpModeManual(true);
+                    if (requiredHelpers > 0 && opt.v !== 'helpers') {
+                      setHelpMode('helpers');
+                      setNumHelpers(n => Math.max(requiredHelpers, n));
+                      return;
+                    }
+                    setHelpMode(opt.v);
+                  }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 12, width: '100%',
                       padding: '10px 12px', marginBottom: 8, borderRadius: 10,
@@ -911,11 +928,11 @@ export default function LandingView() {
                   <div style={{ marginTop: 4, padding: '10px 12px', background: '#EEF4FF', borderRadius: 10, border: '1px solid #0052FF20' }}>
                     <ExtraRow
                       label="Número de ayudantes"
-                      sub="Además del chofer"
+                      sub={requiredHelpers > 0 ? `Minimo recomendado por tus articulos: ${requiredHelpers}` : 'Ademas del chofer'}
                       value={numHelpers}
-                      onDec={() => setNumHelpers(n => Math.max(1, n - 1))}
+                      onDec={() => setNumHelpers(n => Math.max(requiredHelpers || 1, n - 1))}
                       onInc={() => setNumHelpers(n => n + 1)}
-                      onSet={v => setNumHelpers(Math.max(1, Number(v) || 1))}
+                      onSet={v => setNumHelpers(Math.max(requiredHelpers || 1, Number(v) || 1))}
                     />
                   </div>
                 )}
@@ -999,15 +1016,15 @@ export default function LandingView() {
                     )}
                     {helpMode === 'driver' && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                        <span>Ayuda del chofer</span>
-                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(driverHelpPrice)}</span>
+                        <span>Ayuda del chofer incluida</span>
+                        <span style={{ fontWeight: 700, color: '#22c55e' }}>$0</span>
                       </div>
                     )}
                     {helpMode === 'helpers' && (
                       <>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                          <span>Ayuda del chofer</span>
-                          <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(driverHelpPrice)}</span>
+                          <span>Ayuda del chofer incluida</span>
+                          <span style={{ fontWeight: 700, color: '#22c55e' }}>$0</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
                           <span>{numHelpers} ayudante{numHelpers > 1 ? 's' : ''} × ${fmt(helperUnitPrice)}</span>
@@ -1056,7 +1073,7 @@ export default function LandingView() {
                     <div style={{ fontSize: 12, color: '#64748b', marginTop: 8, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 10px' }}>
                       {vehicleLabel && <span>{vehicleLabel.icon} {vehicleLabel.name}</span>}
                       {distanceKm && <span>· {distanceKm} km</span>}
-                      {helpMode === 'driver' && <span>· Ayuda del chofer</span>}
+                      {helpMode === 'driver' && <span>· Chofer ayuda incluido</span>}
                       {helpMode === 'helpers' && <span>· Chofer + {numHelpers} ayudante{numHelpers !== 1 ? 's' : ''}</span>}
                       {numFloors > 0 && <span>· {numFloors} piso{numFloors > 1 ? 's' : ''}</span>}
                       {needsPacking && <span>· Embalaje incluido</span>}
@@ -1088,7 +1105,7 @@ export default function LandingView() {
                     const chips = [
                       vehicleLabel && vehicleLabel.name,
                       distanceKm && `${distanceKm} km`,
-                      helpMode === 'driver' && 'Ayuda del chofer',
+                      helpMode === 'driver' && 'Chofer ayuda incluido',
                       helpMode === 'helpers' && `+${numHelpers} ayudante${numHelpers !== 1 ? 's' : ''}`,
                       numFloors > 0 && `${numFloors} piso${numFloors > 1 ? 's' : ''}`,
                       needsPacking && 'Embalaje',
@@ -1144,7 +1161,7 @@ export default function LandingView() {
                     <div style={{ fontSize: 11, color: '#64748b', marginTop: 6, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '3px 8px' }}>
                       {vehicleLabel && <span>{vehicleLabel.icon} {vehicleLabel.name}</span>}
                       {distanceKm && <span>· {distanceKm} km</span>}
-                      {helpMode === 'driver' && <span>· Ayuda del chofer</span>}
+                      {helpMode === 'driver' && <span>· Chofer ayuda incluido</span>}
                       {helpMode === 'helpers' && <span>· +{numHelpers} ayudante{numHelpers !== 1 ? 's' : ''}</span>}
                       {numFloors > 0 && <span>· {numFloors} piso{numFloors > 1 ? 's' : ''}</span>}
                     </div>

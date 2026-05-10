@@ -164,9 +164,12 @@ export const api = {
   // Vehicle configs (flete/mudanza pricing)
   getVehicleConfigs: () => request('GET', '/vehicle-configs'),
   updateVehicleConfig: (id, data) => request('PATCH', `/vehicle-configs/${id}`, data),
+  getInventoryConfigs: () => request('GET', '/inventory-configs'),
+  updateInventoryConfig: (id, data) => request('PATCH', `/inventory-configs/${id}`, data),
 
   // Public pricing helpers (no auth required)
   getPublicVehicleConfigs: () => request('GET', '/public/vehicle-configs'),
+  getPublicInventoryConfigs: () => request('GET', '/public/inventory-configs'),
   calculateDistance: (data) => request('POST', '/public/distance', data),
   getQuoteEstimate: (data) => request('POST', '/public/quote-estimate', data),
 };

@@ -18,18 +18,20 @@ function buildRanges(tiers) {
 
 export default function MovePricingView() {
   const [configs, setConfigs] = useState([]);
+  const [items, setItems] = useState([]);
   const [serviceTab, setServiceTab] = useState('flete');
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
 
   useEffect(() => {
-    api.getVehicleConfigs()
-      .then(setConfigs)
+    Promise.all([api.getVehicleConfigs(), api.getInventoryConfigs().catch(() => [])])
+      .then(([cfgs, itemRows]) => { setConfigs(cfgs); setItems(itemRows || []); })
       .catch(err => toast('❌ ' + err.message))
       .finally(() => setLoading(false));
   }, []);
 
   const reload = () => api.getVehicleConfigs().then(setConfigs).catch(() => {});
+  const reloadItems = () => api.getInventoryConfigs().then(setItems).catch(() => {});
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Cargando configuraciones…</div>;
 
@@ -98,6 +100,10 @@ export default function MovePricingView() {
           }}
         />
       ))}
+
+      {serviceTab === 'flete' && (
+        <InventoryConfigSection items={items} onSaved={reloadItems} />
+      )}
 
       {editing && (
         <EditModal
@@ -180,8 +186,8 @@ function VehicleCard({ config: c, serviceType = 'flete', onEdit, onToggleActive 
               <div style={{ fontSize: 12, fontWeight: 800, color: '#475569' }}>$0</div>
             </div>
             <div style={{ flex: 1, textAlign: 'center', padding: '8px 6px', background: '#EEF4FF', border: '2px solid #0052FF40', borderRadius: 9 }}>
-              <div style={{ fontSize: 9, color: '#0052FF90', margin: '2px 0 4px', lineHeight: 1.3 }}>+ Ayuda del chofer<br/><span style={{color:'#0052FF70'}}>carga y descarga</span></div>
-              <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--accent)' }}>${fmt(ex.driver_help)}</div>
+              <div style={{ fontSize: 9, color: '#0052FF90', margin: '2px 0 4px', lineHeight: 1.3 }}>Chofer ayuda<br/><span style={{color:'#0052FF70'}}>incluido en base</span></div>
+              <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--accent)' }}>$0</div>
             </div>
             <div style={{ flex: 1, textAlign: 'center', padding: '8px 6px', background: '#fff', border: '1px solid var(--border)', borderRadius: 9 }}>
               <div style={{ fontSize: 9, color: 'var(--muted)', margin: '2px 0 4px', lineHeight: 1.3 }}>Ayudante adicional<br/><span style={{color:'#94a3b8'}}>por persona extra</span></div>
@@ -197,8 +203,8 @@ function VehicleCard({ config: c, serviceType = 'flete', onEdit, onToggleActive 
               <div style={{ marginTop: 8, padding: '8px 10px', background: '#0052FF06', borderRadius: 8, fontSize: 10, color: '#475569', lineHeight: 1.9 }}>
                 <strong style={{ color: '#0052FF' }}>Ejemplos a 30 km:</strong><br/>
                 🚗 Solo traslado: <strong>${fmt(km30)}</strong><br/>
-                👷 + Ayuda chofer: <strong>${fmt(km30 + Number(ex.driver_help || 0))}</strong><br/>
-                👷👷 + Chofer y 1 ayudante: <strong>${fmt(km30 + Number(ex.driver_help || 0) + Number(ex.helper || 0))}</strong>
+                👷 Chofer ayuda: <strong>${fmt(km30)}</strong><br/>
+                👷👷 Chofer + 1 ayudante: <strong>${fmt(km30 + Number(ex.helper || 0))}</strong>
               </div>
             );
           })()}
@@ -225,6 +231,95 @@ function ExtraStat({ icon, label, value, unit = '', money = true }) {
       <div style={{ fontSize: 16 }}>{icon}</div>
       <div style={{ fontSize: 9, color: 'var(--muted)', margin: '2px 0' }}>{label}</div>
       <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)' }}>{money ? '$' : ''}{fmt(value)}<span style={{ fontSize: 10, fontWeight: 500, color: 'var(--muted)' }}>{unit}</span></div>
+    </div>
+  );
+}
+
+function InventoryConfigSection({ items, onSaved }) {
+  const [editing, setEditing] = useState(null);
+  if (!items.length) {
+    return (
+      <div style={{ padding: 16, borderRadius: 14, border: '1px solid #f59e0b50', background: '#fff7ed', color: '#92400e', fontSize: 12, lineHeight: 1.5 }}>
+        Ejecuta la migracion de articulos para poder editar reglas de volumen, camion y ayudantes.
+      </div>
+    );
+  }
+  return (
+    <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+      <div style={{ fontSize: 12, fontWeight: 900, color: '#0f172a', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+        Articulos del cotizador
+      </div>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {items.map(item => (
+          <button
+            key={item._id || item.id}
+            onClick={() => setEditing(item)}
+            style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center', padding: '10px 12px', borderRadius: 12, border: '1px solid var(--border)', background: '#fff', textAlign: 'left', cursor: 'pointer' }}
+          >
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{item.icon} {item.name}</div>
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{item.cat} · {item.vol} m3 · {item.minVehicleType} · {item.requiredHelpers} ayud.</div>
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--accent)' }}>Editar</span>
+          </button>
+        ))}
+      </div>
+      {editing && (
+        <InventoryItemModal
+          item={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); onSaved(); toast('Articulo actualizado'); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function InventoryItemModal({ item, onClose, onSaved }) {
+  const [form, setForm] = useState({ ...item });
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.updateInventoryConfig(item._id, {
+        name: form.name,
+        icon: form.icon,
+        cat: form.cat,
+        vol: Number(form.vol || 0),
+        minVehicleType: form.minVehicleType,
+        requiredHelpers: Number(form.requiredHelpers || 0),
+        active: form.active,
+      });
+      onSaved();
+    } catch (err) { toast('❌ ' + err.message); }
+    finally { setSaving(false); }
+  };
+  return (
+    <div onClick={e => { if (e.target === e.currentTarget) onClose(); }} style={{ position: 'fixed', inset: 0, background: '#0008', zIndex: 1000, display: 'flex', alignItems: 'flex-end' }}>
+      <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxHeight: '90dvh', overflowY: 'auto', padding: '18px 16px calc(30px + env(safe-area-inset-bottom))' }}>
+        <h2 style={{ fontSize: 16, fontWeight: 900, margin: '0 0 12px' }}>Editar articulo</h2>
+        <FL>Nombre</FL><input value={form.name} onChange={e => set('name', e.target.value)} style={inp} />
+        <FL>Icono</FL><input value={form.icon} onChange={e => set('icon', e.target.value)} style={inp} />
+        <FL>Categoria</FL><input value={form.cat} onChange={e => set('cat', e.target.value)} style={inp} />
+        <FL>Volumen m3</FL><input type="number" step="0.1" value={form.vol} onChange={e => set('vol', e.target.value)} style={inp} />
+        <FL>Camion minimo</FL>
+        <select value={form.minVehicleType} onChange={e => set('minVehicleType', e.target.value)} style={inp}>
+          <option value="furgon">Furgon</option>
+          <option value="camion34">Camion 3/4</option>
+          <option value="camionLargo">Camion largo</option>
+        </select>
+        <FL>Ayudantes requeridos</FL>
+        <input type="number" min="0" value={form.requiredHelpers} onChange={e => set('requiredHelpers', e.target.value)} style={inp} />
+        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, marginBottom: 12 }}>0 = solo chofer incluido. 1 = chofer + 1 ayudante adicional.</div>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginBottom: 14 }}>
+          <input type="checkbox" checked={form.active !== false} onChange={e => set('active', e.target.checked)} /> Activo en cotizador
+        </label>
+        <button onClick={save} disabled={saving} style={{ width: '100%', padding: 13, borderRadius: 12, border: 'none', background: saving ? 'var(--border)' : 'var(--accent)', color: '#fff', fontWeight: 800 }}>
+          {saving ? 'Guardando...' : 'Guardar articulo'}
+        </button>
+        <button onClick={onClose} style={{ width: '100%', marginTop: 8, padding: 12, borderRadius: 12, border: '1px solid var(--border)', background: '#fff', color: 'var(--muted)', fontWeight: 800 }}>Cancelar</button>
+      </div>
     </div>
   );
 }
@@ -365,10 +460,9 @@ function EditModal({ config: c, onClose, onSaved }) {
             <input type="number" value={0} disabled style={{ ...inp, background: '#f1f5f9', color: '#94a3b8' }} />
             <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, marginBottom: 10 }}>Sin cobro extra — cliente carga y descarga por su cuenta</div>
           </div>
-          <div>
-            <FL>👷 Ayuda del chofer (costo fijo)</FL>
-            <input type="number" value={extras.driver_help} onChange={e => setExtra('driver_help', e.target.value)} style={inp} />
-            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, marginBottom: 10 }}>Se suma cuando el cliente pide que el chofer ayude a cargar y descargar</div>
+          <div style={{ padding: '9px 11px', background: '#fff', border: '1px solid var(--border)', borderRadius: 9, marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: '#0f172a' }}>Chofer incluido en precio base</div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Si el chofer ayuda a cargar, no se suma costo extra. Solo se cobran ayudantes adicionales.</div>
           </div>
           <div>
             <FL>👷+ Ayudante adicional (por persona)</FL>
@@ -379,8 +473,8 @@ function EditModal({ config: c, onClose, onSaved }) {
           <div style={{ marginTop: 12, padding: '10px 12px', background: '#EEF4FF', borderRadius: 10, fontSize: 11, color: '#0052FF', lineHeight: 2 }}>
             <strong>Vista previa del servicio de carga:</strong><br/>
             🚗 Solo traslado → +$0<br/>
-            👷 + Ayuda del chofer → +${fmt(extras.driver_help)}<br/>
-            👷👷 + Chofer y 2 ayudantes → +${fmt(Number(extras.driver_help) + 2 * Number(extras.helper))}
+            👷 Chofer ayuda → +$0<br/>
+            👷👷 Chofer y 2 ayudantes → +${fmt(2 * Number(extras.helper))}
           </div>
         </div>
 

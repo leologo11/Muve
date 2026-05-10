@@ -3,28 +3,28 @@ import React from 'react';
 // ── Catalog ───────────────────────────────────────────────────────────────────
 
 export const CATALOG = [
-  { id: 'cama1p',      name: 'Cama 1 plaza',    icon: '🛏️', vol: 1.5, cat: 'Dormitorio' },
-  { id: 'cama2p',      name: 'Cama 2 plazas',   icon: '🛏️', vol: 2.0, cat: 'Dormitorio' },
-  { id: 'camaQueen',   name: 'Cama Queen/King',  icon: '🛏️', vol: 2.8, cat: 'Dormitorio' },
-  { id: 'closet',      name: 'Clóset/Ropero',    icon: '🪞', vol: 2.5, cat: 'Dormitorio' },
-  { id: 'comoda',      name: 'Cómoda',           icon: '🗄️', vol: 0.8, cat: 'Dormitorio' },
-  { id: 'mesaNoche',   name: 'Mesa de noche',    icon: '🪑', vol: 0.3, cat: 'Dormitorio' },
-  { id: 'sofa2p',      name: 'Sofá 2 plazas',   icon: '🛋️', vol: 2.0, cat: 'Living' },
-  { id: 'sofa3p',      name: 'Sofá 3 plazas',   icon: '🛋️', vol: 3.2, cat: 'Living' },
-  { id: 'tvSmall',     name: 'TV hasta 50"',     icon: '📺', vol: 0.3, cat: 'Living' },
-  { id: 'tvLarge',     name: 'TV 55" o más',     icon: '📺', vol: 0.6, cat: 'Living' },
-  { id: 'mesaComedor', name: 'Mesa comedor',     icon: '🍽️', vol: 1.2, cat: 'Comedor' },
-  { id: 'silla',       name: 'Silla (x1)',       icon: '🪑', vol: 0.3, cat: 'Comedor' },
-  { id: 'nevera',      name: 'Refrigerador',     icon: '🧊', vol: 1.5, cat: 'Cocina' },
-  { id: 'cocina',      name: 'Cocina/Horno',     icon: '🍳', vol: 1.0, cat: 'Cocina' },
-  { id: 'microondas',  name: 'Microondas',       icon: '📦', vol: 0.1, cat: 'Cocina' },
-  { id: 'lavadora',    name: 'Lavadora',         icon: '🫧', vol: 0.8, cat: 'Electrodomésticos' },
-  { id: 'secadora',    name: 'Secadora',         icon: '🌀', vol: 0.8, cat: 'Electrodomésticos' },
-  { id: 'escritorio',  name: 'Escritorio',       icon: '💻', vol: 0.8, cat: 'Oficina' },
-  { id: 'librero',     name: 'Librero/Estante',  icon: '📚', vol: 1.0, cat: 'Oficina' },
-  { id: 'cajaP',       name: 'Caja pequeña',     icon: '📦', vol: 0.08, cat: 'Cajas' },
-  { id: 'cajaM',       name: 'Caja mediana',     icon: '📦', vol: 0.18, cat: 'Cajas' },
-  { id: 'cajaG',       name: 'Caja grande',      icon: '📦', vol: 0.35, cat: 'Cajas' },
+  { id: 'cama1p',      name: 'Cama 1 plaza',    icon: '🛏️', vol: 1.5, cat: 'Dormitorio', minVehicleType: 'furgon', requiredHelpers: 0 },
+  { id: 'cama2p',      name: 'Cama 2 plazas',   icon: '🛏️', vol: 2.0, cat: 'Dormitorio', minVehicleType: 'camion34', requiredHelpers: 1 },
+  { id: 'camaQueen',   name: 'Cama Queen/King',  icon: '🛏️', vol: 2.8, cat: 'Dormitorio', minVehicleType: 'camion34', requiredHelpers: 1 },
+  { id: 'closet',      name: 'Clóset/Ropero',    icon: '🪞', vol: 2.5, cat: 'Dormitorio', minVehicleType: 'camion34', requiredHelpers: 1 },
+  { id: 'comoda',      name: 'Cómoda',           icon: '🗄️', vol: 0.8, cat: 'Dormitorio', minVehicleType: 'furgon', requiredHelpers: 0 },
+  { id: 'mesaNoche',   name: 'Mesa de noche',    icon: '🪑', vol: 0.3, cat: 'Dormitorio', minVehicleType: 'furgon', requiredHelpers: 0 },
+  { id: 'sofa2p',      name: 'Sofá 2 plazas',   icon: '🛋️', vol: 2.0, cat: 'Living', minVehicleType: 'furgon', requiredHelpers: 1 },
+  { id: 'sofa3p',      name: 'Sofá 3 plazas',   icon: '🛋️', vol: 3.2, cat: 'Living', minVehicleType: 'camion34', requiredHelpers: 1 },
+  { id: 'tvSmall',     name: 'TV hasta 50"',     icon: '📺', vol: 0.3, cat: 'Living', minVehicleType: 'furgon', requiredHelpers: 0 },
+  { id: 'tvLarge',     name: 'TV 55" o más',     icon: '📺', vol: 0.6, cat: 'Living', minVehicleType: 'furgon', requiredHelpers: 0 },
+  { id: 'mesaComedor', name: 'Mesa comedor',     icon: '🍽️', vol: 1.2, cat: 'Comedor', minVehicleType: 'furgon', requiredHelpers: 0 },
+  { id: 'silla',       name: 'Silla (x1)',       icon: '🪑', vol: 0.3, cat: 'Comedor', minVehicleType: 'furgon', requiredHelpers: 0 },
+  { id: 'nevera',      name: 'Refrigerador',     icon: '🧊', vol: 1.5, cat: 'Cocina', minVehicleType: 'camion34', requiredHelpers: 1 },
+  { id: 'cocina',      name: 'Cocina/Horno',     icon: '🍳', vol: 1.0, cat: 'Cocina', minVehicleType: 'camion34', requiredHelpers: 1 },
+  { id: 'microondas',  name: 'Microondas',       icon: '📦', vol: 0.1, cat: 'Cocina', minVehicleType: 'furgon', requiredHelpers: 0 },
+  { id: 'lavadora',    name: 'Lavadora',         icon: '🫧', vol: 0.8, cat: 'Electrodomésticos', minVehicleType: 'furgon', requiredHelpers: 1 },
+  { id: 'secadora',    name: 'Secadora',         icon: '🌀', vol: 0.8, cat: 'Electrodomésticos', minVehicleType: 'furgon', requiredHelpers: 1 },
+  { id: 'escritorio',  name: 'Escritorio',       icon: '💻', vol: 0.8, cat: 'Oficina', minVehicleType: 'furgon', requiredHelpers: 0 },
+  { id: 'librero',     name: 'Librero/Estante',  icon: '📚', vol: 1.0, cat: 'Oficina', minVehicleType: 'furgon', requiredHelpers: 0 },
+  { id: 'cajaP',       name: 'Caja pequeña',     icon: '📦', vol: 0.08, cat: 'Cajas', minVehicleType: 'furgon', requiredHelpers: 0 },
+  { id: 'cajaM',       name: 'Caja mediana',     icon: '📦', vol: 0.18, cat: 'Cajas', minVehicleType: 'furgon', requiredHelpers: 0 },
+  { id: 'cajaG',       name: 'Caja grande',      icon: '📦', vol: 0.35, cat: 'Cajas', minVehicleType: 'furgon', requiredHelpers: 0 },
 ];
 
 export const VEHICLE_THRESHOLDS = [
@@ -35,24 +35,39 @@ export const VEHICLE_THRESHOLDS = [
 
 export const MAX_MOVE_VOL = VEHICLE_THRESHOLDS[2].maxVol;
 
-export const TALL_ITEM_IDS = new Set(['cama2p', 'camaQueen', 'closet', 'nevera', 'lavadora', 'secadora', 'sofa3p']);
+export const TALL_ITEM_IDS = new Set(CATALOG.filter(i => i.minVehicleType === 'camion34').map(i => i.id));
 
-const CATS = [...new Set(CATALOG.map(c => c.cat))];
+const VEHICLE_RANK = { furgon: 1, camion34: 2, camionLargo: 3 };
 
-export function totalVol(inventory) {
+export function totalVol(inventory, catalog = CATALOG) {
   return inventory.reduce((sum, item) => {
-    const c = CATALOG.find(x => x.id === item.id);
+    const c = catalog.find(x => x.id === item.id);
     return sum + (c ? c.vol * (item.qty || 0) : 0);
   }, 0);
 }
 
-export function inventoryHasTallItems(inventory = []) {
-  return inventory.some(item => TALL_ITEM_IDS.has(item.id) && item.qty > 0);
+export function inventoryHasTallItems(inventory = [], catalog = CATALOG) {
+  return inventory.some(item => {
+    const c = catalog.find(x => x.id === item.id);
+    return item.qty > 0 && c?.minVehicleType === 'camion34';
+  });
 }
 
-export function recommendVehicleType(vol, inventory = []) {
+export function requiredHelpersForInventory(inventory = [], catalog = CATALOG) {
+  return inventory.reduce((max, item) => {
+    const c = catalog.find(x => x.id === item.id);
+    return item.qty > 0 ? Math.max(max, Number(c?.requiredHelpers || 0)) : max;
+  }, 0);
+}
+
+export function recommendVehicleType(vol, inventory = [], catalog = CATALOG) {
   if (vol > VEHICLE_THRESHOLDS[1].maxVol) return 'camionLargo';
-  if (inventoryHasTallItems(inventory)) return 'camion34';
+  const minVehicle = inventory.reduce((best, item) => {
+    const c = catalog.find(x => x.id === item.id);
+    return item.qty > 0 && VEHICLE_RANK[c?.minVehicleType] > VEHICLE_RANK[best] ? c.minVehicleType : best;
+  }, 'furgon');
+  if (minVehicle === 'camionLargo') return 'camionLargo';
+  if (minVehicle === 'camion34') return 'camion34';
   const v = VEHICLE_THRESHOLDS.find(t => vol <= t.maxVol);
   return (v || VEHICLE_THRESHOLDS[VEHICLE_THRESHOLDS.length - 1]).vehicleType;
 }
@@ -75,16 +90,17 @@ export function serializeInventory(inventory, extras) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function InventoryPicker({ inventory, onChange, extras, onExtrasChange, disabled = false }) {
+export default function InventoryPicker({ inventory, onChange, extras, onExtrasChange, disabled = false, catalog = CATALOG }) {
   const [collapsed, setCollapsed] = React.useState({});
+  const cats = React.useMemo(() => [...new Set(catalog.map(c => c.cat))], [catalog]);
 
   const getQty = id => inventory.find(i => i.id === id)?.qty || 0;
-  const currentVol = totalVol(inventory);
+  const currentVol = totalVol(inventory, catalog);
 
   const setQty = (id, qty) => {
     const next = inventory.filter(i => i.id !== id);
     if (qty > 0) {
-      const cat = CATALOG.find(c => c.id === id);
+      const cat = catalog.find(c => c.id === id);
       next.push({ id, name: cat.name, qty });
     }
     onChange(next);
@@ -95,7 +111,7 @@ export default function InventoryPicker({ inventory, onChange, extras, onExtrasC
   return (
     <div>
       {/* Items by category — all expanded by default */}
-      {CATS.map(cat => {
+      {cats.map(cat => {
         const isOpen = !collapsed[cat]; // default open (not in collapsed set)
         return (
         <div key={cat} style={{ marginBottom: 8 }}>
@@ -117,7 +133,7 @@ export default function InventoryPicker({ inventory, onChange, extras, onExtrasC
             }}>▼</span>
           </button>
           {isOpen && <div className="inventory-item-grid">
-            {CATALOG.filter(c => c.cat === cat).map(item => {
+            {catalog.filter(c => c.cat === cat).map(item => {
               const qty = getQty(item.id);
               const wouldExceedLimit = currentVol + item.vol > MAX_MOVE_VOL;
               return (

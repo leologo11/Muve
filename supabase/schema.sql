@@ -107,6 +107,21 @@ create table if not exists quote_items (
   created_at timestamptz not null default now()
 );
 
+create table if not exists inventory_item_configs (
+  id uuid primary key default gen_random_uuid(),
+  item_key text not null unique,
+  name text not null,
+  icon text not null default '📦',
+  category text not null default 'Otros',
+  volume_m3 numeric not null default 0,
+  min_vehicle_type text not null default 'furgon' check (min_vehicle_type in ('furgon', 'camion34', 'camionLargo')),
+  required_helpers integer not null default 0,
+  active boolean not null default true,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists routes (
   id uuid primary key default gen_random_uuid(),
   route_code text not null unique,
