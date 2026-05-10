@@ -237,6 +237,7 @@ function ExtraStat({ icon, label, value, unit = '', money = true }) {
 
 function InventoryConfigSection({ items, onSaved }) {
   const [editing, setEditing] = useState(null);
+  const blankItem = { name: '', icon: '📦', cat: 'Otros', vol: 0.5, minVehicleType: 'furgon', requiredHelpers: 0, isHeavy: false, isFragile: false, isLong: false, isTall: false, active: true };
   if (!items.length) {
     return (
       <div style={{ padding: 16, borderRadius: 14, border: '1px solid #f59e0b50', background: '#fff7ed', color: '#92400e', fontSize: 12, lineHeight: 1.5 }}>
@@ -249,6 +250,9 @@ function InventoryConfigSection({ items, onSaved }) {
       <div style={{ fontSize: 12, fontWeight: 900, color: '#0f172a', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
         Articulos del cotizador
       </div>
+      <button onClick={() => setEditing({ ...blankItem, _isNew: true })} style={{ width: '100%', padding: 11, borderRadius: 12, border: '1px dashed var(--accent)', background: '#EEF4FF', color: 'var(--accent)', fontWeight: 900, marginBottom: 10 }}>
+        + Agregar articulo
+      </button>
       <div style={{ display: 'grid', gap: 8 }}>
         {items.map(item => (
           <button
@@ -258,7 +262,10 @@ function InventoryConfigSection({ items, onSaved }) {
           >
             <div>
               <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{item.icon} {item.name}</div>
-              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{item.cat} · {item.vol} m3 · {item.minVehicleType} · {item.requiredHelpers} ayud.</div>
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
+                {item.cat} · {item.vol} m3 · {item.minVehicleType} · {item.requiredHelpers} ayud.
+                {item.isHeavy && ' · pesado'}{item.isFragile && ' · fragil'}{item.isLong && ' · largo'}{item.isTall && ' · alto'}
+              </div>
             </div>
             <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--accent)' }}>Editar</span>
           </button>
@@ -276,21 +283,27 @@ function InventoryConfigSection({ items, onSaved }) {
 }
 
 function InventoryItemModal({ item, onClose, onSaved }) {
-  const [form, setForm] = useState({ ...item });
+  const [form, setForm] = useState({ isHeavy: false, isFragile: false, isLong: false, isTall: false, active: true, ...item });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const save = async () => {
     setSaving(true);
     try {
-      await api.updateInventoryConfig(item._id, {
+      const payload = {
         name: form.name,
         icon: form.icon,
         cat: form.cat,
         vol: Number(form.vol || 0),
         minVehicleType: form.minVehicleType,
         requiredHelpers: Number(form.requiredHelpers || 0),
+        isHeavy: form.isHeavy,
+        isFragile: form.isFragile,
+        isLong: form.isLong,
+        isTall: form.isTall,
         active: form.active,
-      });
+      };
+      if (item._isNew) await api.createInventoryConfig(payload);
+      else await api.updateInventoryConfig(item._id, payload);
       onSaved();
     } catch (err) { toast('❌ ' + err.message); }
     finally { setSaving(false); }
@@ -298,7 +311,7 @@ function InventoryItemModal({ item, onClose, onSaved }) {
   return (
     <div onClick={e => { if (e.target === e.currentTarget) onClose(); }} style={{ position: 'fixed', inset: 0, background: '#0008', zIndex: 1000, display: 'flex', alignItems: 'flex-end' }}>
       <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxHeight: '90dvh', overflowY: 'auto', padding: '18px 16px calc(30px + env(safe-area-inset-bottom))' }}>
-        <h2 style={{ fontSize: 16, fontWeight: 900, margin: '0 0 12px' }}>Editar articulo</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 900, margin: '0 0 12px' }}>{item._isNew ? 'Agregar articulo' : 'Editar articulo'}</h2>
         <FL>Nombre</FL><input value={form.name} onChange={e => set('name', e.target.value)} style={inp} />
         <FL>Icono</FL><input value={form.icon} onChange={e => set('icon', e.target.value)} style={inp} />
         <FL>Categoria</FL><input value={form.cat} onChange={e => set('cat', e.target.value)} style={inp} />
@@ -312,6 +325,18 @@ function InventoryItemModal({ item, onClose, onSaved }) {
         <FL>Ayudantes requeridos</FL>
         <input type="number" min="0" value={form.requiredHelpers} onChange={e => set('requiredHelpers', e.target.value)} style={inp} />
         <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, marginBottom: 12 }}>0 = solo chofer incluido. 1 = chofer + 1 ayudante adicional.</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+          {[
+            ['isHeavy', 'Pesado'],
+            ['isFragile', 'Fragil'],
+            ['isLong', 'Largo'],
+            ['isTall', 'Alto'],
+          ].map(([key, label]) => (
+            <label key={key} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '9px 10px', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12, fontWeight: 800 }}>
+              <input type="checkbox" checked={Boolean(form[key])} onChange={e => set(key, e.target.checked)} /> {label}
+            </label>
+          ))}
+        </div>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginBottom: 14 }}>
           <input type="checkbox" checked={form.active !== false} onChange={e => set('active', e.target.checked)} /> Activo en cotizador
         </label>
@@ -343,6 +368,8 @@ function EditModal({ config: c, onClose, onSaved }) {
     packing:     c.extras?.packing     ?? 15000,
     included_m3: c.extras?.included_m3 ?? 3,
     extra_m3:    c.extras?.extra_m3    ?? 16000,
+    partial_discount_pct: c.extras?.partial_discount_pct ?? 20,
+    partial_discount_max_m3: c.extras?.partial_discount_max_m3 ?? 4,
   });
   const [saving, setSaving] = useState(false);
 
@@ -501,6 +528,16 @@ function EditModal({ config: c, onClose, onSaved }) {
                   <FL>m3 adicional</FL>
                   <input type="number" value={extras.extra_m3} onChange={e => setExtra('extra_m3', e.target.value)} style={inp} />
                   <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Precio por cada m3 sobre el volumen incluido.</div>
+                </div>
+                <div>
+                  <FL>Descuento carga parcial (%)</FL>
+                  <input type="number" min="0" max="80" value={extras.partial_discount_pct} onChange={e => setExtra('partial_discount_pct', e.target.value)} style={inp} />
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Aplica si sube de camion por alto/largo pero lleva poco.</div>
+                </div>
+                <div>
+                  <FL>Max m3 para descuento</FL>
+                  <input type="number" min="0" step="0.1" value={extras.partial_discount_max_m3} onChange={e => setExtra('partial_discount_max_m3', e.target.value)} style={inp} />
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Hasta este volumen se considera carga parcial.</div>
                 </div>
               </div>
             )}

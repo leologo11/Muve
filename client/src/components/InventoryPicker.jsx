@@ -39,6 +39,16 @@ export const TALL_ITEM_IDS = new Set(CATALOG.filter(i => i.minVehicleType === 'c
 
 const VEHICLE_RANK = { furgon: 1, camion34: 2, camionLargo: 3 };
 
+export function normalizeCatalogItem(item) {
+  return {
+    ...item,
+    isHeavy: Boolean(item.isHeavy ?? Number(item.requiredHelpers || 0) > 0),
+    isTall: Boolean(item.isTall ?? item.minVehicleType === 'camion34'),
+    isLong: Boolean(item.isLong ?? false),
+    isFragile: Boolean(item.isFragile ?? false),
+  };
+}
+
 export function totalVol(inventory, catalog = CATALOG) {
   return inventory.reduce((sum, item) => {
     const c = catalog.find(x => x.id === item.id);
@@ -68,6 +78,11 @@ export function recommendVehicleType(vol, inventory = [], catalog = CATALOG) {
   }, 'furgon');
   if (minVehicle === 'camionLargo') return 'camionLargo';
   if (minVehicle === 'camion34') return 'camion34';
+  const v = VEHICLE_THRESHOLDS.find(t => vol <= t.maxVol);
+  return (v || VEHICLE_THRESHOLDS[VEHICLE_THRESHOLDS.length - 1]).vehicleType;
+}
+
+export function recommendVehicleTypeByVolume(vol) {
   const v = VEHICLE_THRESHOLDS.find(t => vol <= t.maxVol);
   return (v || VEHICLE_THRESHOLDS[VEHICLE_THRESHOLDS.length - 1]).vehicleType;
 }

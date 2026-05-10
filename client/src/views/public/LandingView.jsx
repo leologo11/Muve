@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { api } from '../../api/index.js';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
-import InventoryPicker, { CATALOG, totalVol, recommendVehicleType, serializeInventory, VEHICLE_THRESHOLDS, inventoryHasTallItems, requiredHelpersForInventory } from '../../components/InventoryPicker.jsx';
+import InventoryPicker, { CATALOG, totalVol, recommendVehicleType, recommendVehicleTypeByVolume, serializeInventory, VEHICLE_THRESHOLDS, inventoryHasTallItems, requiredHelpersForInventory } from '../../components/InventoryPicker.jsx';
 
 const LARGE_ITEM_IDS = new Set(['camaQueen', 'cama2p', 'sofa3p', 'sofa2p', 'closet', 'nevera', 'lavadora', 'cocina']);
 
@@ -275,12 +275,13 @@ export default function LandingView() {
   const hasTallItems = inventoryHasTallItems(inventory, catalog);
   const requiredHelpers = requiredHelpersForInventory(inventory, catalog);
   const smartVehicleType = invVol > 0 ? recommendVehicleType(invVol, inventory, catalog) : 'furgon';
+  const volumeVehicleType = invVol > 0 ? recommendVehicleTypeByVolume(invVol) : 'furgon';
   const vehicleLabel = VEHICLE_THRESHOLDS.find(t => t.vehicleType === smartVehicleType);
   const configServiceType = serviceType === 'mudanza' ? 'mudanza' : 'flete';
   const activeVehicleConfig =
     vehicleConfigs.find(c => c.vehicleType === smartVehicleType && (c.serviceType || 'flete') === configServiceType) ||
     vehicleConfigs.find(c => c.vehicleType === smartVehicleType);
-  const vehicleBasePrice = Number(activeVehicleConfig?.basePrice ?? FLETE_BASE_PRICE);
+  const rawVehicleBasePrice = Number(activeVehicleConfig?.basePrice ?? FLETE_BASE_PRICE);
   const vehicleKmPrice = tierPricePerKm(activeVehicleConfig?.kmTiers || [], distanceKm || 0);
   const distanceCost = distanceKm ? roundToThousand(distanceKm * vehicleKmPrice) : 0;
   const cfgExtras = activeVehicleConfig?.extras || {};
@@ -291,6 +292,11 @@ export default function LandingView() {
   const includedM3 = Number(cfgExtras.included_m3 ?? FLETE_BASE_VOL);
   const extraM3Price = Number(cfgExtras.extra_m3 ?? FLETE_EXTRA_M3);
   const extraVol     = Math.max(0, invVol - includedM3);
+  const partialDiscountPct = serviceType === 'flete' && smartVehicleType !== volumeVehicleType && invVol > 0 && invVol <= Number(cfgExtras.partial_discount_max_m3 ?? 4)
+    ? Number(cfgExtras.partial_discount_pct ?? 20)
+    : 0;
+  const partialDiscount = roundToThousand(rawVehicleBasePrice * partialDiscountPct / 100);
+  const vehicleBasePrice = Math.max(0, rawVehicleBasePrice - partialDiscount);
   // Ayudante sugerido: vol>6 o ítems pesados → chofer+ayudante, vol>2 → solo chofer
   const suggestHelperMode = requiredHelpers > 0 ? 'helpers' : invVol > 2 ? 'driver' : 'none';
   // Costos extras
@@ -996,6 +1002,12 @@ export default function LandingView() {
                       <span>Precio base {vehicleLabel?.name || ''}</span>
                       <span style={{ fontWeight: 700 }}>${fmt(vehicleBasePrice)}</span>
                     </div>
+                    {partialDiscount > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#16a34a' }}>
+                        <span>Descuento por carga parcial</span>
+                        <span style={{ fontWeight: 700 }}>-${fmt(partialDiscount)}</span>
+                      </div>
+                    )}
                     {serviceType !== 'mudanza' && extraVol > 0 && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
                         <span>{extraVol.toFixed(2)} m³ adicionales sobre {includedM3} m³ × ${fmt(extraM3Price)}</span>

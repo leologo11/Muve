@@ -46,6 +46,10 @@ function normalizeInventoryItem(r) {
     vol: Number(r.volume_m3 || 0),
     minVehicleType: r.min_vehicle_type || 'furgon',
     requiredHelpers: Number(r.required_helpers || 0),
+    isHeavy: Boolean(r.is_heavy),
+    isFragile: Boolean(r.is_fragile),
+    isLong: Boolean(r.is_long),
+    isTall: Boolean(r.is_tall),
     active: r.active !== false,
     sortOrder: r.sort_order || 0,
   };

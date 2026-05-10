@@ -165,6 +165,7 @@ export const api = {
   getVehicleConfigs: () => request('GET', '/vehicle-configs'),
   updateVehicleConfig: (id, data) => request('PATCH', `/vehicle-configs/${id}`, data),
   getInventoryConfigs: () => request('GET', '/inventory-configs'),
+  createInventoryConfig: (data) => request('POST', '/inventory-configs', data),
   updateInventoryConfig: (id, data) => request('PATCH', `/inventory-configs/${id}`, data),
 
   // Public pricing helpers (no auth required)
