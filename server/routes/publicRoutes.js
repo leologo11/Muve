@@ -22,6 +22,21 @@ function calcVehiclePrice(config, distanceKm, numHelpers = 0, numFloors = 0, nee
   return Math.round(total / 1000) * 1000;
 }
 
+function normalizePublicVehicleConfig(r) {
+  return {
+    id: r.id,
+    vehicleType: r.vehicle_type,
+    serviceType: r.service_type || 'flete',
+    name: r.name,
+    description: r.description,
+    basePrice: Number(r.base_price || 0),
+    kmTiers: r.km_tiers || [],
+    extras: r.extras || {},
+    active: r.active,
+    onlyRegions: r.only_regions,
+  };
+}
+
 function priceRange(exact) {
   const low  = Math.round(exact * 0.88 / 5000) * 5000;
   const high = Math.round(exact * 1.18 / 5000) * 5000;
@@ -31,13 +46,17 @@ function priceRange(exact) {
 // GET /api/public/vehicle-configs — active vehicle pricing (no auth)
 router.get('/vehicle-configs', async (req, res) => {
   try {
-    const rows = await supabaseRequest(`/vehicle_configs${qs({ active: 'eq.true', select: '*', order: 'sort_order.asc' })}`);
-    return res.json(rows.map(r => ({
-      id: r.id, vehicleType: r.vehicle_type, name: r.name, description: r.description,
-      basePrice: Number(r.base_price || 0), kmTiers: r.km_tiers || [],
-      extras: r.extras || {}, active: r.active, onlyRegions: r.only_regions,
-    })));
+    const filters = { active: 'eq.true', select: '*', order: 'service_type.asc,sort_order.asc' };
+    if (req.query.serviceType) filters.service_type = `eq.${req.query.serviceType}`;
+    const rows = await supabaseRequest(`/vehicle_configs${qs(filters)}`);
+    return res.json(rows.map(normalizePublicVehicleConfig));
   } catch (err) {
+    if (err.message.includes('service_type') || err.message.includes('schema cache')) {
+      try {
+        const rows = await supabaseRequest(`/vehicle_configs${qs({ active: 'eq.true', select: '*', order: 'sort_order.asc' })}`);
+        return res.json(rows.map(normalizePublicVehicleConfig));
+      } catch {}
+    }
     if (err.message.includes('vehicle_configs') || err.message.includes('schema cache')) {
       return res.json([]);
     }
@@ -100,9 +119,15 @@ router.post('/distance', async (req, res) => {
 // POST /api/public/quote-estimate — calculate price estimate for given trip (no auth)
 router.post('/quote-estimate', async (req, res) => {
   try {
-    const { distanceKm, numHelpers = 0, numFloors = 0, needsPacking = false, driverHelps = false } = req.body;
+    const { distanceKm, numHelpers = 0, numFloors = 0, needsPacking = false, driverHelps = false, serviceType = 'flete' } = req.body;
     if (!distanceKm) return res.status(400).json({ error: 'distanceKm requerido' });
-    const configs = await supabaseRequest(`/vehicle_configs${qs({ active: 'eq.true', select: '*', order: 'sort_order.asc' })}`);
+    let configs;
+    try {
+      configs = await supabaseRequest(`/vehicle_configs${qs({ active: 'eq.true', service_type: `eq.${serviceType}`, select: '*', order: 'sort_order.asc' })}`);
+    } catch (err) {
+      if (!err.message.includes('service_type') && !err.message.includes('schema cache')) throw err;
+      configs = await supabaseRequest(`/vehicle_configs${qs({ active: 'eq.true', select: '*', order: 'sort_order.asc' })}`);
+    }
     const vehicles = configs.map(cfg => {
       const exact = calcVehiclePrice(cfg, distanceKm, numHelpers, numFloors, needsPacking, driverHelps);
       const { min, max } = priceRange(exact);

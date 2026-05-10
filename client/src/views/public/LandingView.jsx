@@ -179,7 +179,7 @@ export default function LandingView() {
       if (distanceKm) {
         try {
           const { vehicles: vs } = await api.getQuoteEstimate({
-            distanceKm, numHelpers: helpMode === 'helpers' ? numHelpers : 0,
+            serviceType, distanceKm, numHelpers: helpMode === 'helpers' ? numHelpers : 0,
             driverHelps: helpMode !== 'none', numFloors, needsPacking,
           });
           if (vs?.length) {
@@ -268,7 +268,10 @@ export default function LandingView() {
   const hasTallItems = inventoryHasTallItems(inventory);
   const smartVehicleType = invVol > 0 ? recommendVehicleType(invVol, inventory) : 'furgon';
   const vehicleLabel = VEHICLE_THRESHOLDS.find(t => t.vehicleType === smartVehicleType);
-  const activeVehicleConfig = vehicleConfigs.find(c => c.vehicleType === smartVehicleType);
+  const configServiceType = serviceType === 'mudanza' ? 'mudanza' : 'flete';
+  const activeVehicleConfig =
+    vehicleConfigs.find(c => c.vehicleType === smartVehicleType && (c.serviceType || 'flete') === configServiceType) ||
+    vehicleConfigs.find(c => c.vehicleType === smartVehicleType);
   const vehicleBasePrice = Number(activeVehicleConfig?.basePrice ?? FLETE_BASE_PRICE);
   const vehicleKmPrice = tierPricePerKm(activeVehicleConfig?.kmTiers || [], distanceKm || 0);
   const distanceCost = distanceKm ? roundToThousand(distanceKm * vehicleKmPrice) : 0;
@@ -286,7 +289,7 @@ export default function LandingView() {
                      : helpMode === 'helpers' ? driverHelpPrice + numHelpers * helperUnitPrice
                      : 0;
   const packCost     = needsPacking ? packingPrice : 0;
-  const extraVolCost = roundToThousand(extraVol * extraM3Price);
+  const extraVolCost = serviceType === 'mudanza' ? 0 : roundToThousand(extraVol * extraM3Price);
   const fleteExact   = roundToThousand(vehicleBasePrice + distanceCost + extraVolCost + floorCost + helpCost + packCost);
 
   const status = useMemo(() => {
@@ -316,7 +319,7 @@ export default function LandingView() {
       setDistanceKm(km);
       setDurationMin(min);
       if (km) {
-        const { vehicles: vs } = await api.getQuoteEstimate({ distanceKm: km, numHelpers: 0, numFloors: 0, needsPacking: false });
+        const { vehicles: vs } = await api.getQuoteEstimate({ serviceType, distanceKm: km, numHelpers: 0, numFloors: 0, needsPacking: false });
         setVehicles(vs || []);
         if (vs?.length) {
           setSelectedVehicle(vs[0]);
@@ -959,7 +962,7 @@ export default function LandingView() {
                       <span>Precio base {vehicleLabel?.name || ''}</span>
                       <span style={{ fontWeight: 700 }}>${fmt(vehicleBasePrice)}</span>
                     </div>
-                    {extraVol > 0 && (
+                    {serviceType !== 'mudanza' && extraVol > 0 && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
                         <span>{extraVol.toFixed(2)} m³ adicionales × ${fmt(extraM3Price)}</span>
                         <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(extraVolCost)}</span>
@@ -1001,7 +1004,7 @@ export default function LandingView() {
                         <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(packingPrice)}</span>
                       </div>
                     )}
-                    {helpMode === 'none' && numFloors === 0 && !needsPacking && extraVol === 0 && (
+                    {helpMode === 'none' && numFloors === 0 && !needsPacking && extraVolCost === 0 && (
                       <div style={{ fontSize: 10, color: '#22c55e', fontWeight: 700, textAlign: 'center', marginTop: 2 }}>
                         ✓ Sin costos adicionales — dejar en recepción no tiene cargo extra
                       </div>

@@ -18,6 +18,7 @@ function buildRanges(tiers) {
 
 export default function MovePricingView() {
   const [configs, setConfigs] = useState([]);
+  const [serviceTab, setServiceTab] = useState('flete');
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
 
@@ -46,16 +47,47 @@ export default function MovePricingView() {
     </div>
   );
 
+  const visibleConfigs = configs.filter(c => (c.serviceType || 'flete') === serviceTab);
+  const isMudanza = serviceTab === 'mudanza';
+
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px calc(90px + env(safe-area-inset-bottom))' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, margin: '0 0 12px' }}>
+        {[
+          ['flete', 'Fletes', 'Por volumen + camion sugerido'],
+          ['mudanza', 'Mudanzas', 'Camion completo + base mayor'],
+        ].map(([id, title, sub]) => (
+          <button
+            key={id}
+            onClick={() => setServiceTab(id)}
+            style={{
+              padding: '11px 12px', borderRadius: 12, cursor: 'pointer', textAlign: 'left',
+              border: `1.5px solid ${serviceTab === id ? 'var(--accent)' : 'var(--border)'}`,
+              background: serviceTab === id ? '#EEF4FF' : '#fff',
+              color: serviceTab === id ? 'var(--accent)' : 'var(--text)',
+              fontWeight: 800,
+            }}
+          >
+            <div style={{ fontSize: 14 }}>{title}</div>
+            <div style={{ fontSize: 10, color: serviceTab === id ? '#0052FF90' : 'var(--muted)', marginTop: 2 }}>{sub}</div>
+          </button>
+        ))}
+      </div>
       <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5, margin: '6px 0 16px', padding: '10px 12px', background: 'var(--card2)', borderRadius: 10, border: '1px solid var(--border)' }}>
         💡 Los precios aplican inmediatamente en la landing pública. El sistema cotiza según el tramo en que cae la distancia total del viaje.
       </div>
 
-      {configs.map(cfg => (
+      {visibleConfigs.length === 0 && (
+        <div style={{ padding: 18, borderRadius: 14, border: '1px solid #f59e0b50', background: '#fff7ed', color: '#92400e', fontSize: 13, lineHeight: 1.5, marginBottom: 14 }}>
+          Aun no hay precios separados para {isMudanza ? 'mudanzas' : 'fletes'}. Ejecuta la migracion SQL nueva en Supabase para crear esta seccion.
+        </div>
+      )}
+
+      {visibleConfigs.map(cfg => (
         <VehicleCard
           key={cfg._id || cfg.id}
           config={cfg}
+          serviceType={serviceTab}
           onEdit={() => setEditing(cfg)}
           onToggleActive={async () => {
             try {
@@ -80,9 +112,10 @@ export default function MovePricingView() {
 
 // ── Vehicle config card ───────────────────────────────────────────────────────
 
-function VehicleCard({ config: c, onEdit, onToggleActive }) {
+function VehicleCard({ config: c, serviceType = 'flete', onEdit, onToggleActive }) {
   const ranges = buildRanges(c.kmTiers);
   const ex = c.extras || {};
+  const isMudanza = serviceType === 'mudanza';
 
   return (
     <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 16, marginBottom: 14, overflow: 'hidden', opacity: c.active ? 1 : 0.55 }}>
@@ -177,7 +210,7 @@ function VehicleCard({ config: c, onEdit, onToggleActive }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             <ExtraStat icon="🏢" label="Piso sin ascensor" value={ex.floor} />
             <ExtraStat icon="📦" label="Embalaje profesional" value={ex.packing} />
-            <ExtraStat icon="📐" label="m³ adicional" value={ex.extra_m3} unit="/m³" />
+            {!isMudanza && <ExtraStat icon="m3" label="m3 adicional" value={ex.extra_m3} unit="/m3" />}
           </div>
         </div>
       </div>
@@ -198,6 +231,7 @@ function ExtraStat({ icon, label, value, unit = '' }) {
 // ── Edit modal ────────────────────────────────────────────────────────────────
 
 function EditModal({ config: c, onClose, onSaved }) {
+  const isMudanza = (c.serviceType || 'flete') === 'mudanza';
   const [name,        setName]        = useState(c.name);
   const [description, setDescription] = useState(c.description);
   const [basePrice,   setBasePrice]   = useState(c.basePrice);
@@ -360,11 +394,18 @@ function EditModal({ config: c, onClose, onSaved }) {
               <FL>📦 Embalaje</FL>
               <input type="number" value={extras.packing} onChange={e => setExtra('packing', e.target.value)} style={inp} />
             </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <FL>📐 m³ adicional (sobre los {3} m³ base)</FL>
-              <input type="number" value={extras.extra_m3} onChange={e => setExtra('extra_m3', e.target.value)} style={inp} />
-              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Se cobra por cada m³ que exceda los 3 m³ incluidos en la tarifa base</div>
-            </div>
+            {!isMudanza && (
+              <div style={{ gridColumn: '1 / -1' }}>
+                <FL>m3 adicional</FL>
+                <input type="number" value={extras.extra_m3} onChange={e => setExtra('extra_m3', e.target.value)} style={inp} />
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Se cobra solo en fletes cuando la carga excede el volumen incluido.</div>
+              </div>
+            )}
+            {isMudanza && (
+              <div style={{ gridColumn: '1 / -1', padding: '10px 12px', borderRadius: 10, background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', fontSize: 11, lineHeight: 1.45 }}>
+                En mudanzas no se cobra m3 adicional. Ajusta el precio base del camion para reflejar que se vende como camion completo.
+              </div>
+            )}
           </div>
         </div>
 

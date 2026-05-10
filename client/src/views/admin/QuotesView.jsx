@@ -382,7 +382,12 @@ function stripFleteTag(notes) {
 }
 
 function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelete }) {
-  const allConfigs = vehicleConfigs.length > 0 ? vehicleConfigs : FALLBACK_CONFIGS;
+  const quoteServiceType = q.serviceType === 'mudanza' ? 'mudanza' : 'flete';
+  const serviceConfigs = vehicleConfigs.filter(c => (c.serviceType || 'flete') === quoteServiceType);
+  const legacyConfigs = vehicleConfigs.filter(c => !c.serviceType || c.serviceType === 'flete');
+  const allConfigs = serviceConfigs.length > 0
+    ? serviceConfigs
+    : (legacyConfigs.length > 0 ? legacyConfigs : FALLBACK_CONFIGS);
 
   // If migration not yet run, dedicated columns will be all-zero — recover from client_notes backup
   const recovered = (!q.numHelpers && !q.numFloors && !q.needsPacking && !q.vehicleType && !q.distanceKm)
