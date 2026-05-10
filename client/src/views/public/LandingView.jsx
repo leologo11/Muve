@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { api } from '../../api/index.js';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
 import InventoryPicker, { CATALOG, totalVol, recommendVehicleType, recommendVehicleTypeByVolume, serializeInventory, VEHICLE_THRESHOLDS, inventoryHasTallItems, requiredHelpersForInventory } from '../../components/InventoryPicker.jsx';
@@ -110,6 +110,7 @@ const SERVICES = [
 export default function LandingView() {
   const [step,        setStep]        = useState(1);
   const [serviceType, setServiceType] = useState('');
+  const bodyRef = useRef(null);
 
   // Paquetería
   const [clientCompany, setClientCompany] = useState('');
@@ -380,19 +381,19 @@ export default function LandingView() {
       ? { type: 'flete', title: 'Te conviene cotizar como flete', desc: 'Con los mismos articulos usas menos espacio y pagas por volumen, no por el camion completo.', price: displayFleteComparePrice, savings: fleteSavings }
       : null;
   const recommendationCard = movingServiceRecommendation && (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', padding: '12px 14px', borderRadius: 14, border: '1.5px solid #f59e0b60', background: '#fff7ed', color: '#9a3412' }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'stretch', padding: 14, borderRadius: 16, border: '1.5px solid #f59e0b70', background: 'linear-gradient(135deg,#fff7ed,#fffbeb)', color: '#9a3412', boxShadow: '0 10px 26px #f59e0b18' }}>
       <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: .8, textTransform: 'uppercase', color: '#c2410c', marginBottom: 4 }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 900, letterSpacing: .8, textTransform: 'uppercase', color: '#c2410c', background: '#fed7aa', borderRadius: 999, padding: '4px 8px', marginBottom: 8 }}>
           Recomendacion para ahorrar
         </div>
-        <div style={{ fontSize: 13, fontWeight: 900, marginBottom: 4 }}>{movingServiceRecommendation.title}</div>
-        <div style={{ fontSize: 11, lineHeight: 1.45 }}>{movingServiceRecommendation.desc}</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 900, padding: '4px 8px', borderRadius: 999, background: '#fff', border: '1px solid #fed7aa' }}>
+        <div style={{ fontSize: 14, fontWeight: 900, marginBottom: 5, color: '#7c2d12' }}>{movingServiceRecommendation.title}</div>
+        <div style={{ fontSize: 11, lineHeight: 1.5, color: '#9a3412' }}>{movingServiceRecommendation.desc}</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 10 }}>
+          <span style={{ fontSize: 11, fontWeight: 900, padding: '5px 9px', borderRadius: 999, background: '#fff', border: '1px solid #fed7aa' }}>
             Si llevas lo mismo en {movingServiceRecommendation.type === 'mudanza' ? 'mudanza' : 'flete'}: ${fmt(movingServiceRecommendation.price)}
           </span>
           {movingServiceRecommendation.savings > 0 && (
-            <span style={{ fontSize: 11, fontWeight: 900, padding: '4px 8px', borderRadius: 999, background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}>
+            <span style={{ fontSize: 13, fontWeight: 1000, padding: '5px 10px', borderRadius: 999, background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}>
               Ahorras ${fmt(movingServiceRecommendation.savings)}
             </span>
           )}
@@ -401,7 +402,7 @@ export default function LandingView() {
       <button
         type="button"
         onClick={() => switchMovingService(movingServiceRecommendation.type)}
-        style={{ flex: '1 1 130px', minHeight: 42, border: 'none', borderRadius: 10, background: '#f59e0b', color: '#fff', padding: '9px 12px', fontSize: 11, fontWeight: 900, cursor: 'pointer' }}
+        style={{ flex: '1 1 132px', minHeight: 46, border: 'none', borderRadius: 12, background: 'linear-gradient(135deg,#f59e0b,#ea580c)', color: '#fff', padding: '10px 12px', fontSize: 12, fontWeight: 900, cursor: 'pointer', boxShadow: '0 8px 18px #f9731630' }}
       >
         Cambiar a {movingServiceRecommendation.type === 'mudanza' ? 'mudanza' : 'flete'}
       </button>
@@ -509,6 +510,10 @@ export default function LandingView() {
 
 
   // ── Submit ──────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+  }, [step, serviceType]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -714,7 +719,7 @@ export default function LandingView() {
         </div>
 
         {/* ── Scrollable step body ───────────────────────────────────────── */}
-        <div className="q-body quote-form">
+        <div ref={bodyRef} className="q-body quote-form">
           {blurReady && !success && (
             <div className="form-guide-message" key={status[1]}>
               <span className="form-guide-dot" />
