@@ -1,4 +1,4 @@
-const PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID;
+const PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID || '1365904715457691';
 
 let initialized = false;
 
