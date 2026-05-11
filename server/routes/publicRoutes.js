@@ -23,7 +23,7 @@ function calcVehiclePrice(config, distanceKm, numHelpers = 0, numFloors = 0, nee
   const ppk = tier ? Number(tier.price_per_km || 0) : 0;
   const extras = config.extras || {};
   const kmCost = distanceKm * ppk;
-  const driverHelpCost = 0; // El chofer va incluido en el precio base.
+  const driverHelpCost = driverHelps ? Number(extras.driver_help || 0) : 0;
   const helperCost = numHelpers * Number(extras.helper || 0);
   const floorCost = numFloors * Number(extras.floor || 0);
   const packingCost = needsPacking ? Number(extras.packing || 0) : 0;

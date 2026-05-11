@@ -258,10 +258,11 @@ export default function LandingView() {
   };
 
   const switchMovingService = (nextType) => {
+    const nextHelpMode = requiredHelpers > 0 ? 'helpers' : 'driver';
     setServiceType(nextType);
     setHelpModeManual(false);
-    setHelpMode('driver');
-    setNumHelpers(1);
+    setHelpMode(nextHelpMode);
+    setNumHelpers(n => nextHelpMode === 'helpers' ? Math.max(requiredHelpers || 1, n) : Math.max(1, n));
     setPriceRange(null);
     setStep(3);
   };
@@ -304,9 +305,12 @@ export default function LandingView() {
   const volumeVehicleType = invVol > 0 ? recommendVehicleTypeByVolume(invVol) : 'furgon';
   const vehicleLabel = VEHICLE_THRESHOLDS.find(t => t.vehicleType === smartVehicleType);
   const configServiceType = serviceType === 'mudanza' ? 'mudanza' : 'flete';
-  const findVehicleConfig = (vehicleType, type) =>
-    vehicleConfigs.find(c => c.vehicleType === vehicleType && (c.serviceType || 'flete') === type) ||
-    vehicleConfigs.find(c => c.vehicleType === vehicleType);
+  const findVehicleConfig = (vehicleType, type) => {
+    const sameVehicle = vehicleConfigs.filter(c => c.vehicleType === vehicleType);
+    return sameVehicle.find(c => (c.serviceType || 'flete') === type) ||
+      sameVehicle.find(c => !c.serviceType && type === 'flete') ||
+      sameVehicle[0];
+  };
   const activeVehicleConfig = findVehicleConfig(smartVehicleType, configServiceType);
   const rawVehicleBasePrice = Number(activeVehicleConfig?.basePrice ?? FLETE_BASE_PRICE);
   const vehicleKmPrice = tierPricePerKm(activeVehicleConfig?.kmTiers || [], distanceKm || 0);
@@ -345,6 +349,8 @@ export default function LandingView() {
   const compareMovingPrice = (type) => {
     const cfg = findVehicleConfig(smartVehicleType, type);
     const ex = cfg?.extras || {};
+    const comparisonHelpMode = requiredHelpers > 0 ? 'helpers' : (helpMode !== 'none' ? helpMode : (type === 'mudanza' ? 'driver' : suggestHelperMode));
+    const comparisonHelpers = comparisonHelpMode === 'helpers' ? Math.max(numHelpers, requiredHelpers || 1) : 0;
     const base = Number(cfg?.basePrice ?? FLETE_BASE_PRICE);
     const ppk = tierPricePerKm(cfg?.kmTiers || [], distanceKm || 0);
     const kmCost = distanceKm ? roundToThousand(distanceKm * ppk) : 0;
@@ -356,8 +362,8 @@ export default function LandingView() {
       ? Math.max(0, Math.min(maxDiscount, maxDiscount * (1 - (invVol / vehicleCapacityM3))))
       : 0;
     const discount = roundToThousand(base * discountPct / 100);
-    const driverHelp = type === 'mudanza' && helpMode !== 'none' ? Number(ex.driver_help ?? FLETE_DRIVER_HELP) : 0;
-    const helper = helpMode === 'helpers' ? numHelpers * Number(ex.helper ?? FLETE_HELPER_COST) : 0;
+    const driverHelp = type === 'mudanza' && comparisonHelpMode !== 'none' ? Number(ex.driver_help ?? FLETE_DRIVER_HELP) : 0;
+    const helper = comparisonHelpMode === 'helpers' ? comparisonHelpers * Number(ex.helper ?? FLETE_HELPER_COST) : 0;
     const floors = numFloors * Number(ex.floor ?? FLETE_FLOOR_COST);
     const packing = needsPacking ? Number(ex.packing ?? FLETE_PACKING_COST) : 0;
     const discountedBase = Math.max(0, base - discount);
