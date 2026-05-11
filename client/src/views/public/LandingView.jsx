@@ -1032,7 +1032,7 @@ export default function LandingView() {
                 {[
                   { v: 'none',    title: 'Solo traslado',          desc: 'El chofer conduce. Carga y descarga por tu cuenta.' },
                   { v: 'driver',  title: 'Chofer ayuda',           desc: serviceType === 'mudanza' ? `El chofer ayuda a cargar y descargar. +$${fmt(driverHelpPrice)}` : 'El chofer ayuda a cargar y descargar. Incluido en precio base.' },
-                  { v: 'helpers', title: 'Chofer + ayudante',      desc: `Chofer incluido + ayudante adicional. +$${fmt(helperUnitPrice)} c/u` },
+                  { v: 'helpers', title: requiredHelpers > 1 ? `Chofer + ${requiredHelpers} ayudantes` : 'Chofer + ayudante', desc: `Chofer incluido + ayudantes adicionales. +$${fmt(helperUnitPrice)} c/u` },
                 ].filter(opt => !(serviceType === 'mudanza' && opt.v === 'none')).map(opt => {
                   const isRecommended = invVol > 0 && suggestHelperMode !== 'none' && opt.v === suggestHelperMode;
                   const isActive = helpMode === opt.v;
@@ -1070,7 +1070,7 @@ export default function LandingView() {
                   <div style={{ marginTop: 4, padding: '10px 12px', background: '#EEF4FF', borderRadius: 10, border: '1px solid #0052FF20' }}>
                     <ExtraRow
                       label="Número de ayudantes"
-                      sub={requiredHelpers > 0 ? `Recomendado por tus articulos: ${requiredHelpers}` : 'Ademas del chofer'}
+                      sub={requiredHelpers > 0 ? `Recomendado por carga: ${requiredHelpers} ayudante${requiredHelpers > 1 ? 's' : ''}` : 'Ademas del chofer'}
                       value={numHelpers}
                       onDec={() => setNumHelpers(n => Math.max(1, n - 1))}
                       onInc={() => setNumHelpers(n => n + 1)}

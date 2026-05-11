@@ -63,11 +63,66 @@ export function inventoryHasTallItems(inventory = [], catalog = CATALOG) {
   });
 }
 
+export function inventoryLoadStats(inventory = [], catalog = CATALOG) {
+  return inventory.reduce((stats, item) => {
+    const qty = Number(item.qty || 0);
+    if (qty <= 0) return stats;
+    const raw = catalog.find(x => x.id === item.id);
+    if (!raw) return stats;
+    const c = normalizeCatalogItem(raw);
+    stats.totalQty += qty;
+    stats.totalVol += Number(c.vol || 0) * qty;
+    stats.requiredItemHelpers = Math.max(stats.requiredItemHelpers, Number(c.requiredHelpers || 0));
+    if (c.isHeavy) stats.heavyQty += qty;
+    if (c.isTall || c.minVehicleType === 'camion34') stats.tallQty += qty;
+    if (c.isLong) stats.longQty += qty;
+    if (c.isFragile) stats.fragileQty += qty;
+    if (c.cat) stats.categories.add(c.cat);
+    return stats;
+  }, {
+    totalQty: 0,
+    totalVol: 0,
+    heavyQty: 0,
+    tallQty: 0,
+    longQty: 0,
+    fragileQty: 0,
+    requiredItemHelpers: 0,
+    categories: new Set(),
+  });
+}
+
 export function requiredHelpersForInventory(inventory = [], catalog = CATALOG) {
-  return inventory.reduce((max, item) => {
-    const c = catalog.find(x => x.id === item.id);
-    return item.qty > 0 ? Math.max(max, Number(c?.requiredHelpers || 0)) : max;
-  }, 0);
+  const stats = inventoryLoadStats(inventory, catalog);
+  if (stats.totalQty === 0 || stats.totalVol <= 0) return 0;
+
+  let helpers = stats.requiredItemHelpers;
+  const categoryCount = stats.categories.size;
+
+  if (stats.totalVol > 3.5 || stats.totalQty >= 6 || stats.heavyQty >= 1 || stats.tallQty >= 1) {
+    helpers = Math.max(helpers, 1);
+  }
+
+  if (
+    stats.totalVol > 10 ||
+    stats.totalQty >= 12 ||
+    stats.heavyQty >= 3 ||
+    stats.tallQty >= 3 ||
+    (categoryCount >= 4 && stats.totalQty >= 8)
+  ) {
+    helpers = Math.max(helpers, 2);
+  }
+
+  if (
+    stats.totalVol > 24 ||
+    stats.totalQty >= 22 ||
+    stats.heavyQty >= 7 ||
+    stats.tallQty >= 6 ||
+    (categoryCount >= 5 && stats.totalQty >= 16)
+  ) {
+    helpers = Math.max(helpers, 3);
+  }
+
+  return Math.min(3, helpers);
 }
 
 export function recommendVehicleType(vol, inventory = [], catalog = CATALOG) {

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
-import InventoryPicker, { totalVol, recommendVehicleType, serializeInventory, parseInventoryStr } from '../../components/InventoryPicker.jsx';
+import InventoryPicker, { totalVol, recommendVehicleType, serializeInventory, parseInventoryStr, requiredHelpersForInventory } from '../../components/InventoryPicker.jsx';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -459,6 +459,9 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
       setVehicleType(rec);
       setPriceEdited(false);
     }
+    const recHelpers = requiredHelpersForInventory(inventory);
+    if (recHelpers > 0 && helpMode !== 'helpers') setHelpMode('helpers');
+    if (recHelpers > 0) setHelpers(n => Math.max(n, recHelpers));
   }, [inventory]);
 
   const isDone = ['approved', 'rejected'].includes(q.status);
