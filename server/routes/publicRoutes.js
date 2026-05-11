@@ -8,6 +8,7 @@ import {
   validatePublicCalculationPayload,
   validatePublicQuotePayload,
 } from '../middleware/security.js';
+import { notifyAdminQuoteCreated } from '../utils/notifications.js';
 import { isSupabaseEnabled, normalizeQuote, normalizeQuoteItem, qs, supabaseRequest } from '../utils/supabase.js';
 
 const router = Router();
@@ -373,6 +374,10 @@ router.post('/quotes', publicQuoteLimiter, validatePublicQuotePayload, quoteSpam
         commune: '',
         note: noteParts.join(' | ') || (serviceType === 'paqueteria' ? 'Lead paqueteria' : ''),
       }),
+    });
+
+    notifyAdminQuoteCreated({ quote, payload }).catch(err => {
+      console.warn('Quote notification failed:', err.message);
     });
 
     return res.status(201).json({
