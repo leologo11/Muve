@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx';
 import Login from './views/Login.jsx';
 import AdminView from './views/admin/AdminView.jsx';
@@ -9,6 +9,17 @@ import CustomerView from './views/customer/CustomerView.jsx';
 import PublicRouteView from './views/PublicRouteView.jsx';
 import QuoteView from './views/public/QuoteView.jsx';
 import LandingView from './views/public/LandingView.jsx';
+import { trackPageView } from './utils/metaPixel.js';
+
+function MetaPixelPageView() {
+  const location = useLocation();
+
+  useEffect(() => {
+    trackPageView();
+  }, [location.pathname, location.search]);
+
+  return null;
+}
 
 function RoleRouter() {
   const { user, loading } = useAuth();
@@ -43,6 +54,7 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <MetaPixelPageView />
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/admin/*" element={<RoleRouter />} />

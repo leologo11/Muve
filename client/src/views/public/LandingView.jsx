@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { api } from '../../api/index.js';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
 import InventoryPicker, { CATALOG, totalVol, recommendVehicleType, recommendVehicleTypeByVolume, serializeInventory, VEHICLE_THRESHOLDS, inventoryHasTallItems, requiredHelpersForInventory } from '../../components/InventoryPicker.jsx';
+import { trackMetaEvent } from '../../utils/metaPixel.js';
 
 const LARGE_ITEM_IDS = new Set(['camaQueen', 'cama2p', 'sofa3p', 'sofa2p', 'closet', 'nevera', 'lavadora', 'cocina']);
 
@@ -546,6 +547,12 @@ export default function LandingView() {
         contactPerson, contactPhone, contactEmail, deliveryDate, deliveryTime,
         clientNotes: isUrgent ? `🚨 URGENTE - SERVICIO INMEDIATO 🚨\n${clientNotes}`.trim() : clientNotes,
         urgent: isUrgent,
+      });
+      trackMetaEvent('Lead', {
+        content_name: 'Cotizacion MUVE',
+        content_category: serviceType,
+        value: isFlete ? finalFletePrice : (priceRange?.hi || 0),
+        currency: 'CLP',
       });
       setFormGone(true);                                        // form desaparece + cajitas vuelan
       window.setTimeout(() => setDeparted(true), 4200);        // camión sale cuando ya cargó todo
