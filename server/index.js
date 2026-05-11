@@ -19,16 +19,34 @@ import quoteRoutes from './routes/quoteRoutes.js';
 import credentialRoutes from './routes/credentials.js';
 import vehicleConfigRoutes from './routes/vehicleConfigRoutes.js';
 import inventoryConfigRoutes from './routes/inventoryConfigRoutes.js';
+import { securityHeaders } from './middleware/security.js';
 import { runCleanup } from './utils/cleanup.js';
 import { isSupabaseEnabled } from './utils/supabase.js';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+app.set('trust proxy', 1);
 
-// CORS — en producción el frontend y backend son el mismo servidor, se permite todo
+app.use(securityHeaders);
+
+function productionOrigins() {
+  return [
+    'https://muveapp.cl',
+    'https://www.muveapp.cl',
+    process.env.FRONTEND_URL,
+    process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null,
+    ...(process.env.PUBLIC_ALLOWED_ORIGINS || '').split(','),
+  ].filter(Boolean).map(origin => origin.trim());
+}
+
+// CORS: en produccion solo dominio propio y origenes configurados.
 app.use(cors({
   origin: (origin, cb) => {
-    if (process.env.NODE_ENV === 'production') return cb(null, true);
+    if (process.env.NODE_ENV === 'production') {
+      const allowed = productionOrigins();
+      if (!origin || allowed.includes(origin)) return cb(null, true);
+      return cb(new Error('Not allowed by CORS'));
+    }
     const allowed = [
       'http://localhost:5173',
       'http://127.0.0.1:5173',
@@ -42,8 +60,8 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json({ limit: '20mb' }));
-app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: process.env.JSON_BODY_LIMIT || '5mb' }));
 
 // Routes
 app.use('/api/public', publicRoutes);
@@ -135,6 +153,12 @@ app.post('/api/admin/cleanup', async (req, res) => {
 // Global error handler
 app.use((err, _req, res, _next) => {
   console.error(err);
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({ error: 'Origen no permitido' });
+  }
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'La solicitud es demasiado grande' });
+  }
   res.status(500).json({ error: err.message || 'Error interno del servidor' });
 });
 

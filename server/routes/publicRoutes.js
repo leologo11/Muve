@@ -1,5 +1,13 @@
 import { Router } from 'express';
 import crypto from 'crypto';
+import {
+  publicCalculationLimiter,
+  publicQuoteLimiter,
+  publicReadLimiter,
+  quoteSpamGuard,
+  validatePublicCalculationPayload,
+  validatePublicQuotePayload,
+} from '../middleware/security.js';
 import { isSupabaseEnabled, normalizeQuote, normalizeQuoteItem, qs, supabaseRequest } from '../utils/supabase.js';
 
 const router = Router();
@@ -62,7 +70,7 @@ function priceRange(exact) {
 }
 
 // GET /api/public/vehicle-configs — active vehicle pricing (no auth)
-router.get('/vehicle-configs', async (req, res) => {
+router.get('/vehicle-configs', publicReadLimiter, async (req, res) => {
   try {
     const filters = { active: 'eq.true', select: '*', order: 'service_type.asc,sort_order.asc' };
     if (req.query.serviceType) filters.service_type = `eq.${req.query.serviceType}`;
@@ -83,7 +91,7 @@ router.get('/vehicle-configs', async (req, res) => {
 });
 
 // GET /api/public/inventory-configs — active moving item catalog (no auth)
-router.get('/inventory-configs', async (_req, res) => {
+router.get('/inventory-configs', publicReadLimiter, async (_req, res) => {
   try {
     const rows = await supabaseRequest(`/inventory_item_configs${qs({ active: 'eq.true', select: '*', order: 'category.asc,sort_order.asc,name.asc' })}`);
     res.json(rows.map(normalizeInventoryItem));
@@ -104,7 +112,7 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 }
 
 // POST /api/public/distance — calculate road distance via OSRM with Haversine fallback (no auth)
-router.post('/distance', async (req, res) => {
+router.post('/distance', publicCalculationLimiter, validatePublicCalculationPayload, async (req, res) => {
   try {
     const { originLat, originLng, destLat, destLng } = req.body;
     if (!originLat || !originLng || !destLat || !destLng) {
@@ -146,7 +154,7 @@ router.post('/distance', async (req, res) => {
 });
 
 // POST /api/public/quote-estimate — calculate price estimate for given trip (no auth)
-router.post('/quote-estimate', async (req, res) => {
+router.post('/quote-estimate', publicCalculationLimiter, validatePublicCalculationPayload, async (req, res) => {
   try {
     const { distanceKm, numHelpers = 0, numFloors = 0, needsPacking = false, driverHelps = false, serviceType = 'flete' } = req.body;
     if (!distanceKm) return res.status(400).json({ error: 'distanceKm requerido' });
@@ -175,7 +183,11 @@ router.post('/quote-estimate', async (req, res) => {
 });
 
 function clean(value) {
-  return String(value || '').trim();
+  return String(value || '')
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/[<>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 const STATUS_LABELS = { draft: 'Borrador', active: 'En curso', paused: 'Pausada', completed: 'Completada', cancelled: 'Cancelada' };
@@ -234,7 +246,7 @@ async function replaceSupabaseQuoteItems(quoteId, items = []) {
 }
 
 // POST /api/public/quotes - ingreso desde la landing publica
-router.post('/quotes', async (req, res) => {
+router.post('/quotes', publicQuoteLimiter, validatePublicQuotePayload, quoteSpamGuard, async (req, res) => {
   try {
     const serviceType = clean(req.body.serviceType).toLowerCase();
     if (!SERVICE_TYPES.includes(serviceType)) {
@@ -375,7 +387,7 @@ router.post('/quotes', async (req, res) => {
 });
 
 // GET /api/public/route/:shareToken — company tracking (no auth required)
-router.get('/route/:shareToken', async (req, res) => {
+router.get('/route/:shareToken', publicReadLimiter, async (req, res) => {
   try {
     const routes = await supabaseRequest(`/routes${qs({ share_token: `eq.${req.params.shareToken}`, select: '*' })}`);
     const route = routes?.[0];
@@ -413,7 +425,7 @@ router.get('/route/:shareToken', async (req, res) => {
 });
 
 // PATCH /api/public/quote/:token — client updates items (saves draft)
-router.patch('/quote/:token', async (req, res) => {
+router.patch('/quote/:token', publicQuoteLimiter, async (req, res) => {
   try {
     if (isSupabaseEnabled()) {
       const quote = await findSupabaseQuoteByToken(req.params.token);
@@ -449,7 +461,7 @@ router.patch('/quote/:token', async (req, res) => {
 });
 
 // POST /api/public/quote/:token/submit — client submits for admin review
-router.post('/quote/:token/submit', async (req, res) => {
+router.post('/quote/:token/submit', publicQuoteLimiter, async (req, res) => {
   try {
     if (isSupabaseEnabled()) {
       const quote = await findSupabaseQuoteByToken(req.params.token);
