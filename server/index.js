@@ -39,8 +39,8 @@ function productionOrigins() {
   ].filter(Boolean).map(origin => origin.trim());
 }
 
-// CORS: en produccion solo dominio propio y origenes configurados.
-app.use(cors({
+// CORS: proteger solo el API; la web publica debe poder ser leida por crawlers sociales.
+const corsOptions = {
   origin: (origin, cb) => {
     if (process.env.NODE_ENV === 'production') {
       const allowed = productionOrigins();
@@ -58,7 +58,9 @@ app.use(cors({
     else cb(new Error('Not allowed by CORS'));
   },
   credentials: true
-}));
+};
+
+app.use('/api', cors(corsOptions));
 
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: process.env.JSON_BODY_LIMIT || '5mb' }));
