@@ -407,34 +407,10 @@ export default function AdminView() {
         <Header
           title="⚙️ Admin · Rutas"
           extra={
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-              <button onClick={() => setView('allPackages')} style={{ background: '#0052FF14', border: '1px solid #0052FF30', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', cursor: 'pointer' }}>
-                📦 Paquetes
-              </button>
-              <button onClick={() => setView('generalMap')} style={{ background: '#22c55e14', border: '1px solid #22c55e40', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#16a34a', cursor: 'pointer' }}>
-                🗺 Mapa
-              </button>
-              <QuotesBadgeBtn onClick={() => setView('quotes')} />
-              <button onClick={() => setView('zones')} style={{ background: '#5c35cc14', border: '1px solid #5c35cc30', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#5c35cc', cursor: 'pointer' }}>
-                🗺 Zonas
-              </button>
-              <button onClick={() => setView('invoices')} style={{ background: '#fff3e0', border: '1px solid #f57c0030', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#f57c00', cursor: 'pointer' }}>
-                💳 Cobros
-              </button>
-              <button onClick={() => setView('companies')} style={{ background: '#0050780e', border: '1px solid #00507820', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#005078', cursor: 'pointer' }}>
-                🏢 Empresas
-              </button>
-              <button onClick={() => setView('users')} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', cursor: 'pointer' }}>
-                👥 Usuarios
-              </button>
-              <button onClick={() => setView('movePricing')} style={{ background: '#0052FF12', border: '1px solid #0052FF28', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', cursor: 'pointer' }}>
-                🚛 Precios
-              </button>
-              <button onClick={() => setView('credentials')} style={{ background: 'linear-gradient(135deg, #0052FF 0%, #00DAFF 100%)', border: 'none', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 800, color: '#fff', cursor: 'pointer', boxShadow: '0 6px 14px #0052ff24' }}>
-                API Keys
-              </button>
-              <ResetDataBtn onDone={() => { setRoutes([]); setSelectedRoute(null); }} />
-            </div>
+            <AdminMainMenu
+              setView={setView}
+              onResetDone={() => { setRoutes([]); setSelectedRoute(null); }}
+            />
           }
         />
 
@@ -756,7 +732,117 @@ export default function AdminView() {
 }
 
 // ── Quotes button with live "submitted" badge ──
-function QuotesBadgeBtn({ onClick }) {
+function AdminMainMenu({ setView, onResetDone }) {
+  const [open, setOpen] = useState(false);
+  const go = (nextView) => {
+    setOpen(false);
+    setView(nextView);
+  };
+  const items = [
+    { label: 'Paquetes', desc: 'Ver, mover e importar paquetes', view: 'allPackages', color: 'var(--accent)', bg: '#0052FF14' },
+    { label: 'Mapa general', desc: 'Mapa, filtros y zonas de entrega', view: 'generalMap', color: '#16a34a', bg: '#22c55e14' },
+    { label: 'Zonas', desc: 'Sectores y mapa de comunas', view: 'zones', color: '#5c35cc', bg: '#5c35cc14' },
+    { label: 'Cobros', desc: 'Facturas y rutas por cobrar', view: 'invoices', color: '#f57c00', bg: '#fff3e0' },
+    { label: 'Empresas', desc: 'Clientes, proveedores y contactos', view: 'companies', color: '#005078', bg: '#0050780e' },
+    { label: 'Usuarios', desc: 'Admin, drivers y empresas', view: 'users', color: 'var(--muted)', bg: 'var(--card2)' },
+    { label: 'Precios', desc: 'Fletes, mudanzas e items', view: 'movePricing', color: 'var(--accent)', bg: '#0052FF12' },
+    { label: 'API Keys', desc: 'Credenciales de integracion', view: 'credentials', color: '#fff', bg: 'linear-gradient(135deg, #0052FF 0%, #00DAFF 100%)' },
+  ];
+
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        onClick={() => setOpen(true)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 7, minHeight: 34,
+          border: '1px solid #0052FF30', borderRadius: 10, padding: '7px 11px',
+          background: '#0052FF12', color: 'var(--accent)', fontSize: 12,
+          fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap',
+        }}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+      >
+        <span style={{ fontSize: 15, lineHeight: 1 }}>☰</span>
+        Menu
+      </button>
+
+      {open && (
+        <div
+          onClick={() => setOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(15,23,42,.34)', display: 'flex',
+            justifyContent: 'flex-end', alignItems: 'flex-start',
+            padding: 'max(12px, env(safe-area-inset-top)) 10px 10px',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: 'min(390px, calc(100vw - 20px))',
+              maxHeight: 'calc(100dvh - 24px)',
+              overflowY: 'auto',
+              background: '#fff',
+              border: '1px solid var(--border)',
+              borderRadius: 18,
+              boxShadow: '0 20px 70px rgba(15,23,42,.28)',
+              padding: 14,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--text)' }}>Menu admin</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>Todas las opciones en un solo lugar</div>
+              </div>
+              <button
+                onClick={() => setOpen(false)}
+                aria-label="Cerrar menu"
+                style={{
+                  width: 34, height: 34, borderRadius: 10,
+                  border: '1px solid var(--border)', background: 'var(--card2)',
+                  color: 'var(--muted)', fontSize: 18, fontWeight: 800, cursor: 'pointer',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+              <QuotesBadgeBtn onClick={() => go('quotes')} wide />
+              {items.map(item => (
+                <button
+                  key={item.view}
+                  onClick={() => go(item.view)}
+                  style={{
+                    textAlign: 'left',
+                    border: '1px solid var(--border)',
+                    borderRadius: 12,
+                    background: item.bg,
+                    color: item.color === '#fff' ? '#fff' : 'var(--text)',
+                    padding: '11px 12px',
+                    cursor: 'pointer',
+                    boxShadow: item.color === '#fff' ? '0 8px 18px #0052ff24' : 'none',
+                  }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 900, color: item.color }}>{item.label}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: item.color === '#fff' ? 'rgba(255,255,255,.86)' : 'var(--muted)', marginTop: 2 }}>
+                    {item.desc}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border)', marginTop: 12, paddingTop: 12 }}>
+              <ResetDataBtn onDone={() => { setOpen(false); onResetDone?.(); }} wide />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuotesBadgeBtn({ onClick, wide = false }) {
   const [count, setCount] = useState(0);
   useEffect(() => {
     api.getQuotes()
@@ -764,8 +850,9 @@ function QuotesBadgeBtn({ onClick }) {
       .catch(() => {});
   }, []);
   return (
-    <button onClick={onClick} style={{ position: 'relative', background: '#f57c0014', border: '1px solid #f57c0030', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#f57c00', cursor: 'pointer' }}>
+    <button onClick={onClick} style={{ position: 'relative', background: '#f57c0014', border: '1px solid #f57c0030', borderRadius: wide ? 12 : 8, padding: wide ? '11px 12px' : '4px 10px', fontSize: wide ? 13 : 11, fontWeight: wide ? 900 : 700, color: '#f57c00', cursor: 'pointer', width: wide ? '100%' : 'auto', textAlign: wide ? 'left' : 'center' }}>
       💼 Cotizaciones
+      {wide && <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginTop: 2 }}>Solicitudes enviadas por clientes</div>}
       {count > 0 && (
         <span style={{ position: 'absolute', top: -5, right: -5, width: 16, height: 16, borderRadius: '50%', background: '#cc2244', color: '#fff', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff' }}>
           {count}
@@ -1522,7 +1609,7 @@ const RESET_TARGETS = [
   { id: 'companies', label: 'Empresas / clientes',   desc: 'Elimina todos los registros de empresas' },
 ];
 
-function ResetDataBtn({ onDone }) {
+function ResetDataBtn({ onDone, wide = false }) {
   const [open, setOpen] = React.useState(false);
   const [checked, setChecked] = React.useState({});
   const [confirm, setConfirm] = React.useState('');
@@ -1567,7 +1654,7 @@ function ResetDataBtn({ onDone }) {
     <>
       <button
         onClick={handleOpen}
-        style={{ background: '#cc224408', border: '1px solid #cc224430', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#cc2244', cursor: 'pointer' }}
+        style={{ background: '#cc224408', border: '1px solid #cc224430', borderRadius: wide ? 12 : 8, padding: wide ? '11px 12px' : '4px 10px', fontSize: wide ? 13 : 11, fontWeight: wide ? 900 : 700, color: '#cc2244', cursor: 'pointer', width: wide ? '100%' : 'auto', textAlign: wide ? 'left' : 'center' }}
       >
         🗑️ Reset DB
       </button>
