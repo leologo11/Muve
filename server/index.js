@@ -19,6 +19,7 @@ import quoteRoutes from './routes/quoteRoutes.js';
 import credentialRoutes from './routes/credentials.js';
 import vehicleConfigRoutes from './routes/vehicleConfigRoutes.js';
 import inventoryConfigRoutes from './routes/inventoryConfigRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
 import { securityHeaders } from './middleware/security.js';
 import { runCleanup } from './utils/cleanup.js';
 import { isSupabaseEnabled } from './utils/supabase.js';
@@ -80,6 +81,7 @@ app.use('/api/quotes', quoteRoutes);
 app.use('/api/credentials', credentialRoutes);
 app.use('/api/vehicle-configs', vehicleConfigRoutes);
 app.use('/api/inventory-configs', inventoryConfigRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 app.get('/api/health', (_, res) => res.json({ ok: true, ts: Date.now() }));
 

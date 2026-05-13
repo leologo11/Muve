@@ -19,6 +19,7 @@ import CompaniesView from './CompaniesView.jsx';
 import CredentialsView from './CredentialsView.jsx';
 import MovePricingView from './MovePricingView.jsx';
 import GeneralMapView from './GeneralMapView.jsx';
+import AnalyticsView from './AnalyticsView.jsx';
 
 const STATUS_META = {
   draft:      { label: 'Borrador',   color: 'var(--muted)',   bg: 'var(--card2)' },
@@ -392,6 +393,11 @@ export default function AdminView() {
         <Toast />
       </div>
     );
+  }
+
+  // ── ANALYTICS VIEW ──
+  if (view === 'analytics') {
+    return <AnalyticsView onBack={() => setView('routes')} />;
   }
 
   // ── SECTOR MAP VIEW ──
@@ -777,7 +783,8 @@ function AdminMainMenu({ setView, onResetDone }) {
     { label: 'Empresas', desc: 'Clientes, proveedores y contactos', view: 'companies', color: '#005078', bg: '#0050780e' },
     { label: 'Usuarios', desc: 'Admin, drivers y empresas', view: 'users', color: 'var(--muted)', bg: 'var(--card2)' },
     { label: 'Precios', desc: 'Fletes, mudanzas e items', view: 'movePricing', color: 'var(--accent)', bg: '#0052FF12' },
-    { label: 'API Keys', desc: 'Credenciales de integracion', view: 'credentials', color: '#fff', bg: 'linear-gradient(135deg, #0052FF 0%, #00DAFF 100%)' },
+    { label: 'API Keys',   desc: 'Credenciales de integracion',             view: 'credentials', color: '#fff', bg: 'linear-gradient(135deg, #0052FF 0%, #00DAFF 100%)' },
+    { label: 'Analytics',  desc: 'Funnel de visitas del cotizador público',  view: 'analytics',   color: '#7C3AED', bg: '#7c3aed10' },
   ];
 
   return (

@@ -3,6 +3,7 @@ import { api } from '../../api/index.js';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
 import InventoryPicker, { CATALOG, totalVol, recommendVehicleType, recommendVehicleTypeByVolume, serializeInventory, VEHICLE_THRESHOLDS, inventoryHasTallItems, requiredHelpersForInventory } from '../../components/InventoryPicker.jsx';
 import { trackMetaEvent, trackFunnelStep } from '../../utils/metaPixel.js';
+import { trackLanding, trackStep as trackFunnelDB, trackSubmit as trackSubmitDB } from '../../utils/pageTracker.js';
 
 const LARGE_ITEM_IDS = new Set(['camaQueen', 'cama2p', 'sofa3p', 'sofa2p', 'closet', 'nevera', 'lavadora', 'cocina']);
 
@@ -168,6 +169,7 @@ export default function LandingView() {
   const stepTitle = serviceType ? (STEP_TITLES[serviceType]?.[step - 1] ?? '') : '';
 
   useEffect(() => {
+    trackLanding(); // registra la visita inicial al landing
     api.getPublicVehicleConfigs()
       .then(cfgs => setVehicleConfigs(Array.isArray(cfgs) ? cfgs : []))
       .catch(() => setVehicleConfigs([]));
@@ -582,7 +584,10 @@ export default function LandingView() {
   }, [step, serviceType]);
 
   useEffect(() => {
-    if (step > 1 && serviceType) trackFunnelStep(step, serviceType);
+    if (step > 1 && serviceType) {
+      trackFunnelStep(step, serviceType);
+      trackFunnelDB(step, serviceType);
+    }
   }, [step, serviceType]);
 
   const handleSubmit = async (e) => {
@@ -618,6 +623,7 @@ export default function LandingView() {
         value: isFlete ? finalFletePrice : (priceRange?.hi || 0),
         currency: 'CLP',
       });
+      trackSubmitDB(serviceType);
       setFormGone(true);                                        // form desaparece + cajitas vuelan
       window.setTimeout(() => setDeparted(true), 4200);        // camión sale cuando ya cargó todo
       window.setTimeout(() => setSuccess(quote), 6200);        // mensaje tras camión en marcha

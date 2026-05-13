@@ -168,6 +168,9 @@ export const api = {
   createInventoryConfig: (data) => request('POST', '/inventory-configs', data),
   updateInventoryConfig: (id, data) => request('PATCH', `/inventory-configs/${id}`, data),
 
+  // Analytics funnel (admin)
+  getAnalyticsFunnel: (days = 7) => request('GET', `/analytics/funnel?days=${days}`),
+
   // Public pricing helpers (no auth required)
   getPublicVehicleConfigs: () => request('GET', '/public/vehicle-configs'),
   getPublicInventoryConfigs: () => request('GET', '/public/inventory-configs'),
