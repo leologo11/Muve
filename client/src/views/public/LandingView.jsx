@@ -259,11 +259,17 @@ export default function LandingView() {
   };
 
   const switchMovingService = (nextType) => {
-    const nextHelpMode = requiredHelpers > 0 ? 'helpers' : 'driver';
+    // Calcular mínimo de ayudantes para el tipo destino (mismo criterio que compareMovingPrice)
+    const cap = vehicleCapacityM3 || 16;
+    const targetTrucks = nextType === 'mudanza' && invVol > 0 ? Math.max(1, Math.ceil(invVol / cap)) : 1;
+    const targetMinH = nextType === 'mudanza'
+      ? Math.max(requiredHelpers, targetTrucks - 1 + (targetTrucks >= 2 ? 1 : 0))
+      : requiredHelpers;
+    const nextHelpMode = (requiredHelpers > 0 || targetMinH > 0) ? 'helpers' : 'driver';
     setServiceType(nextType);
     setHelpModeManual(false);
     setHelpMode(nextHelpMode);
-    setNumHelpers(n => nextHelpMode === 'helpers' ? Math.max(requiredHelpers || 1, n) : Math.max(1, n));
+    setNumHelpers(n => nextHelpMode === 'helpers' ? Math.max(targetMinH || 1, n) : Math.max(1, n));
     setPriceRange(null);
     setStep(3);
   };
@@ -395,9 +401,11 @@ export default function LandingView() {
       : 0;
     const discount = roundToThousand(base * discountPct / 100);
     const discountedBase = Math.max(0, base - discount);
-    // Modo y cantidad de ayudantes usando los precios del tipo destino
-    const cmpHelpMode = requiredHelpers > 0 ? 'helpers' : (helpMode !== 'none' ? helpMode : (type === 'mudanza' ? 'driver' : suggestHelperMode));
+    // Mínimo de ayudantes requeridos para el tipo destino (camiones adicionales obligan a helpers)
     const minH = type === 'mudanza' ? Math.max(requiredHelpers, trucks - 1 + (trucks >= 2 ? 1 : 0)) : requiredHelpers;
+    // Si mudanza necesita helpers por cantidad de camiones, forzar modo 'helpers'
+    const rawCmpHelpMode = requiredHelpers > 0 ? 'helpers' : (helpMode !== 'none' ? helpMode : (type === 'mudanza' ? 'driver' : suggestHelperMode));
+    const cmpHelpMode = (type === 'mudanza' && minH > 0) ? 'helpers' : rawCmpHelpMode;
     const cmpHelpers = cmpHelpMode === 'helpers' ? Math.max(numHelpers, minH || 1) : 0;
     // Usar los precios de ayudante/chofer del tipo DESTINO (no del actual)
     const driverHelp = type === 'mudanza' && cmpHelpMode !== 'none'
