@@ -171,6 +171,12 @@ export const api = {
   // Analytics funnel (admin)
   getAnalyticsFunnel: (days = 7) => request('GET', `/analytics/funnel?days=${days}`),
 
+  // Presupuestos manuales (admin)
+  getPresupuestos:    ()     => request('GET',    '/presupuestos'),
+  createPresupuesto:  (data) => request('POST',   '/presupuestos', data),
+  updatePresupuesto:  (id, data) => request('PATCH', `/presupuestos/${id}`, data),
+  deletePresupuesto:  (id)   => request('DELETE', `/presupuestos/${id}`),
+
   // Public pricing helpers (no auth required)
   getPublicVehicleConfigs: () => request('GET', '/public/vehicle-configs'),
   getPublicInventoryConfigs: () => request('GET', '/public/inventory-configs'),
