@@ -42,23 +42,34 @@ const SOURCE_META = {
 
 const fmt = n => Number(n || 0).toLocaleString('es-CL');
 
-function FunnelBar({ label, count, pct, maxCount, isLast }) {
+function FunnelBar({ label, count, pct, maxCount, isLast, dropPct, stepNote }) {
   const barPct = maxCount > 0 ? Math.round(count / maxCount * 100) : 0;
+  const isGreen = isLast;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: isLast ? 'none' : '1px solid var(--border)' }}>
-      <div style={{ width: 142, fontSize: 12, fontWeight: 700, color: 'var(--text)', flexShrink: 0 }}>{label}</div>
-      <div style={{ flex: 1, background: '#f1f5f9', borderRadius: 8, height: 24, overflow: 'hidden', position: 'relative' }}>
-        <div style={{
-          width: `${barPct}%`, height: '100%',
-          background: isLast ? 'linear-gradient(90deg,#059669,#34d399)' : 'linear-gradient(90deg,#0052FF,#00DAFF)',
-          borderRadius: 8, transition: 'width .6s ease',
-        }} />
-        <span style={{ position: 'absolute', left: 8, top: 0, lineHeight: '24px', fontSize: 12, fontWeight: 800, color: barPct > 18 ? '#fff' : 'var(--text)' }}>
-          {fmt(count)}
-        </span>
+    <div style={{ padding: '7px 0', borderBottom: isLast ? 'none' : '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+        <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{label}</div>
+        {stepNote && <div style={{ fontSize: 10, color: 'var(--muted)', fontStyle: 'italic', flexShrink: 0 }}>{stepNote}</div>}
+        {dropPct !== null && dropPct !== undefined && (
+          <div style={{ fontSize: 10, fontWeight: 700, color: dropPct > 30 ? '#ef4444' : '#f59e0b', flexShrink: 0 }}>
+            {dropPct > 0 ? `▼ ${dropPct}% abandonaron` : ''}
+          </div>
+        )}
+        <div style={{ width: 38, textAlign: 'right', fontSize: 13, fontWeight: 900, color: isGreen ? '#059669' : 'var(--accent)', flexShrink: 0 }}>
+          {pct}%
+        </div>
       </div>
-      <div style={{ width: 38, textAlign: 'right', fontSize: 13, fontWeight: 900, color: isLast ? '#059669' : 'var(--accent)', flexShrink: 0 }}>
-        {pct}%
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ flex: 1, background: '#f1f5f9', borderRadius: 6, height: 18, overflow: 'hidden', position: 'relative' }}>
+          <div style={{
+            width: `${barPct}%`, height: '100%',
+            background: isGreen ? 'linear-gradient(90deg,#059669,#34d399)' : 'linear-gradient(90deg,#0052FF,#00DAFF)',
+            borderRadius: 6, transition: 'width .6s ease',
+          }} />
+          <span style={{ position: 'absolute', left: 6, top: 0, lineHeight: '18px', fontSize: 11, fontWeight: 800, color: barPct > 20 ? '#fff' : 'var(--text)' }}>
+            {fmt(count)}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -145,8 +156,9 @@ export default function AnalyticsView({ onBack }) {
   useEffect(() => { load(days); }, [days]);
 
   const maxCount      = data?.funnel?.[0]?.count || 1;
-  const conversionPct = data ? (data.funnel[4]?.count && data.funnel[0]?.count
-    ? Math.round(data.funnel[4].count / data.funnel[0].count * 100) : 0) : 0;
+  const submittedRow  = data?.funnel?.[8];
+  const conversionPct = data && submittedRow?.count && data.funnel[0]?.count
+    ? Math.round(submittedRow.count / data.funnel[0].count * 100) : 0;
 
   const serviceEntries = Object.entries(data?.byService || {}).sort(([, a], [, b]) => b.sessions - a.sessions);
   const deviceEntries  = Object.entries(data?.byDevice  || {}).sort(([, a], [, b]) => b.sessions - a.sessions);
@@ -192,7 +204,7 @@ export default function AnalyticsView({ onBack }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
               {[
                 { label: 'Visitas totales',       value: fmt(data.total),                   color: 'var(--accent)' },
-                { label: 'Cotizaciones enviadas', value: fmt(data.funnel[4]?.count || 0),   color: '#059669' },
+                { label: 'Cotizaciones enviadas', value: fmt(submittedRow?.count || 0),      color: '#059669' },
                 { label: 'Conversión total',      value: `${conversionPct}%`,               color: conversionPct >= 10 ? '#059669' : '#f59e0b' },
               ].map(kpi => (
                 <div key={kpi.label} style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 14, padding: '12px 10px', textAlign: 'center' }}>
@@ -204,10 +216,34 @@ export default function AnalyticsView({ onBack }) {
 
             {/* Funnel */}
             <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 16, padding: '14px 16px' }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: .6, marginBottom: 10 }}>Funnel de pasos</div>
-              {data.funnel.map((row, i) => (
-                <FunnelBar key={row.step} label={row.label} count={row.count} pct={row.pct} maxCount={maxCount} isLast={i === data.funnel.length - 1} />
-              ))}
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: .6, marginBottom: 6 }}>Funnel de interacciones</div>
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 10 }}>
+                Pasos 3–5 aplican solo a flete/mudanza. Paquetería va directo al formulario (paso 6).
+              </div>
+              {data.funnel.map((row, i) => {
+                const prevCount = i > 0 ? data.funnel[i - 1].count : null;
+                const dropPct = (i > 0 && prevCount > 0 && row.count < prevCount)
+                  ? Math.round((prevCount - row.count) / prevCount * 100)
+                  : null;
+                const stepNotes = {
+                  3: 'flete/mudanza',
+                  4: 'flete/mudanza',
+                  5: 'flete/mudanza',
+                  6: 'todos los servicios',
+                };
+                return (
+                  <FunnelBar
+                    key={row.step}
+                    label={row.label}
+                    count={row.count}
+                    pct={row.pct}
+                    maxCount={maxCount}
+                    isLast={i === data.funnel.length - 1}
+                    dropPct={dropPct}
+                    stepNote={stepNotes[row.step]}
+                  />
+                );
+              })}
             </div>
 
             {/* Chart */}

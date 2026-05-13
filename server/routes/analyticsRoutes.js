@@ -10,7 +10,7 @@ router.post('/track', async (req, res) => {
     const { sessionId, step, serviceType, submitted, device, source } = req.body;
     if (!sessionId || !step) return res.status(400).json({ error: 'sessionId and step required' });
 
-    // on_conflict=session_id → upsert conflicts on the UNIQUE session_id, not the PK
+    // on_conflict=session_id → upsert sobre UNIQUE session_id, no sobre el PK uuid
     await supabaseRequest('/analytics_sessions?on_conflict=session_id', {
       method: 'POST',
       body: JSON.stringify({
@@ -27,7 +27,6 @@ router.post('/track', async (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
-    // analytics nunca debe bloquear al cliente
     console.error('analytics track error:', err.message);
     res.json({ ok: false });
   }
@@ -36,7 +35,7 @@ router.post('/track', async (req, res) => {
 // GET /api/analytics/funnel?days=7 — admin only
 router.get('/funnel', requireAuth, requireRole('admin'), async (req, res) => {
   try {
-    const days = Math.min(90, Math.max(1, Number(req.query.days) || 7));
+    const days  = Math.min(90, Math.max(1, Number(req.query.days) || 7));
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
     const sessions = await supabaseRequest(
@@ -47,11 +46,18 @@ router.get('/funnel', requireAuth, requireRole('admin'), async (req, res) => {
       })}`,
     ) || [];
 
-    const total   = sessions.length;
-    const step2   = sessions.filter(s => s.max_step >= 2).length;
-    const step3   = sessions.filter(s => s.max_step >= 3).length;
-    const step4   = sessions.filter(s => s.max_step >= 4).length;
-    const submits = sessions.filter(s => s.submitted).length;
+    const total = sessions.length;
+    const pct   = (n) => total ? Math.round(n / total * 100) : 0;
+
+    // Niveles granulares del funnel (9 eventos)
+    const step2  = sessions.filter(s => s.max_step >= 2).length; // eligió servicio
+    const step3  = sessions.filter(s => s.max_step >= 3).length; // geocodificó origen
+    const step4  = sessions.filter(s => s.max_step >= 4).length; // geocodificó destino
+    const step5  = sessions.filter(s => s.max_step >= 5).length; // agregó ítems
+    const step6  = sessions.filter(s => s.max_step >= 6).length; // llegó al formulario
+    const step7  = sessions.filter(s => s.max_step >= 7).length; // escribió nombre
+    const step8  = sessions.filter(s => s.max_step >= 8).length; // escribió teléfono
+    const submits = sessions.filter(s => s.submitted).length;     // envió cotización
 
     // Por tipo de servicio
     const byService = {};
@@ -80,7 +86,7 @@ router.get('/funnel', requireAuth, requireRole('admin'), async (req, res) => {
       if (s.submitted) bySource[src].submits++;
     }
 
-    // Por día (para el gráfico de tendencia)
+    // Por día
     const byDay = {};
     for (const s of sessions) {
       const day = (s.created_at || '').slice(0, 10);
@@ -94,11 +100,15 @@ router.get('/funnel', requireAuth, requireRole('admin'), async (req, res) => {
       days,
       total,
       funnel: [
-        { step: 1, label: 'Visitas',            count: total,   pct: 100 },
-        { step: 2, label: 'Eligieron servicio', count: step2,   pct: total ? Math.round(step2   / total * 100) : 0 },
-        { step: 3, label: 'Inventario',         count: step3,   pct: total ? Math.round(step3   / total * 100) : 0 },
-        { step: 4, label: 'Formulario',         count: step4,   pct: total ? Math.round(step4   / total * 100) : 0 },
-        { step: 5, label: 'Cotización enviada', count: submits, pct: total ? Math.round(submits / total * 100) : 0 },
+        { step: 1, label: 'Entraron a la página',        count: total,  pct: 100           },
+        { step: 2, label: 'Eligieron tipo de servicio',  count: step2,  pct: pct(step2)    },
+        { step: 3, label: 'Ingresaron dirección origen', count: step3,  pct: pct(step3)    },
+        { step: 4, label: 'Ingresaron dirección destino',count: step4,  pct: pct(step4)    },
+        { step: 5, label: 'Agregaron ítems al inventario',count: step5, pct: pct(step5)    },
+        { step: 6, label: 'Llegaron al formulario',      count: step6,  pct: pct(step6)    },
+        { step: 7, label: 'Escribieron su nombre',       count: step7,  pct: pct(step7)    },
+        { step: 8, label: 'Escribieron su teléfono',     count: step8,  pct: pct(step8)    },
+        { step: 9, label: 'Enviaron la cotización',      count: submits,pct: pct(submits)   },
       ],
       byService,
       byDevice,

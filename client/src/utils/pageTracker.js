@@ -1,5 +1,5 @@
 // Tracking de funnel para el cotizador público.
-// Guarda eventos en Supabase via /api/analytics/track.
+// 9 niveles de eventos basados en interacciones reales del usuario.
 // Excluye rutas de admin/driver automáticamente.
 
 const SESSION_KEY = 'muve_sid';
@@ -29,7 +29,6 @@ function setState(s) {
   sessionStorage.setItem(STATE_KEY, JSON.stringify(s));
 }
 
-// Detecta tipo de dispositivo
 function getDevice() {
   const ua = navigator.userAgent || '';
   if (/iPad|tablet/i.test(ua)) return 'tablet';
@@ -37,7 +36,6 @@ function getDevice() {
   return 'desktop';
 }
 
-// Detecta fuente de tráfico: UTM params > referrer > directo
 function getSource() {
   const params = new URLSearchParams(window.location.search);
   const utmSource = params.get('utm_source');
@@ -45,7 +43,6 @@ function getSource() {
 
   if (utmSource) {
     const src = utmSource.toLowerCase();
-    // Classify paid vs organic from UTM
     if (utmMedium === 'cpc' || utmMedium === 'paid') return `${src}_ads`;
     return src;
   }
@@ -71,13 +68,14 @@ async function post(payload) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-  } catch {} // analytics nunca rompe la app
+  } catch {}
 }
 
+// Nivel 1: visita inicial
 export function trackLanding() {
   if (isAdminPath()) return;
   const state = getState();
-  if (state.sent1) return; // ya registrada esta sesión
+  if (state.sent1) return;
 
   const device = getDevice();
   const source = getSource();
@@ -85,17 +83,19 @@ export function trackLanding() {
   post({ sessionId: getSessionId(), step: 1, submitted: false, device, source });
 }
 
-export function trackStep(step, serviceType) {
+// Niveles 2-8: eventos granulares de interacción
+// Solo avanza — nunca retrocede el max registrado
+export function trackEvent(level, serviceType) {
   if (isAdminPath()) return;
   const state = getState();
   const prevMax = state.maxStep || 1;
-  if (step <= prevMax) return; // no retroceder
+  if (level <= prevMax) return;
 
-  const updated = { ...state, maxStep: step, serviceType: serviceType || state.serviceType };
+  const updated = { ...state, maxStep: level, serviceType: serviceType || state.serviceType };
   setState(updated);
   post({
     sessionId:   getSessionId(),
-    step,
+    step:        level,
     serviceType: updated.serviceType,
     submitted:   updated.submitted || false,
     device:      updated.device,
@@ -103,17 +103,21 @@ export function trackStep(step, serviceType) {
   });
 }
 
+// Nivel 9: cotización enviada
 export function trackSubmit(serviceType) {
   if (isAdminPath()) return;
   const state = getState();
-  const updated = { ...state, submitted: true, serviceType: serviceType || state.serviceType };
+  const updated = { ...state, submitted: true, maxStep: 9, serviceType: serviceType || state.serviceType };
   setState(updated);
   post({
     sessionId:   getSessionId(),
-    step:        updated.maxStep || 4,
+    step:        9,
     serviceType: updated.serviceType,
     submitted:   true,
     device:      updated.device,
     source:      updated.source,
   });
 }
+
+// alias backward compat
+export const trackStep = trackEvent;

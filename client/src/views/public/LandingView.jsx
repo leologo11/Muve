@@ -3,7 +3,7 @@ import { api } from '../../api/index.js';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
 import InventoryPicker, { CATALOG, totalVol, recommendVehicleType, recommendVehicleTypeByVolume, serializeInventory, VEHICLE_THRESHOLDS, inventoryHasTallItems, requiredHelpersForInventory } from '../../components/InventoryPicker.jsx';
 import { trackMetaEvent, trackFunnelStep } from '../../utils/metaPixel.js';
-import { trackLanding, trackStep as trackFunnelDB, trackSubmit as trackSubmitDB } from '../../utils/pageTracker.js';
+import { trackLanding, trackEvent, trackSubmit as trackSubmitDB } from '../../utils/pageTracker.js';
 
 const LARGE_ITEM_IDS = new Set(['camaQueen', 'cama2p', 'sofa3p', 'sofa2p', 'closet', 'nevera', 'lavadora', 'cocina']);
 
@@ -250,6 +250,7 @@ export default function LandingView() {
     setServiceType(v);
     if (v === 'flete' || v === 'mudanza') setHelpMode('driver');
     setStep(2);
+    trackEvent(2, v);
   };
 
   const resetInventoryLoad = () => {
@@ -583,12 +584,50 @@ export default function LandingView() {
     bodyRef.current?.scrollTo({ top: 0, behavior: 'auto' });
   }, [step, serviceType]);
 
+  // Meta Pixel por paso (mantener independiente)
   useEffect(() => {
-    if (step > 1 && serviceType) {
-      trackFunnelStep(step, serviceType);
-      trackFunnelDB(step, serviceType);
-    }
+    if (step > 1 && serviceType) trackFunnelStep(step, serviceType);
   }, [step, serviceType]);
+
+  // Nivel 3: geocodificó dirección de origen
+  const originGeocoded = Boolean(origin.lat);
+  useEffect(() => {
+    if (originGeocoded && serviceType) trackEvent(3, serviceType);
+  }, [originGeocoded, serviceType]);
+
+  // Nivel 4: geocodificó dirección de destino
+  const destGeocoded = Boolean(dest.lat);
+  useEffect(() => {
+    if (destGeocoded && serviceType) trackEvent(4, serviceType);
+  }, [destGeocoded, serviceType]);
+
+  // Nivel 5: agregó al menos 1 ítem al inventario (solo flete/mudanza)
+  const hasInventory = inventory.some(i => i.qty > 0);
+  useEffect(() => {
+    if (hasInventory && (serviceType === 'flete' || serviceType === 'mudanza')) {
+      trackEvent(5, serviceType);
+    }
+  }, [hasInventory, serviceType]);
+
+  // Nivel 6: llegó al formulario de contacto
+  useEffect(() => {
+    if (!serviceType) return;
+    const onContactForm = (step === 4 && (serviceType === 'flete' || serviceType === 'mudanza'))
+      || (step === 2 && serviceType === 'paqueteria');
+    if (onContactForm) trackEvent(6, serviceType);
+  }, [step, serviceType]);
+
+  // Nivel 7: escribió nombre (≥2 caracteres)
+  const hasName = contactPerson.trim().length >= 2;
+  useEffect(() => {
+    if (hasName && serviceType) trackEvent(7, serviceType);
+  }, [hasName, serviceType]);
+
+  // Nivel 8: escribió teléfono (≥8 dígitos)
+  const hasPhone = contactPhone.replace(/\D/g, '').length >= 8;
+  useEffect(() => {
+    if (hasPhone && serviceType) trackEvent(8, serviceType);
+  }, [hasPhone, serviceType]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
