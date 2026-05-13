@@ -1229,8 +1229,8 @@ export default function LandingView() {
               /* ── POST-SUBMIT: price + summary, no form fields ─────────── */
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-                {/* Price range card */}
-                {priceRange && (
+                {/* Price range card — hidden for large quotes */}
+                {priceRange && !isLargeQuote && (
                   <div style={{
                     background: 'linear-gradient(135deg,#f4f7ff,#e8f0ff)',
                     border: '2px solid #0052FF20', borderRadius: 16, padding: '18px 16px',
@@ -1303,13 +1303,15 @@ export default function LandingView() {
                 </div>
 
                 {/* Confirmation message */}
-                <div style={{ background: '#f0fdf4', border: '1.5px solid #22c55e30', borderRadius: 14, padding: '16px 18px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 22, marginBottom: 8 }}>✅</div>
-                  <div style={{ fontWeight: 800, fontSize: 15, color: '#15803d', marginBottom: 6 }}>
-                    ¡Tu cotización fue enviada!
+                <div style={{ background: isLargeQuote ? '#fff7ed' : '#f0fdf4', border: `1.5px solid ${isLargeQuote ? '#f59e0b40' : '#22c55e30'}`, borderRadius: 14, padding: '16px 18px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 22, marginBottom: 8 }}>{isLargeQuote ? '🚛' : '✅'}</div>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: isLargeQuote ? '#92400e' : '#15803d', marginBottom: 6 }}>
+                    {isLargeQuote ? '¡Solicitud recibida!' : '¡Tu cotización fue enviada!'}
                   </div>
-                  <div style={{ fontSize: 13, color: '#166534', lineHeight: 1.65 }}>
-                    Nos comunicaremos contigo a la brevedad para confirmar los detalles y el precio exacto de tu {serviceType}.
+                  <div style={{ fontSize: 13, color: isLargeQuote ? '#b45309' : '#166534', lineHeight: 1.65 }}>
+                    {isLargeQuote
+                      ? 'Tu traslado requiere una evaluación personalizada. Te enviaremos el precio y todos los detalles a la brevedad.'
+                      : `Nos comunicaremos contigo a la brevedad para confirmar los detalles y el precio exacto de tu ${serviceType}.`}
                   </div>
                 </div>
               </div>
@@ -1360,8 +1362,7 @@ export default function LandingView() {
                   </div>
                 )}
 
-                {/* Contact — name + phone in grid, email below */}
-                {recommendationCard}
+                {!isLargeQuote && recommendationCard}
 
                 <div style={{ background: '#f8fbff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: '#64748b', textTransform: 'uppercase' }}>Tus datos</div>
