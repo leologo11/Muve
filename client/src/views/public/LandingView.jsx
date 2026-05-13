@@ -376,14 +376,16 @@ export default function LandingView() {
   );
   const displayFletePriceBeforeDiscount = partialDiscount > 0 ? marketPrice(Math.max(fleteExactBeforeDiscount, rawVehicleBasePrice)) : 0;
   const selectedCategories = new Set(inventory.filter(i => i.qty > 0).map(i => catalog.find(c => c.id === i.id)?.cat).filter(Boolean));
+  // Calcula precio total para comparar entre flete y mudanza usando los precios
+  // del tipo destino (no los del tipo actual). Incluye numTrucks para mudanza.
   const compareMovingPrice = (type) => {
     const cfg = findVehicleConfig(smartVehicleType, type);
     const ex = cfg?.extras || {};
-    const comparisonHelpMode = requiredHelpers > 0 ? 'helpers' : (helpMode !== 'none' ? helpMode : (type === 'mudanza' ? 'driver' : suggestHelperMode));
-    const comparisonHelpers = comparisonHelpMode === 'helpers' ? Math.max(numHelpers, requiredHelpers || 1) : 0;
     const base = Number(cfg?.basePrice ?? FLETE_BASE_PRICE);
+    const cap = vehicleCapacityM3 || 16;
+    const trucks = type === 'mudanza' && invVol > 0 ? Math.max(1, Math.ceil(invVol / cap)) : 1;
     const ppk = tierPricePerKm(cfg?.kmTiers || [], distanceKm || 0);
-    const kmCost = distanceKm ? roundToThousand(distanceKm * ppk) : 0;
+    const kmCost = distanceKm ? roundToThousand(distanceKm * ppk) * trucks : 0;
     const included = Number(ex.included_m3 ?? FLETE_BASE_VOL);
     const extraM3 = Number(ex.extra_m3 ?? FLETE_EXTRA_M3);
     const extraCost = type === 'mudanza' ? 0 : roundToThousand(Math.max(0, invVol - included) * extraM3);
@@ -392,12 +394,22 @@ export default function LandingView() {
       ? Math.max(0, Math.min(maxDiscount, maxDiscount * (1 - (invVol / vehicleCapacityM3))))
       : 0;
     const discount = roundToThousand(base * discountPct / 100);
-    const driverHelp = type === 'mudanza' && comparisonHelpMode !== 'none' ? Number(ex.driver_help ?? FLETE_DRIVER_HELP) : 0;
-    const helper = comparisonHelpMode === 'helpers' ? comparisonHelpers * Number(ex.helper ?? FLETE_HELPER_COST) : 0;
-    const floors = numFloors * Number(ex.floor ?? FLETE_FLOOR_COST);
-    const packing = needsPacking ? Number(ex.packing ?? FLETE_PACKING_COST) : 0;
     const discountedBase = Math.max(0, base - discount);
-    return roundToThousand(discountedBase + kmCost + extraCost + driverHelp + helper + floors + packing);
+    // Modo y cantidad de ayudantes usando los precios del tipo destino
+    const cmpHelpMode = requiredHelpers > 0 ? 'helpers' : (helpMode !== 'none' ? helpMode : (type === 'mudanza' ? 'driver' : suggestHelperMode));
+    const minH = type === 'mudanza' ? Math.max(requiredHelpers, trucks - 1 + (trucks >= 2 ? 1 : 0)) : requiredHelpers;
+    const cmpHelpers = cmpHelpMode === 'helpers' ? Math.max(numHelpers, minH || 1) : 0;
+    // Usar los precios de ayudante/chofer del tipo DESTINO (no del actual)
+    const driverHelp = type === 'mudanza' && cmpHelpMode !== 'none'
+      ? Number(ex.driver_help ?? FLETE_DRIVER_HELP) * trucks
+      : 0;
+    const helper = cmpHelpMode === 'helpers' ? cmpHelpers * Number(ex.helper ?? FLETE_HELPER_COST) : 0;
+    const floors = numFloors * Number(ex.floor ?? FLETE_FLOOR_COST);
+    const packBase = Number(ex.packing ?? FLETE_PACKING_COST);
+    const packing = needsPacking
+      ? (type === 'mudanza' && invVol > 0 ? Math.max(packBase, roundToThousand(invVol * MUDANZA_PACKING_PER_M3)) : packBase)
+      : 0;
+    return roundToThousand(discountedBase * trucks + kmCost + extraCost + driverHelp + helper + floors + packing);
   };
   const fleteComparePrice = compareMovingPrice('flete');
   const mudanzaComparePrice = compareMovingPrice('mudanza');
@@ -406,12 +418,16 @@ export default function LandingView() {
   const activeComparePrice = serviceType === 'mudanza' ? displayMudanzaComparePrice : displayFleteComparePrice;
   const mudanzaSavings = Math.max(0, activeComparePrice - displayMudanzaComparePrice);
   const fleteSavings = Math.max(0, activeComparePrice - displayFleteComparePrice);
-  const shouldRecommendMudanza = serviceType === 'flete' && invVol > 0 && (
+  // Solo recomendar si el ahorro es real: mínimo $25k o 10% del precio actual
+  const minSavingsThreshold = Math.max(25_000, activeComparePrice * 0.10);
+  const shouldRecommendMudanza = serviceType === 'flete' && invVol > 0 && numTrucks === 1 && (
     (selectedCategories.size >= 4 && vehicleLoadPct >= 55) ||
     vehicleLoadPct >= 75 ||
     invVol >= Math.max(includedM3 * 2, 8)
-  ) && displayMudanzaComparePrice < activeComparePrice;
-  const shouldRecommendFlete = serviceType === 'mudanza' && invVol > 0 && vehicleLoadPct <= 35 && selectedCategories.size <= 2 && displayFleteComparePrice < activeComparePrice;
+  ) && displayMudanzaComparePrice < activeComparePrice && mudanzaSavings >= minSavingsThreshold;
+  const shouldRecommendFlete = serviceType === 'mudanza' && invVol > 0 && numTrucks === 1 &&
+    vehicleLoadPct <= 35 && selectedCategories.size <= 2 &&
+    displayFleteComparePrice < activeComparePrice && fleteSavings >= minSavingsThreshold;
   const movingServiceRecommendation = shouldRecommendMudanza
     ? { type: 'mudanza', title: 'Te conviene cotizar como mudanza', desc: 'Con los mismos articulos, en mudanza pagas por el camion completo. Incluso podrias aprovechar el espacio restante si quieres agregar mas cosas.', price: displayMudanzaComparePrice, savings: mudanzaSavings }
     : shouldRecommendFlete
