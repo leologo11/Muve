@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { api } from '../../api/index.js';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
 import InventoryPicker, { CATALOG, totalVol, recommendVehicleType, recommendVehicleTypeByVolume, serializeInventory, VEHICLE_THRESHOLDS, inventoryHasTallItems, requiredHelpersForInventory } from '../../components/InventoryPicker.jsx';
-import { trackMetaEvent } from '../../utils/metaPixel.js';
+import { trackMetaEvent, trackFunnelStep } from '../../utils/metaPixel.js';
 
 const LARGE_ITEM_IDS = new Set(['camaQueen', 'cama2p', 'sofa3p', 'sofa2p', 'closet', 'nevera', 'lavadora', 'cocina']);
 
@@ -344,6 +344,11 @@ export default function LandingView() {
   const fleteExact   = roundToThousand(vehicleBasePrice + distanceCost + extraVolCost + floorCost + helpCost + packCost);
   const fleteExactBeforeDiscount = roundToThousand(rawVehicleBasePrice + distanceCost + extraVolCost + floorCost + helpCost + packCost);
   const displayFletePrice = marketPrice(Math.max(fleteExact, vehicleBasePrice));
+  const isLargeQuote = isFlete && (
+    smartVehicleType === 'camionLargo' ||
+    invVol >= 25 ||
+    displayFletePrice >= 700_000
+  );
   const displayFletePriceBeforeDiscount = partialDiscount > 0 ? marketPrice(Math.max(fleteExactBeforeDiscount, rawVehicleBasePrice)) : 0;
   const selectedCategories = new Set(inventory.filter(i => i.qty > 0).map(i => catalog.find(c => c.id === i.id)?.cat).filter(Boolean));
   const compareMovingPrice = (type) => {
@@ -525,6 +530,10 @@ export default function LandingView() {
 
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+  }, [step, serviceType]);
+
+  useEffect(() => {
+    if (step > 1 && serviceType) trackFunnelStep(step, serviceType);
   }, [step, serviceType]);
 
   const handleSubmit = async (e) => {
@@ -1309,7 +1318,24 @@ export default function LandingView() {
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
                 {/* Price range — compact */}
-                {priceRange && (
+                {isLargeQuote ? (
+                  <div style={{
+                    background: 'linear-gradient(135deg,#fff7ed,#fffbeb)',
+                    border: '2px solid #f59e0b40', borderRadius: 14, padding: '16px 18px',
+                    textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: 28, marginBottom: 8 }}>🚛</div>
+                    <div style={{ fontSize: 14, fontWeight: 900, color: '#92400e', marginBottom: 6 }}>
+                      Tu traslado es extenso y complejo
+                    </div>
+                    <div style={{ fontSize: 12, color: '#b45309', lineHeight: 1.6 }}>
+                      Para este tipo de servicio no mostramos precio automático — lo revisamos manualmente y te confirmamos la mejor propuesta a la brevedad.
+                    </div>
+                    <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, color: '#78350f', background: '#fef3c7', borderRadius: 999, padding: '5px 12px', border: '1px solid #fde68a' }}>
+                      ✓ Envía tu solicitud y te contactamos
+                    </div>
+                  </div>
+                ) : priceRange && (
                   <div style={{
                     background: 'linear-gradient(135deg,#f4f7ff,#e8f0ff)',
                     border: '2px solid #0052FF20', borderRadius: 14, padding: '14px 16px',

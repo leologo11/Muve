@@ -123,6 +123,7 @@ export default function AllPackagesView() {
           />
           <button onClick={() => setShowSingle(true)} style={actionBtn('#0052FF')} title="Agregar 1 paquete">➕</button>
           <button onClick={() => setShowImport(true)} style={actionBtn('#7c3aed')} title="Importar lote con IA">🤖</button>
+          <button onClick={() => load(page)} style={actionBtn('#0284c7')} title="Actualizar lista">🔄</button>
         </div>
 
         {/* Status chips */}

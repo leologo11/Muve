@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { api } from '../../api/index.js';
 import Header from '../../components/Header.jsx';
 import RouteMap from '../../components/RouteMap.jsx';
@@ -71,6 +71,37 @@ export default function AdminView() {
     const timer = setInterval(poll, 20000);
     return () => clearInterval(timer);
   }, [selectedRoute?._id, selectedRoute?.driverId, selectedRoute?.status]);
+
+  // Poll for new submitted quotes every 30s and notify admin
+  const knownQuoteIds = useRef(null);
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const quotes = await api.getQuotes();
+        const submitted = quotes.filter(q => q.status === 'submitted');
+        const currentIds = new Set(submitted.map(q => q._id || q.id));
+        if (knownQuoteIds.current === null) {
+          knownQuoteIds.current = currentIds;
+          return;
+        }
+        const fresh = submitted.filter(q => !knownQuoteIds.current.has(q._id || q.id));
+        knownQuoteIds.current = currentIds;
+        if (!fresh.length) return;
+        const msg = fresh.length === 1
+          ? `Nueva cotización de ${fresh[0].contactPerson || 'cliente'}`
+          : `${fresh.length} nuevas cotizaciones recibidas`;
+        toast('💼 ' + msg);
+        if (Notification?.permission === 'granted') {
+          new Notification('MUVE — Nueva cotización', { body: msg, icon: '/logo_reducido.png' });
+        } else if (Notification?.permission === 'default') {
+          Notification.requestPermission();
+        }
+      } catch {}
+    };
+    poll();
+    const timer = setInterval(poll, 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   const loadRoutes = async () => {
     try { setRoutes(await api.getRoutes()); }

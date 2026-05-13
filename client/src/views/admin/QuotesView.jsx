@@ -293,6 +293,12 @@ export default function QuotesView() {
         ))}
 
         <button
+          onClick={reload}
+          style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 76, width: 52, height: 52, borderRadius: '50%', background: '#0284c7', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', boxShadow: '0 4px 16px #0284c740', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          title="Actualizar cotizaciones"
+        >🔄</button>
+
+        <button
           onClick={() => setCreating(true)}
           style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16, width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', boxShadow: '0 4px 16px #0052FF40', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >＋</button>

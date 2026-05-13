@@ -2162,11 +2162,11 @@ mark {
 }
 
 @media (max-width: 480px) {
-  /* On phones: take full width, anchor near top so footer stays on screen */
+  /* On phones: take full width, anchor below notch so content is fully visible */
   .quote-overlay {
     width: 96vw;
-    top: 2svh;
-    max-height: 96svh;
+    top: max(env(safe-area-inset-top, 0px), 2svh);
+    max-height: calc(96svh - max(env(safe-area-inset-top, 0px), 2svh) + 2svh);
     transform: translateX(-50%) translateY(8px); /* hidden: slightly above */
   }
 
@@ -2179,7 +2179,7 @@ mark {
   }
 
   .quote-overlay .quote-panel {
-    max-height: calc(96svh - 4px);
+    max-height: calc(96svh - max(env(safe-area-inset-top, 0px), 2svh) + 2svh - 4px);
     border-radius: 16px !important;
   }
 
