@@ -231,7 +231,7 @@ export default function QuotesView() {
         const meta = STATUS_META[detailQuote.status] || STATUS_META.draft;
         return (
           <div style={{ position: 'fixed', inset: 0, background: '#f8fafc', zIndex: 500, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ background: '#fff', borderBottom: '1px solid var(--border)', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, boxShadow: '0 1px 8px #0000000d' }}>
+            <div style={{ background: '#fff', borderBottom: '1px solid var(--border)', padding: 'max(10px, env(safe-area-inset-top)) 14px 10px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, boxShadow: '0 1px 8px #0000000d' }}>
               <button
                 onClick={() => setDetailQuote(null)}
                 style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 10, padding: '6px 14px', fontSize: 13, fontWeight: 700, color: 'var(--accent)', cursor: 'pointer', whiteSpace: 'nowrap' }}
