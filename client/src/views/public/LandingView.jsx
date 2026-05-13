@@ -1096,7 +1096,10 @@ export default function LandingView() {
                 {[
                   { v: 'none',    title: 'Solo traslado',          desc: 'El chofer conduce. Carga y descarga por tu cuenta.' },
                   { v: 'driver',  title: 'Chofer ayuda',           desc: serviceType === 'mudanza' ? `El chofer ayuda a cargar y descargar. +$${fmt(driverHelpPrice)}` : 'El chofer ayuda a cargar y descargar. Incluido en precio base.' },
-                  { v: 'helpers', title: requiredHelpers > 1 ? `Chofer + ${requiredHelpers} ayudantes` : 'Chofer + ayudante', desc: `Chofer incluido + ayudantes adicionales. +$${fmt(helperUnitPrice)} c/u` },
+                  { v: 'helpers', title: requiredHelpers > 1 ? `Chofer + ${requiredHelpers} ayudantes` : 'Chofer + ayudante',
+                    desc: serviceType === 'mudanza'
+                      ? `Chofer +$${fmt(driverHelpPrice)} · ayudante${requiredHelpers > 1 ? 's' : ''} +$${fmt(helperUnitPrice)} c/u`
+                      : `Chofer incluido + ayudantes adicionales. +$${fmt(helperUnitPrice)} c/u` },
                 ].filter(opt => !(serviceType === 'mudanza' && opt.v === 'none')).map(opt => {
                   const isRecommended = invVol > 0 && suggestHelperMode !== 'none' && opt.v === suggestHelperMode;
                   const isActive = helpMode === opt.v;
