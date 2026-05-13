@@ -18,6 +18,7 @@ const FLETE_FLOOR_COST   = 6_000;  // por piso sin ascensor
 const FLETE_DRIVER_HELP  = 10_000; // ayuda del chofer
 const FLETE_HELPER_COST  = 15_000; // por ayudante adicional
 const FLETE_PACKING_COST = 22_000; // embalaje profesional
+const MUDANZA_PACKING_PER_M3 = 7_500; // embalaje mudanza: por m³ (labor + materiales)
 const fmt = n => Number(n || 0).toLocaleString('es-CL');
 const WHATSAPP_DIRECT_URL = 'https://wa.me/56952023504?text=Hola%20MUVE%2C%20quiero%20cotizar%20un%20flete%20o%20mudanza';
 const makeRange = (exact) => ({
@@ -324,30 +325,54 @@ export default function LandingView() {
   const extraM3Price = Number(cfgExtras.extra_m3 ?? FLETE_EXTRA_M3);
   const extraVol     = Math.max(0, invVol - includedM3);
   const vehicleCapacityM3 = Number(vehicleLabel?.maxVol || 0);
+
+  // ── Número de camiones necesarios (solo mudanza) ───────────────────────────
+  // camionLargo ≈ 2 camiones 3/4; si supera → 3 o 4 camiones 3/4
+  const numTrucks = (serviceType === 'mudanza' && invVol > 0 && vehicleCapacityM3 > 0)
+    ? Math.max(1, Math.ceil(invVol / vehicleCapacityM3))
+    : 1;
+
   const partialDiscountMaxPct = Number(cfgExtras.partial_discount_pct ?? 30);
   const partialDiscountPct = serviceType === 'flete' && smartVehicleType !== volumeVehicleType && invVol > 0 && vehicleCapacityM3 > 0
     ? Math.max(0, Math.min(partialDiscountMaxPct, partialDiscountMaxPct * (1 - (invVol / vehicleCapacityM3))))
     : 0;
   const partialDiscount = roundToThousand(rawVehicleBasePrice * partialDiscountPct / 100);
   const vehicleBasePrice = Math.max(0, rawVehicleBasePrice - partialDiscount);
-  const vehicleLoadPct = vehicleCapacityM3 > 0 ? Math.min(100, Math.round((invVol / vehicleCapacityM3) * 100)) : 0;
+  // Para el % de carga: en mudanza con múltiples camiones mostramos carga del primer camión
+  const vehicleLoadPct = vehicleCapacityM3 > 0
+    ? Math.min(100, Math.round(((invVol % vehicleCapacityM3 || vehicleCapacityM3) / vehicleCapacityM3) * 100))
+    : 0;
   const partialDiscountStage = vehicleLoadPct <= 35 ? 'poca carga' : vehicleLoadPct <= 70 ? 'carga media' : 'carga alta';
   // Ayudante sugerido: vol>6 o ítems pesados → chofer+ayudante, vol>2 → solo chofer
   const suggestHelperMode = requiredHelpers > 0 ? 'helpers' : invVol > 2 ? 'driver' : 'none';
-  // Costos extras
-  const floorCost    = numFloors * floorUnitPrice;
-  const driverHelpCost = serviceType === 'mudanza' && helpMode !== 'none' ? driverHelpPrice : 0;
-  const helpersCost  = helpMode === 'helpers' ? numHelpers * helperUnitPrice : 0;
-  const helpCost     = driverHelpCost + helpersCost;
-  const packCost     = needsPacking ? packingPrice : 0;
+  // Mínimo de ayudantes para mudanza: al menos 1 por camión adicional al primero + ítem-based
+  const mudanzaMinHelpers = serviceType === 'mudanza'
+    ? Math.max(requiredHelpers, numTrucks - 1 + (numTrucks >= 2 ? 1 : 0))
+    : requiredHelpers;
+
+  // ── Costos extras ──────────────────────────────────────────────────────────
+  const floorCost = numFloors * floorUnitPrice;
+  // Chofer de cada camión ayuda → se multiplica por numTrucks en mudanza
+  const driverHelpCost = serviceType === 'mudanza' && helpMode !== 'none'
+    ? driverHelpPrice * numTrucks
+    : 0;
+  const helpersCost = helpMode === 'helpers' ? numHelpers * helperUnitPrice : 0;
+  const helpCost = driverHelpCost + helpersCost;
+  // Embalaje en mudanza: escala con volumen (labor + materiales por m³)
+  const packCost = needsPacking
+    ? (serviceType === 'mudanza' && invVol > 0
+      ? Math.max(packingPrice, roundToThousand(invVol * MUDANZA_PACKING_PER_M3))
+      : packingPrice)
+    : 0;
   const extraVolCost = serviceType === 'mudanza' ? 0 : roundToThousand(extraVol * extraM3Price);
-  const fleteExact   = roundToThousand(vehicleBasePrice + distanceCost + extraVolCost + floorCost + helpCost + packCost);
-  const fleteExactBeforeDiscount = roundToThousand(rawVehicleBasePrice + distanceCost + extraVolCost + floorCost + helpCost + packCost);
-  const displayFletePrice = marketPrice(Math.max(fleteExact, vehicleBasePrice));
+  // Base + km se multiplican por numTrucks: cada camión recorre la misma ruta
+  const fleteExact   = roundToThousand(vehicleBasePrice * numTrucks + distanceCost * numTrucks + extraVolCost + floorCost + helpCost + packCost);
+  const fleteExactBeforeDiscount = roundToThousand(rawVehicleBasePrice * numTrucks + distanceCost * numTrucks + extraVolCost + floorCost + helpCost + packCost);
+  const displayFletePrice = marketPrice(Math.max(fleteExact, vehicleBasePrice * numTrucks));
+  // Cotización manual solo para traslados realmente fuera de lo normal
   const isLargeQuote = isFlete && (
-    smartVehicleType === 'camionLargo' ||
-    invVol >= 25 ||
-    displayFletePrice >= 700_000
+    numTrucks >= 3 ||
+    displayFletePrice >= 1_500_000
   );
   const displayFletePriceBeforeDiscount = partialDiscount > 0 ? marketPrice(Math.max(fleteExactBeforeDiscount, rawVehicleBasePrice)) : 0;
   const selectedCategories = new Set(inventory.filter(i => i.qty > 0).map(i => catalog.find(c => c.id === i.id)?.cat).filter(Boolean));
@@ -479,9 +504,9 @@ export default function LandingView() {
   }, [inventory]);
 
   useEffect(() => {
-    if (requiredHelpers > 0 && !helpModeManual) {
+    if (mudanzaMinHelpers > 0 && !helpModeManual) {
       setHelpMode('helpers');
-      setNumHelpers(n => Math.max(requiredHelpers, n));
+      setNumHelpers(n => Math.max(mudanzaMinHelpers, n));
       return;
     }
     if (helpModeManual) return;
@@ -491,7 +516,7 @@ export default function LandingView() {
     }
     setHelpMode(invVol > 0 ? suggestHelperMode : 'none');
     if (suggestHelperMode === 'helpers') setNumHelpers(n => Math.max(requiredHelpers || 1, n));
-  }, [invVol, suggestHelperMode, helpModeManual, requiredHelpers, isFlete]);
+  }, [invVol, suggestHelperMode, helpModeManual, mudanzaMinHelpers, requiredHelpers, isFlete]);
 
   // Auto-recommend vehicle from inventory (no price shown yet)
   useEffect(() => {
@@ -724,22 +749,36 @@ export default function LandingView() {
           {(() => {
             const vol = totalVol(inventory, catalog);
             if (step !== 3 || !isFlete) return null;
-            const volPct = Math.min((vol / 18) * 100, 100);
             const recType = vol > 0 ? recommendVehicleType(vol, inventory, catalog) : 'furgon';
             const rec = VEHICLE_THRESHOLDS.find(t => t.vehicleType === recType) || VEHICLE_THRESHOLDS[0];
+            const trucks = (serviceType === 'mudanza' && vol > 0 && rec.maxVol > 0)
+              ? Math.max(1, Math.ceil(vol / rec.maxVol)) : 1;
+            const volPct = Math.min(((vol % rec.maxVol || rec.maxVol) / rec.maxVol) * 100, 100);
             return (
               <div style={{ marginTop: 10, background: '#f4f7ff', border: '1px solid #0052FF20', borderRadius: 10, padding: '8px 12px', visibility: vol > 0 ? 'visible' : 'hidden' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontSize: 15 }}>{rec.icon}</span>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)' }}>Camión sugerido: {rec.name}</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)' }}>
+                      {rec.name}{trucks > 1 ? ` × ${trucks}` : ''}
+                    </span>
+                    {trucks > 1 && (
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 999, background: '#fee2e2', color: '#b91c1c' }}>
+                        {trucks} camiones
+                      </span>
+                    )}
                   </div>
                   <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>{vol.toFixed(1)} m³</span>
                 </div>
                 <div style={{ background: '#dbeafe', borderRadius: 4, height: 6, overflow: 'hidden' }}>
                   <div style={{ width: `${volPct}%`, height: '100%', borderRadius: 4, transition: 'width .3s ease',
-                    background: vol > 18 ? '#cc2244' : vol > 7 ? '#f59e0b' : '#0052FF' }} />
+                    background: trucks > 1 ? '#ef4444' : vol > 7 ? '#f59e0b' : '#0052FF' }} />
                 </div>
+                {trucks > 1 && (
+                  <div style={{ fontSize: 10, color: '#b91c1c', fontWeight: 700, marginTop: 4 }}>
+                    {vol.toFixed(1)} m³ en total · camión {trucks} con {(vol % rec.maxVol || rec.maxVol).toFixed(1)} m³
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -1129,9 +1168,11 @@ export default function LandingView() {
                   </div>
                   {vehicleLabel && (
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 24 }}>{vehicleLabel.icon}</div>
-                      <div style={{ fontSize: 10, fontWeight: 800, color: '#475569' }}>{vehicleLabel.name}</div>
-                      <div style={{ fontSize: 9, color: '#94a3b8' }}>{vehicleLabel.desc}</div>
+                      <div style={{ fontSize: numTrucks > 1 ? 18 : 24 }}>{vehicleLabel.icon}{numTrucks > 1 ? ` ×${numTrucks}` : ''}</div>
+                      <div style={{ fontSize: 10, fontWeight: 800, color: numTrucks > 1 ? '#b91c1c' : '#475569' }}>
+                        {numTrucks > 1 ? `${numTrucks} camiones` : vehicleLabel.name}
+                      </div>
+                      <div style={{ fontSize: 9, color: '#94a3b8' }}>{numTrucks > 1 ? `${invVol.toFixed(0)} m³ en total` : vehicleLabel.desc}</div>
                     </div>
                   )}
                 </div>
@@ -1159,8 +1200,14 @@ export default function LandingView() {
                 {invVol > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3, borderTop: '1px solid #0052FF15', paddingTop: 8 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                      <span>Precio base {vehicleLabel?.name || ''}</span>
-                      <span style={{ fontWeight: 700 }}>${fmt(rawVehicleBasePrice)}</span>
+                      <span>
+                        {numTrucks > 1
+                          ? `${vehicleLabel?.name || ''} × ${numTrucks} camiones`
+                          : `Precio base ${vehicleLabel?.name || ''}`}
+                      </span>
+                      <span style={{ fontWeight: 700 }}>
+                        {numTrucks > 1 ? `$${fmt(rawVehicleBasePrice)} × ${numTrucks}` : `$${fmt(rawVehicleBasePrice)}`}
+                      </span>
                     </div>
                     {partialDiscount > 0 && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#16a34a' }}>
@@ -1176,8 +1223,11 @@ export default function LandingView() {
                     )}
                     {distanceKm > 0 && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                        <span>{distanceKm} km × ${fmt(vehicleKmPrice)}/km</span>
-                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(distanceCost)}</span>
+                        <span>
+                          {distanceKm} km × ${fmt(vehicleKmPrice)}/km
+                          {numTrucks > 1 ? ` × ${numTrucks}` : ''}
+                        </span>
+                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(distanceCost * numTrucks)}</span>
                       </div>
                     )}
                     {numFloors > 0 && (
@@ -1188,15 +1238,27 @@ export default function LandingView() {
                     )}
                     {helpMode === 'driver' && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                        <span>{serviceType === 'mudanza' ? 'Ayuda del chofer' : 'Ayuda del chofer incluida'}</span>
-                        <span style={{ fontWeight: 700, color: serviceType === 'mudanza' ? '#f59e0b' : '#22c55e' }}>{serviceType === 'mudanza' ? `+$${fmt(driverHelpCost)}` : '$0'}</span>
+                        <span>
+                          {serviceType === 'mudanza'
+                            ? `Ayuda chofer${numTrucks > 1 ? ` × ${numTrucks} choferes` : ''}`
+                            : 'Ayuda del chofer incluida'}
+                        </span>
+                        <span style={{ fontWeight: 700, color: serviceType === 'mudanza' ? '#f59e0b' : '#22c55e' }}>
+                          {serviceType === 'mudanza' ? `+$${fmt(driverHelpCost)}` : '$0'}
+                        </span>
                       </div>
                     )}
                     {helpMode === 'helpers' && (
                       <>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                          <span>{serviceType === 'mudanza' ? 'Ayuda del chofer' : 'Ayuda del chofer incluida'}</span>
-                          <span style={{ fontWeight: 700, color: serviceType === 'mudanza' ? '#f59e0b' : '#22c55e' }}>{serviceType === 'mudanza' ? `+$${fmt(driverHelpCost)}` : '$0'}</span>
+                          <span>
+                            {serviceType === 'mudanza'
+                              ? `Ayuda chofer${numTrucks > 1 ? ` × ${numTrucks} choferes` : ''}`
+                              : 'Ayuda del chofer incluida'}
+                          </span>
+                          <span style={{ fontWeight: 700, color: serviceType === 'mudanza' ? '#f59e0b' : '#22c55e' }}>
+                            {serviceType === 'mudanza' ? `+$${fmt(driverHelpCost)}` : '$0'}
+                          </span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
                           <span>{numHelpers} ayudante{numHelpers > 1 ? 's' : ''} × ${fmt(helperUnitPrice)}</span>
@@ -1206,8 +1268,11 @@ export default function LandingView() {
                     )}
                     {needsPacking && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                        <span>Embalaje profesional</span>
-                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(packingPrice)}</span>
+                        <span>
+                          Embalaje profesional
+                          {serviceType === 'mudanza' && invVol > 0 ? ` (${invVol.toFixed(1)} m³)` : ''}
+                        </span>
+                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(packCost)}</span>
                       </div>
                     )}
                     {helpMode === 'none' && numFloors === 0 && !needsPacking && extraVolCost === 0 && (

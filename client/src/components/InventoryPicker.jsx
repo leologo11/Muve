@@ -98,10 +98,12 @@ export function requiredHelpersForInventory(inventory = [], catalog = CATALOG) {
   let helpers = stats.requiredItemHelpers;
   const categoryCount = stats.categories.size;
 
+  // 1 ayudante: carga liviana básica
   if (stats.totalVol > 3.5 || stats.totalQty >= 6 || stats.heavyQty >= 1 || stats.tallQty >= 1) {
     helpers = Math.max(helpers, 1);
   }
 
+  // 2 ayudantes: mudanza mediana (depto 2D)
   if (
     stats.totalVol > 10 ||
     stats.totalQty >= 12 ||
@@ -112,17 +114,33 @@ export function requiredHelpersForInventory(inventory = [], catalog = CATALOG) {
     helpers = Math.max(helpers, 2);
   }
 
+  // 3 ayudantes: mudanza grande (casa 3D o depto completo)
   if (
-    stats.totalVol > 24 ||
-    stats.totalQty >= 22 ||
-    stats.heavyQty >= 7 ||
-    stats.tallQty >= 6 ||
-    (categoryCount >= 5 && stats.totalQty >= 16)
+    stats.totalVol > 20 ||
+    stats.totalQty >= 20 ||
+    stats.heavyQty >= 6 ||
+    stats.tallQty >= 5 ||
+    (categoryCount >= 5 && stats.totalQty >= 14)
   ) {
     helpers = Math.max(helpers, 3);
   }
 
-  return Math.min(3, helpers);
+  // 4 ayudantes: casa grande (2 camiones)
+  if (
+    stats.totalVol > 32 ||
+    stats.totalQty >= 32 ||
+    stats.heavyQty >= 10 ||
+    (categoryCount >= 6 && stats.totalQty >= 24)
+  ) {
+    helpers = Math.max(helpers, 4);
+  }
+
+  // 5 ayudantes: mansión / traslado corporativo
+  if (stats.totalVol > 48 || stats.totalQty >= 45) {
+    helpers = Math.max(helpers, 5);
+  }
+
+  return Math.min(6, helpers);
 }
 
 export function recommendVehicleType(vol, inventory = [], catalog = CATALOG) {
