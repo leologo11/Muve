@@ -18,10 +18,9 @@ const QUICK_ITEMS = [
 
 function getNextNumber() {
   const year = new Date().getFullYear();
-  const key = `muve_pres_${year}`;
-  const n = parseInt(localStorage.getItem(key) || '0', 10) + 1;
-  localStorage.setItem(key, String(n));
-  return `P-${year}-${String(n).padStart(3, '0')}`;
+  // Número aleatorio entre 1000-9999 para no revelar secuencia
+  const rand = Math.floor(Math.random() * 8000) + 1000;
+  return `P-${year}-${rand}`;
 }
 
 function buildPDFHtml({ number, date, validDays, clientName, clientPhone, clientEmail, items, subtotal, discountAmount, ivaAmount, total, includeIVA, notes }) {
@@ -100,7 +99,7 @@ tbody td{padding:10px 14px;border-bottom:1px solid #e2e8f0;font-size:13px}
 <div class="grid2">
   <div class="card">
     <div class="card-label">Emitido por</div>
-    <div class="card-name">MUVE Logística SpA</div>
+    <div class="card-name">MUVE Logística</div>
     <div class="card-detail">📞 +56 9 5202 3504</div>
     <div class="card-detail">✉️ contacto@muve.cl</div>
     <div class="card-detail">🌐 muve.cl</div>

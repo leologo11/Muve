@@ -1417,25 +1417,8 @@ export default function LandingView() {
               /* ── FORM — compact, no scroll ─────────────────────────── */
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-                {/* Price range — compact */}
-                {isLargeQuote ? (
-                  <div style={{
-                    background: 'linear-gradient(135deg,#fff7ed,#fffbeb)',
-                    border: '2px solid #f59e0b40', borderRadius: 14, padding: '16px 18px',
-                    textAlign: 'center',
-                  }}>
-                    <div style={{ fontSize: 28, marginBottom: 8 }}>🚛</div>
-                    <div style={{ fontSize: 14, fontWeight: 900, color: '#92400e', marginBottom: 6 }}>
-                      Tu traslado es extenso y complejo
-                    </div>
-                    <div style={{ fontSize: 12, color: '#b45309', lineHeight: 1.6 }}>
-                      Para este tipo de servicio no mostramos precio automático — lo revisamos manualmente y te confirmamos la mejor propuesta a la brevedad.
-                    </div>
-                    <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, color: '#78350f', background: '#fef3c7', borderRadius: 999, padding: '5px 12px', border: '1px solid #fde68a' }}>
-                      ✓ Envía tu solicitud y te contactamos
-                    </div>
-                  </div>
-                ) : priceRange && (
+                {/* Price range — compact (solo si no es cotización grande) */}
+                {!isLargeQuote && priceRange && (
                   <div style={{
                     background: 'linear-gradient(135deg,#f4f7ff,#e8f0ff)',
                     border: '2px solid #0052FF20', borderRadius: 14, padding: '14px 16px',
