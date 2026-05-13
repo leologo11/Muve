@@ -20,6 +20,7 @@ import CredentialsView from './CredentialsView.jsx';
 import MovePricingView from './MovePricingView.jsx';
 import GeneralMapView from './GeneralMapView.jsx';
 import AnalyticsView from './AnalyticsView.jsx';
+import PresupuestoView from './PresupuestoView.jsx';
 
 const STATUS_META = {
   draft:      { label: 'Borrador',   color: 'var(--muted)',   bg: 'var(--card2)' },
@@ -346,7 +347,13 @@ export default function AdminView() {
   if (view === 'quotes') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <Header title="💼 Cotizaciones" onBack={() => setView('routes')} />
+        <div style={{ display: 'flex', alignItems: 'center', padding: 'max(10px,env(safe-area-inset-top)) 14px 10px', borderBottom: '1px solid var(--border)', background: '#fff', gap: 10, flexShrink: 0 }}>
+          <button onClick={() => setView('routes')} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--muted)', padding: '2px 6px' }}>←</button>
+          <span style={{ fontSize: 15, fontWeight: 900, flex: 1 }}>💼 Cotizaciones</span>
+          <button onClick={() => setView('presupuesto')} style={{ border: '1px solid #0369a1', background: '#e0f2fe', borderRadius: 9, padding: '6px 11px', fontSize: 12, fontWeight: 800, cursor: 'pointer', color: '#0369a1', whiteSpace: 'nowrap' }}>
+            📄 Generar presupuesto
+          </button>
+        </div>
         <QuotesView />
         <Toast />
       </div>
@@ -398,6 +405,11 @@ export default function AdminView() {
   // ── ANALYTICS VIEW ──
   if (view === 'analytics') {
     return <AnalyticsView onBack={() => setView('routes')} />;
+  }
+
+  // ── PRESUPUESTO VIEW ──
+  if (view === 'presupuesto') {
+    return <PresupuestoView onBack={() => setView('routes')} />;
   }
 
   // ── SECTOR MAP VIEW ──
@@ -784,7 +796,8 @@ function AdminMainMenu({ setView, onResetDone }) {
     { label: 'Usuarios', desc: 'Admin, drivers y empresas', view: 'users', color: 'var(--muted)', bg: 'var(--card2)' },
     { label: 'Precios', desc: 'Fletes, mudanzas e items', view: 'movePricing', color: 'var(--accent)', bg: '#0052FF12' },
     { label: 'API Keys',   desc: 'Credenciales de integracion',             view: 'credentials', color: '#fff', bg: 'linear-gradient(135deg, #0052FF 0%, #00DAFF 100%)' },
-    { label: 'Analytics',  desc: 'Funnel de visitas del cotizador público',  view: 'analytics',   color: '#7C3AED', bg: '#7c3aed10' },
+    { label: 'Analytics',    desc: 'Funnel de visitas del cotizador público',  view: 'analytics',   color: '#7C3AED', bg: '#7c3aed10' },
+    { label: 'Presupuestos', desc: 'Generar presupuesto PDF con ítems y precios', view: 'presupuesto', color: '#0369a1', bg: '#e0f2fe' },
   ];
 
   return (
