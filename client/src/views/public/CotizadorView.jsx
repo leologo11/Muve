@@ -155,6 +155,13 @@ function Stepper({ value, onChange, max = 20 }) {
   );
 }
 
+const WA_URL = `https://wa.me/56952023504?text=${encodeURIComponent('Hola MUVE! 👋 Necesito ayuda con mi cotización.')}`;
+const WaIcon = ({ size = 20, color = WA }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+    <path d="M20.5 3.5A11 11 0 003.4 17.4L2 22l4.7-1.4A11 11 0 1020.5 3.5z"/>
+  </svg>
+);
+
 // ─── Progress header ──────────────────────────────────────────
 function Header({ step, total, title, onBack }) {
   const pct = (step / total) * 100;
@@ -165,7 +172,13 @@ function Header({ step, total, title, onBack }) {
           <ArrowLeft size={18} color={N} strokeWidth={2}/>
         </button>
         <img src="/logo_reducido.png" alt="MUVE" style={{ height: 44, objectFit: 'contain' }}/>
-        <div style={{ width: 38, textAlign: 'right', fontSize: 11, fontWeight: 700, color: T3 }}>{step}/{total}</div>
+        <a href={WA_URL} target="_blank" rel="noreferrer" style={{
+          width: 38, height: 38, borderRadius: 12,
+          background: 'rgba(37,211,102,.12)', border: '1px solid rgba(37,211,102,.28)',
+          display: 'grid', placeItems: 'center', textDecoration: 'none', flexShrink: 0,
+        }}>
+          <WaIcon size={20}/>
+        </a>
       </div>
       <div style={{ padding: '0 16px 10px' }}>
         <div style={{ fontSize: 15, fontWeight: 800, color: N, marginBottom: 6 }}>{title}</div>
@@ -651,8 +664,15 @@ function ScreenWelcome({ onStart }) {
       <div style={{ position:'absolute', bottom:0, left:-80, width:260, height:260, borderRadius:'50%', background:`radial-gradient(circle,${B}10,transparent 68%)`, pointerEvents:'none' }}/>
 
       {/* Logo bar */}
-      <div style={{ padding:'14px 20px 0', flexShrink:0, position:'relative', zIndex:2 }}>
+      <div style={{ padding:'14px 20px 0', flexShrink:0, position:'relative', zIndex:2, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <img src="/logo_reducido.png" alt="MUVE" style={{ height:36, objectFit:'contain' }}/>
+        <a href={WA_URL} target="_blank" rel="noreferrer" style={{
+          width:36, height:36, borderRadius:10,
+          background:'rgba(37,211,102,.12)', border:'1px solid rgba(37,211,102,.28)',
+          display:'grid', placeItems:'center', textDecoration:'none',
+        }}>
+          <WaIcon size={19}/>
+        </a>
       </div>
 
       {/* Hero */}
@@ -841,11 +861,20 @@ function ScreenAddresses({ state, setState, onNext, onBack }) {
 function ScreenItems({ state, setState, onNext, onBack }) {
   const { inventory, freeText } = state;
   const [activeTab, setActiveTab] = useState(GROUPED[0].id);
-  const tabsRef = useRef(null);
+  const [atBottom, setAtBottom]   = useState(false);
+  const tabsRef    = useRef(null);
+  const contentRef = useRef(null);
+
   const onWheelTabs = e => {
     if (!tabsRef.current) return;
     e.preventDefault();
     tabsRef.current.scrollLeft += e.deltaY * 1.2;
+  };
+
+  const onScroll = () => {
+    const el = contentRef.current;
+    if (!el) return;
+    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 32);
   };
 
   const getQty = id => inventory[id] || 0;
@@ -869,7 +898,8 @@ function ScreenItems({ state, setState, onNext, onBack }) {
     <div style={{ height: '100dvh', background: BG, display: 'flex', flexDirection: 'column' }}>
       <Header step={2} total={4} title="¿Qué llevas?" onBack={onBack}/>
 
-      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '14px 16px 0' }}>
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+      <div ref={contentRef} onScroll={onScroll} style={{ overflowY: 'auto', height: '100%', padding: '14px 16px 0' }}>
 
         {/* Counter */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -961,6 +991,15 @@ function ScreenItems({ state, setState, onNext, onBack }) {
           />
         </div>
       </div>
+      </div>{/* end scroll */}
+
+      {/* Scroll hint — gradient + bounce arrow, desaparece al llegar al fondo */}
+      {!atBottom && (
+        <div style={{ position:'absolute', bottom:0, left:0, right:0, height:52, background:`linear-gradient(to bottom, transparent, ${BG} 72%)`, display:'flex', alignItems:'flex-end', justifyContent:'center', paddingBottom:6, pointerEvents:'none' }}>
+          <div style={{ fontSize:18, color:T3, animation:'czScrollBounce 1.4s ease-in-out infinite' }}>⌄</div>
+        </div>
+      )}
+      </div>{/* end wrapper */}
 
       <CtaBar>
         <BtnBack onClick={onBack}/>
@@ -1467,15 +1506,76 @@ function ScreenSuccess({ state, onRestart }) {
 
 // ─── LOADING ──────────────────────────────────────────────────
 function ScreenCalculating() {
+  const MSGS = [
+    'Calculando la distancia…',
+    'Eligiendo el mejor vehículo…',
+    'Analizando tus artículos…',
+    'Aplicando tarifas vigentes…',
+    'Preparando tu cotización…',
+  ];
+  const [msgIdx, setMsgIdx] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setMsgIdx(i => (i + 1) % MSGS.length), 1500);
+    return () => clearInterval(t);
+  }, []);
+
   return (
-    <div style={{ minHeight: '100dvh', background: BG, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-      <style>{`@keyframes czPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.75;transform:scale(.93)}}`}</style>
-      <div style={{ width: 72, height: 72, borderRadius: 20, background: GRAD, display: 'grid', placeItems: 'center', boxShadow: `0 8px 24px ${B}40`, animation: 'czPulse 1.4s ease infinite' }}>
-        <span style={{ fontSize: 34 }}>🚚</span>
+    <div style={{ height: '100dvh', background: GRAD_DEEP, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+      <style>{`
+        @keyframes czCalcRing  { from{transform:scale(0.5);opacity:.55} to{transform:scale(2.4);opacity:0} }
+        @keyframes czCalcFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-14px)} }
+        @keyframes czCalcMsg   { 0%{opacity:0;transform:translateY(10px)} 15%,85%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-8px)} }
+        @keyframes czCalcDot   { 0%,60%,100%{transform:scale(0.6);opacity:.3} 30%{transform:scale(1.15);opacity:1} }
+      `}</style>
+
+      {/* Radial glow */}
+      <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse at 50% 42%, rgba(63,190,237,.22), transparent 62%)', pointerEvents:'none' }}/>
+
+      {/* Expanding rings */}
+      {[0,1,2].map(i => (
+        <div key={i} style={{
+          position:'absolute', width:160, height:160, borderRadius:'50%',
+          border:'1.5px solid rgba(255,255,255,.2)',
+          animation:`czCalcRing 2.6s ease-out ${i * 0.86}s infinite`,
+        }}/>
+      ))}
+
+      {/* Floating vehicle icon */}
+      <div style={{
+        position:'relative', zIndex:2,
+        width:100, height:100, borderRadius:28,
+        background:'rgba(255,255,255,.13)',
+        border:'1px solid rgba(255,255,255,.22)',
+        display:'grid', placeItems:'center',
+        marginBottom:32,
+        animation:'czCalcFloat 2.4s ease-in-out infinite',
+        boxShadow:'0 24px 60px rgba(0,0,0,.25), 0 0 0 1px rgba(255,255,255,.08)',
+      }}>
+        <span style={{ fontSize:46 }}>🚐</span>
       </div>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 17, fontWeight: 800, color: N, letterSpacing: '-0.3px' }}>Buscando el mejor vehículo</div>
-        <div style={{ fontSize: 13, color: T2, marginTop: 6 }}>Analizando tu ruta y artículos…</div>
+
+      {/* Title */}
+      <div style={{ position:'relative', zIndex:2, textAlign:'center', padding:'0 32px' }}>
+        <div style={{ fontSize:22, fontWeight:900, color:'#fff', letterSpacing:'-0.5px', marginBottom:14 }}>
+          Calculando tu precio
+        </div>
+        {/* Cycling message */}
+        <div style={{ height:22, overflow:'hidden', position:'relative' }}>
+          <div key={msgIdx} style={{ fontSize:13, color:'rgba(255,255,255,.65)', fontWeight:500, animation:'czCalcMsg 1.5s ease both' }}>
+            {MSGS[msgIdx]}
+          </div>
+        </div>
+      </div>
+
+      {/* Bouncing dots */}
+      <div style={{ display:'flex', gap:8, marginTop:30, position:'relative', zIndex:2 }}>
+        {[0,1,2].map(i => (
+          <div key={i} style={{
+            width:8, height:8, borderRadius:'50%',
+            background:'rgba(255,255,255,.65)',
+            animation:`czCalcDot 1.4s ease-in-out ${i * 0.23}s infinite`,
+          }}/>
+        ))}
       </div>
     </div>
   );
@@ -1486,8 +1586,9 @@ const CZ_CSS = `
   .cz-anim { display: none; }
   .cz-outer { background: #EBF4FF; }
   .czTestBtn { display: none; }
-  @keyframes czRipple      { to { transform: scale(1); opacity: 0; } }
-  @keyframes czSavingPulse { 0%,100%{opacity:1}50%{opacity:.3} }
+  @keyframes czRipple       { to { transform: scale(1); opacity: 0; } }
+  @keyframes czSavingPulse  { 0%,100%{opacity:1}50%{opacity:.3} }
+  @keyframes czScrollBounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(5px)} }
   .czSavingDot { animation: czSavingPulse 0.8s ease infinite; }
 
   @media (min-width: 640px) {
@@ -1756,7 +1857,6 @@ export default function CotizadorView() {
           {screen}
         </div>
       </div>
-      {state.step >= 1 && state.step <= 4 && !calculating && <FloatingWA/>}
     </>
   );
 }
