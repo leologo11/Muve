@@ -21,25 +21,34 @@ const KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || '';
 
 // ── Google Places API (New) ───────────────────────────────────────────────────
 async function googleSearch(q) {
-  const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY },
-    body: JSON.stringify({ input: q, languageCode: 'es', includedRegionCodes: ['cl'] }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error?.message || `Google ${res.status}`);
-  return (data.suggestions || []).map(s => {
-    const p = s.placePrediction || {};
-    const fullText = p.text?.text || '';
-    return {
-      main:      mergeTypedStreetNumber(p.structuredFormat?.mainText?.text || fullText || '', q),
-      secondary: p.structuredFormat?.secondaryText?.text || '',
-      placeId:   p.placeId,
-      source:    'google',
-      typed:     q,
-      fullText,
-    };
-  });
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 1800);
+  try {
+    const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY },
+      body: JSON.stringify({ input: q, languageCode: 'es', includedRegionCodes: ['cl'] }),
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error?.message || `Google ${res.status}`);
+    return (data.suggestions || []).map(s => {
+      const p = s.placePrediction || {};
+      const fullText = p.text?.text || '';
+      return {
+        main:      mergeTypedStreetNumber(p.structuredFormat?.mainText?.text || fullText || '', q),
+        secondary: p.structuredFormat?.secondaryText?.text || '',
+        placeId:   p.placeId,
+        source:    'google',
+        typed:     q,
+        fullText,
+      };
+    });
+  } catch (e) {
+    clearTimeout(t);
+    throw e;
+  }
 }
 
 async function googleDetails(placeId) {
@@ -67,9 +76,12 @@ async function nominatimSearch(q) {
     q: q + ', Chile', countrycodes: 'cl', format: 'json',
     addressdetails: '1', limit: '7', 'accept-language': 'es',
   });
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 5000);
   const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
     headers: { 'User-Agent': 'MUVE/1.0' },
-  });
+    signal: ctrl.signal,
+  }).finally(() => clearTimeout(t));
   if (!res.ok) throw new Error(`OSM ${res.status}`);
   const list = await res.json();
   return list.map(r => {

@@ -28,9 +28,9 @@ export const CATALOG = [
 ];
 
 export const VEHICLE_THRESHOLDS = [
-  { vehicleType: 'furgon',      name: 'Furgón',       icon: '🚐', maxVol: 5.5, desc: 'Carga baja y liviana' },
-  { vehicleType: 'camion34',    name: 'Camión 3/4',   icon: '🚚', maxVol: 16,  desc: 'Muebles altos o mudanza mediana' },
-  { vehicleType: 'camionLargo', name: 'Camión Largo', icon: '🚛', maxVol: 32, desc: 'Mudanza grande o a regiones' },
+  { vehicleType: 'furgon',      name: 'Furgón',       icon: '🚐', maxVol: 6,  desc: 'Cajas, colchón, electrodomésticos y muebles pequeños. Hasta 6 m³.' },
+  { vehicleType: 'camion34',    name: 'Camión 3/4',   icon: '🚚', maxVol: 15, desc: 'Cama, nevera, sofá, closet y mudanza mediana. Hasta 15 m³.' },
+  { vehicleType: 'camionLargo', name: 'Camión Largo', icon: '🚛', maxVol: 30, desc: 'Mudanza completa de depto o casa de 2-3 dormitorios. Hasta 30 m³.' },
 ];
 
 export const MAX_MOVE_VOL = VEHICLE_THRESHOLDS[2].maxVol;
@@ -176,11 +176,16 @@ export function serializeInventory(inventory, extras) {
   return JSON.stringify({ inventory: active, extras: extras || '' });
 }
 
+// Categories that start expanded by default
+const OPEN_BY_DEFAULT = new Set(['Dormitorio', 'Living', 'Cocina']);
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function InventoryPicker({ inventory, onChange, extras, onExtrasChange, disabled = false, catalog = CATALOG }) {
-  const [collapsed, setCollapsed] = React.useState({});
   const cats = React.useMemo(() => [...new Set(catalog.map(c => c.cat))], [catalog]);
+  const [collapsed, setCollapsed] = React.useState(() =>
+    Object.fromEntries(cats.map(c => [c, !OPEN_BY_DEFAULT.has(c)]))
+  );
 
   const getQty = id => inventory.find(i => i.id === id)?.qty || 0;
   const currentVol = totalVol(inventory, catalog);
@@ -198,71 +203,90 @@ export default function InventoryPicker({ inventory, onChange, extras, onExtrasC
 
   return (
     <div>
-      {/* Items by category — all expanded by default */}
       {cats.map(cat => {
-        const isOpen = !collapsed[cat]; // default open (not in collapsed set)
+        const isOpen = !collapsed[cat];
+        const catItems = catalog.filter(c => c.cat === cat);
+        const selectedCount = catItems.reduce((s, i) => s + (getQty(i.id) > 0 ? 1 : 0), 0);
         return (
-        <div key={cat} style={{ marginBottom: 8 }}>
-          {/* Category header — clickable to collapse/expand */}
-          <button
-            type="button"
-            onClick={() => toggleCat(cat)}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              width: '100%', background: 'none', border: 'none', cursor: 'pointer',
-              padding: '5px 2px', marginBottom: isOpen ? 5 : 2,
-            }}
-          >
-            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: '#64748b', textTransform: 'uppercase' }}>{cat}</span>
-            <span style={{
-              fontSize: 9, color: '#94a3b8', display: 'inline-block',
-              transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
-              transition: 'transform .2s ease',
-            }}>▼</span>
-          </button>
-          {isOpen && <div className="inventory-item-grid">
-            {catalog.filter(c => c.cat === cat).map(item => {
-              const qty = getQty(item.id);
-              const wouldExceedLimit = currentVol + item.vol > MAX_MOVE_VOL;
-              return (
-                <div
-                  key={item.id}
-                  className="inventory-item"
-                  style={{
-                    background: qty > 0 ? '#0052FF08' : '#fff',
-                    border: `1.5px solid ${qty > 0 ? 'var(--accent)' : '#e2e8f0'}`,
-                    borderRadius: 9,
-                  }}
-                >
-                  <span className="inventory-item-icon">{item.icon}</span>
-                  <span className="inventory-item-name" style={{ fontWeight: qty > 0 ? 700 : 500, color: qty > 0 ? 'var(--accent)' : '#475569' }}>
-                    {item.name}
+          <div key={cat} style={{ marginBottom: 6, borderRadius: 10, overflow: 'hidden', border: '1px solid #e8edf5' }}>
+            {/* Category accordion header */}
+            <button
+              type="button"
+              onClick={() => toggleCat(cat)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                width: '100%', background: selectedCount > 0 ? '#f4f8ff' : '#f8fafc',
+                border: 'none', cursor: 'pointer',
+                padding: '11px 14px', minHeight: 48,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: .8, color: selectedCount > 0 ? 'var(--accent)' : '#64748b', textTransform: 'uppercase' }}>
+                  {cat}
+                </span>
+                {selectedCount > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: 'var(--accent)', borderRadius: 99, padding: '1px 7px', minWidth: 20, textAlign: 'center' }}>
+                    {selectedCount}
                   </span>
-                  <div className="inventory-stepper">
-                    <button
-                      type="button"
-                      onClick={() => !disabled && setQty(item.id, Math.max(0, qty - 1))}
-                      disabled={disabled || qty === 0}
-                      style={{ width: 22, height: 22, borderRadius: '50%', border: '1.5px solid #e2e8f0', background: '#fff', fontSize: 13, fontWeight: 700, cursor: (disabled || qty === 0) ? 'not-allowed' : 'pointer', color: qty === 0 ? '#cbd5e1' : '#0f172a', lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}>−</button>
-                    <span style={{ fontSize: 12, fontWeight: 800, minWidth: 14, textAlign: 'center', color: qty > 0 ? 'var(--accent)' : '#94a3b8' }}>{qty}</span>
-                    <button
-                      type="button"
-                      onClick={() => !disabled && setQty(item.id, qty + 1)}
-                      disabled={disabled || wouldExceedLimit}
-                      title={wouldExceedLimit ? 'Límite de volumen para cotización online' : undefined}
-                      style={{ width: 22, height: 22, borderRadius: '50%', border: '1.5px solid #e2e8f0', background: qty > 0 ? 'var(--accent)' : '#fff', fontSize: 13, fontWeight: 700, cursor: (disabled || wouldExceedLimit) ? 'not-allowed' : 'pointer', color: (disabled || wouldExceedLimit) ? '#cbd5e1' : qty > 0 ? '#fff' : '#0f172a', lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}>+</button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>}
-        </div>
+                )}
+                {!isOpen && selectedCount === 0 && (
+                  <span style={{ fontSize: 11, color: '#94a3b8' }}>{catItems.length} artículos</span>
+                )}
+              </div>
+              <span style={{
+                fontSize: 11, color: '#94a3b8', display: 'inline-block', lineHeight: 1,
+                transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                transition: 'transform .2s ease',
+              }}>▼</span>
+            </button>
+
+            {/* Category items */}
+            {isOpen && (
+              <div className="inventory-item-grid" style={{ padding: '8px 10px 10px' }}>
+                {catItems.map(item => {
+                  const qty = getQty(item.id);
+                  const wouldExceedLimit = currentVol + item.vol > MAX_MOVE_VOL;
+                  return (
+                    <div
+                      key={item.id}
+                      className="inventory-item"
+                      style={{
+                        background: qty > 0 ? '#EEF4FF' : '#fff',
+                        border: `1.5px solid ${qty > 0 ? 'var(--accent)' : '#e2e8f0'}`,
+                        borderRadius: 9,
+                      }}
+                    >
+                      <span className="inventory-item-icon">{item.icon}</span>
+                      <div className="inventory-item-name" style={{ fontWeight: qty > 0 ? 700 : 500, color: qty > 0 ? 'var(--accent)' : '#475569' }}>
+                        <div>{item.name}</div>
+                        <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>{item.vol} m³</div>
+                      </div>
+                      <div className="inventory-stepper">
+                        <button
+                          type="button"
+                          onClick={() => !disabled && setQty(item.id, Math.max(0, qty - 1))}
+                          disabled={disabled || qty === 0}
+                          style={{ width: 28, height: 28, borderRadius: '50%', border: '1.5px solid #e2e8f0', background: '#fff', fontSize: 16, fontWeight: 700, cursor: (disabled || qty === 0) ? 'not-allowed' : 'pointer', color: qty === 0 ? '#cbd5e1' : '#0f172a', lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s', flexShrink: 0 }}>−</button>
+                        <span style={{ fontSize: 13, fontWeight: 800, minWidth: 16, textAlign: 'center', color: qty > 0 ? 'var(--accent)' : '#94a3b8' }}>{qty}</span>
+                        <button
+                          type="button"
+                          onClick={() => !disabled && setQty(item.id, qty + 1)}
+                          disabled={disabled || wouldExceedLimit}
+                          title={wouldExceedLimit ? 'Límite de volumen para cotización online' : undefined}
+                          style={{ width: 28, height: 28, borderRadius: '50%', border: '1.5px solid #e2e8f0', background: qty > 0 ? 'var(--accent)' : '#fff', fontSize: 16, fontWeight: 700, cursor: (disabled || wouldExceedLimit) ? 'not-allowed' : 'pointer', color: (disabled || wouldExceedLimit) ? '#cbd5e1' : qty > 0 ? '#fff' : '#0f172a', lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s', flexShrink: 0 }}>+</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         );
       })}
 
       {/* Free-text extras */}
-      <div>
-        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.5, color: '#94a3b8', textTransform: 'uppercase', margin: '6px 0 4px' }}>Otros artículos o cosas adicionales</div>
+      <div style={{ marginTop: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: .5, color: '#94a3b8', textTransform: 'uppercase', margin: '0 0 6px' }}>Otros artículos</div>
         <textarea
           value={extras}
           onChange={e => !disabled && onExtrasChange(e.target.value)}

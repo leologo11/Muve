@@ -21,6 +21,7 @@ import MovePricingView from './MovePricingView.jsx';
 import GeneralMapView from './GeneralMapView.jsx';
 import AnalyticsView from './AnalyticsView.jsx';
 import PresupuestoView from './PresupuestoView.jsx';
+import PruebaView from '../public/PruebaView.jsx';
 
 const STATUS_META = {
   draft:      { label: 'Borrador',   color: 'var(--muted)',   bg: 'var(--card2)' },
@@ -412,6 +413,17 @@ export default function AdminView() {
     return <PresupuestoView onBack={() => setView('routes')} />;
   }
 
+  // ── AI TRAINING VIEW ──
+  if (view === 'aiTraining') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Header title="🤖 Entrenamiento IA — Cotizador" onBack={() => setView('routes')} />
+        <PruebaView />
+        <Toast />
+      </div>
+    );
+  }
+
   // ── SECTOR MAP VIEW ──
   if (view === 'zones') {
     return <ZonesView onBack={() => setView('routes')} />;
@@ -798,6 +810,7 @@ function AdminMainMenu({ setView, onResetDone }) {
     { label: 'API Keys',   desc: 'Credenciales de integracion',             view: 'credentials', color: '#fff', bg: 'linear-gradient(135deg, #0052FF 0%, #00DAFF 100%)' },
     { label: 'Analytics',    desc: 'Funnel de visitas del cotizador público',  view: 'analytics',   color: '#7C3AED', bg: '#7c3aed10' },
     { label: 'Presupuestos', desc: 'Generar presupuesto PDF con ítems y precios', view: 'presupuesto', color: '#0369a1', bg: '#e0f2fe' },
+    { label: 'Entrena IA', desc: 'Revisar y corregir cotizaciones del cotizador público', view: 'aiTraining', color: '#7C3AED', bg: '#7c3aed10' },
   ];
 
   return (

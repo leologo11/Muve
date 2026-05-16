@@ -9,6 +9,8 @@ import CustomerView from './views/customer/CustomerView.jsx';
 import PublicRouteView from './views/PublicRouteView.jsx';
 import QuoteView from './views/public/QuoteView.jsx';
 import LandingView from './views/public/LandingView.jsx';
+import CotizadorView from './views/public/CotizadorView.jsx';
+import PruebaView from './views/public/PruebaView.jsx';
 import { trackPageView } from './utils/metaPixel.js';
 
 function MetaPixelPageView() {
@@ -59,8 +61,10 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/admin/*" element={<RoleRouter />} />
           <Route path="/app/*" element={<RoleRouter />} />
-          <Route path="/cotizar" element={<LandingView />} />
-          <Route path="/" element={<LandingView />} />
+          <Route path="/cotizar" element={<CotizadorView />} />
+          <Route path="/prueba" element={<PruebaView />} />
+          <Route path="/" element={<CotizadorView />} />
+          <Route path="/v1" element={<LandingView />} />
           <Route path="/track/:trackingId" element={<CustomerView />} />
           <Route path="/route/:shareToken" element={<PublicRouteView />} />
           <Route path="/quote/:shareToken" element={<QuoteView />} />

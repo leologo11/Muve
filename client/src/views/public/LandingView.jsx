@@ -151,6 +151,12 @@ export default function LandingView() {
   const [clientNotes,   setClientNotes]   = useState('');
   const [isUrgent,      setIsUrgent]      = useState(false);
 
+  // AI: volume estimate (debounced, silent) + price adjustment factor
+  const [aiEstimate, setAiEstimate] = useState({ loading: false, extraVol: 0, items: [], reasoning: '', confidence: 'medium' });
+  const [aiPriceFactor, setAiPriceFactor] = useState(1.0);
+  const [loadingAiPrice, setLoadingAiPrice] = useState(false);
+  const aiDebounceRef = useRef(null);
+
   // UI
   const [submitting, setSubmitting] = useState(false);
   const [formGone,    setFormGone]    = useState(false); // form faded + boxes flew
@@ -190,8 +196,6 @@ export default function LandingView() {
     // Precio m³ al pasar de step 3 → 4
     if (step === 3 && isFlete) {
       const vol2 = totalVol(inventory, catalog);
-      const finalExact = displayFletePrice;
-      setPriceRange({ exact: finalExact, lo: finalExact, hi: finalExact });
       // Recomendación de vehículo (solo si hay distancia calculada)
       if (distanceKm) {
         try {
@@ -206,10 +210,48 @@ export default function LandingView() {
           }
         } catch {}
       }
+      // AI price review — runs silently while "calculando precio final"
+      if (displayFletePrice > 0 && vehicleLabel) {
+        setLoadingAiPrice(true);
+        try {
+          const catalogItemsPayload = inventory
+            .filter(i => i.qty > 0)
+            .map(i => {
+              const cat = catalog.find(c => c.id === i.id);
+              return { name: cat?.name || i.id, qty: i.qty, vol: Number(cat?.vol || 0) };
+            });
+          const result = await api.reviewPrice({
+            serviceType, vehicleName: vehicleLabel.name, vehicleMaxVol: vehicleCapacityM3,
+            distanceKm: distanceKm || 0, invVol, catalogVol,
+            aiExtraVol: aiEstimate.extraVol || 0,
+            inventoryExtras: inventoryExtras?.trim() || '',
+            catalogItems: catalogItemsPayload,
+            numHelpers: helpMode === 'helpers' ? numHelpers : 0,
+            numFloors, originFloors, destinationFloors, needsPacking,
+            helpMode, numTrucks,
+            formulaPrice: displayFletePrice,
+            vehicleBasePrice, distanceCost, extraVolCost, floorCost, helpCost, packCost, vehicleKmPrice,
+          });
+          // Compute adjusted price directly (state update is async, can't use finalDisplayPrice here)
+          const newFactor = (result?.factor && Math.abs(result.factor - 1.0) > 0.001) ? result.factor : 1.0;
+          if (newFactor !== 1.0) setAiPriceFactor(newFactor);
+          const currentRawExact = Math.max(fleteExact, vehicleBasePrice * numTrucks);
+          const priceForRange = newFactor !== 1.0 ? marketPrice(currentRawExact * newFactor) : displayFletePrice;
+          setPriceRange({ exact: priceForRange, lo: priceForRange, hi: priceForRange });
+        } catch {
+          setPriceRange({ exact: displayFletePrice, lo: displayFletePrice, hi: displayFletePrice });
+        }
+        finally { setLoadingAiPrice(false); }
+      } else {
+        setPriceRange({ exact: displayFletePrice, lo: displayFletePrice, hi: displayFletePrice });
+      }
     }
     setStep(s => s + 1);
   };
-  const goBack = () => setStep(s => Math.max(1, s - 1));
+  const goBack = () => {
+    if (step === 4) setAiPriceFactor(1.0); // reset AI factor when going back to step 3
+    setStep(s => Math.max(1, s - 1));
+  };
 
   const resetQuoteFlow = () => {
     setStep(1);
@@ -233,6 +275,8 @@ export default function LandingView() {
     setIsConserjeria(false);
     setInventory([]);
     setInventoryExtras('');
+    setAiEstimate({ loading: false, extraVol: 0, items: [], reasoning: '', confidence: 'medium' });
+    setAiPriceFactor(1.0);
     setContactPerson('');
     setContactPhone('');
     setContactEmail('');
@@ -256,6 +300,8 @@ export default function LandingView() {
   const resetInventoryLoad = () => {
     setInventory([]);
     setInventoryExtras('');
+    setAiEstimate({ loading: false, extraVol: 0, items: [], reasoning: '', confidence: 'medium' });
+    setAiPriceFactor(1.0);
     setHelpModeManual(false);
     setNumHelpers(1);
     setHelpMode(isFlete ? 'driver' : 'none');
@@ -307,7 +353,8 @@ export default function LandingView() {
   const loadedTruck = TRUCK_LOAD_ORDER.slice(0, sceneCount);
 
   // ── Live m³ price (flete/mudanza) ──────────────────────────────────────────
-  const invVol       = totalVol(inventory, catalog);
+  const catalogVol   = totalVol(inventory, catalog);
+  const invVol       = catalogVol + (aiEstimate.extraVol || 0);
   const numFloors    = originFloors + destinationFloors;
   const hasTallItems = inventoryHasTallItems(inventory, catalog);
   const requiredHelpers = requiredHelpersForInventory(inventory, catalog);
@@ -378,10 +425,15 @@ export default function LandingView() {
   const fleteExact   = roundToThousand(vehicleBasePrice * numTrucks + distanceCost * numTrucks + extraVolCost + floorCost + helpCost + packCost);
   const fleteExactBeforeDiscount = roundToThousand(rawVehicleBasePrice * numTrucks + distanceCost * numTrucks + extraVolCost + floorCost + helpCost + packCost);
   const displayFletePrice = marketPrice(Math.max(fleteExact, vehicleBasePrice * numTrucks));
+  // AI-adjusted final price: factor is set by /price-review endpoint when entering step 4
+  const rawFleteExact = Math.max(fleteExact, vehicleBasePrice * numTrucks);
+  const finalDisplayPrice = aiPriceFactor !== 1.0
+    ? marketPrice(rawFleteExact * aiPriceFactor)
+    : displayFletePrice;
   // Cotización manual solo para traslados realmente fuera de lo normal
   const isLargeQuote = isFlete && (
     numTrucks >= 3 ||
-    displayFletePrice >= 1_500_000
+    finalDisplayPrice >= 1_500_000
   );
   const displayFletePriceBeforeDiscount = partialDiscount > 0 ? marketPrice(Math.max(fleteExactBeforeDiscount, rawVehicleBasePrice)) : 0;
   const selectedCategories = new Set(inventory.filter(i => i.qty > 0).map(i => catalog.find(c => c.id === i.id)?.cat).filter(Boolean));
@@ -533,7 +585,7 @@ export default function LandingView() {
   useEffect(() => {
     if (mudanzaMinHelpers > 0 && !helpModeManual) {
       setHelpMode('helpers');
-      setNumHelpers(n => Math.max(mudanzaMinHelpers, n));
+      setNumHelpers(n => Math.max(Math.min(mudanzaMinHelpers, 1), n));
       return;
     }
     if (helpModeManual) return;
@@ -542,7 +594,7 @@ export default function LandingView() {
       return;
     }
     setHelpMode(invVol > 0 ? suggestHelperMode : 'none');
-    if (suggestHelperMode === 'helpers') setNumHelpers(n => Math.max(requiredHelpers || 1, n));
+    if (suggestHelperMode === 'helpers') setNumHelpers(n => Math.max(Math.min(requiredHelpers || 1, 1), n));
   }, [invVol, suggestHelperMode, helpModeManual, mudanzaMinHelpers, requiredHelpers, isFlete]);
 
   // Auto-recommend vehicle from inventory (no price shown yet)
@@ -554,6 +606,31 @@ export default function LandingView() {
     const rec = vehicles.find(v => v.vehicleType === recType) || vehicles[0];
     if (rec) { setSelectedVehicle(rec); }
   }, [inventory, vehicles, catalog]);
+
+  // AI load estimate — debounced 1.5s after inventoryExtras changes
+  useEffect(() => {
+    if (aiDebounceRef.current) clearTimeout(aiDebounceRef.current);
+    if (!inventoryExtras?.trim() || !isFlete) {
+      setAiEstimate(v => ({ ...v, loading: false, extraVol: 0, items: [], reasoning: '' }));
+      return;
+    }
+    setAiEstimate(v => ({ ...v, loading: true }));
+    aiDebounceRef.current = setTimeout(async () => {
+      try {
+        const catalogItems = inventory
+          .filter(i => i.qty > 0)
+          .map(i => {
+            const cat = catalog.find(c => c.id === i.id);
+            return { name: cat?.name || i.id, qty: i.qty, vol: Number(cat?.vol || 0) };
+          });
+        const result = await api.estimateLoad({ catalogItems, freeText: inventoryExtras.trim(), serviceType });
+        setAiEstimate({ loading: false, extraVol: result.extraVol || 0, items: result.items || [], reasoning: result.reasoning || '', confidence: result.confidence || 'medium' });
+      } catch {
+        setAiEstimate(v => ({ ...v, loading: false }));
+      }
+    }, 1500);
+    return () => clearTimeout(aiDebounceRef.current);
+  }, [inventoryExtras, serviceType]);
 
   // Sync truck boxes with form progress during normal filling
   useEffect(() => {
@@ -639,7 +716,7 @@ export default function LandingView() {
 
     setSubmitting(true);
     try {
-      const finalFletePrice = displayFletePrice;
+      const finalFletePrice = finalDisplayPrice;
       const quote = await api.createPublicQuote({
         serviceType, clientCompany,
         originAddress: origin.address,      originCoords: origin.lat ? { lat: origin.lat, lng: origin.lng } : null,
@@ -816,7 +893,7 @@ export default function LandingView() {
 
           {/* Volume bar — static in header, only visible in step 3 with items */}
           {(() => {
-            const vol = totalVol(inventory, catalog);
+            const vol = invVol; // includes AI extra vol
             if (step !== 3 || !isFlete) return null;
             const recType = vol > 0 ? recommendVehicleType(vol, inventory, catalog) : 'furgon';
             const rec = VEHICLE_THRESHOLDS.find(t => t.vehicleType === recType) || VEHICLE_THRESHOLDS[0];
@@ -1113,9 +1190,41 @@ export default function LandingView() {
 
               {/* 3. Inventory picker */}
               <div style={{ background: '#f8fbff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 16, boxSizing: 'border-box' }}>
-                <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, color: '#64748b', textTransform: 'uppercase', marginBottom: 12 }}>
-                  ¿Qué vas a transportar?
+                {/* Header with volume progress */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: invVol > 0 ? 8 : 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, color: '#64748b', textTransform: 'uppercase' }}>
+                    ¿Qué vas a transportar?
+                  </div>
+                  {invVol > 0 && vehicleLabel && (
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', background: '#EEF4FF', borderRadius: 99, padding: '3px 10px' }}>
+                      {vehicleLabel.icon} {vehicleLabel.name} · {invVol.toFixed(1)} m³
+                    </div>
+                  )}
                 </div>
+
+                {/* Mini volume bar */}
+                {invVol > 0 && vehicleLabel && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ height: 6, background: '#E2E8F0', borderRadius: 99, overflow: 'hidden', marginBottom: 4 }}>
+                      <div style={{
+                        height: '100%', borderRadius: 99,
+                        width: `${Math.min(100, Math.round((invVol / vehicleLabel.maxVol) * 100))}%`,
+                        background: vehicleLoadPct > 85 ? '#ef4444' : vehicleLoadPct > 55 ? '#f59e0b' : 'var(--accent)',
+                        transition: 'width .4s cubic-bezier(.2,.8,.25,1)',
+                      }} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#94a3b8' }}>
+                      <span>{vehicleLoadPct}% del {vehicleLabel.name}</span>
+                      {extraM3Price > 0 && extraVol > 0 && serviceType !== 'mudanza' && (
+                        <span style={{ color: '#f59e0b', fontWeight: 700 }}>+${fmt(extraM3Price)}/m³ adicional</span>
+                      )}
+                      {extraM3Price > 0 && extraVol === 0 && serviceType !== 'mudanza' && includedM3 > 0 && (
+                        <span>{includedM3} m³ incluidos</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {(inventory.some(i => i.qty > 0) || inventoryExtras.trim()) && (
                   <button
                     type="button"
@@ -1141,65 +1250,6 @@ export default function LandingView() {
                 </div>
               )}
 
-              {/* 5. Help mode selector */}
-              <div style={{ background: '#f8fbff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, color: '#64748b', textTransform: 'uppercase', marginBottom: 12 }}>
-                  Servicio de carga
-                </div>
-                {[
-                  { v: 'none',    title: 'Solo traslado',          desc: 'El chofer conduce. Carga y descarga por tu cuenta.' },
-                  { v: 'driver',  title: 'Chofer ayuda',           desc: serviceType === 'mudanza' ? `El chofer ayuda a cargar y descargar. +$${fmt(driverHelpPrice)}` : 'El chofer ayuda a cargar y descargar. Incluido en precio base.' },
-                  { v: 'helpers', title: requiredHelpers > 1 ? `Chofer + ${requiredHelpers} ayudantes` : 'Chofer + ayudante',
-                    desc: serviceType === 'mudanza'
-                      ? `Chofer +$${fmt(driverHelpPrice)} · ayudante${requiredHelpers > 1 ? 's' : ''} +$${fmt(helperUnitPrice)} c/u`
-                      : `Chofer incluido + ayudantes adicionales. +$${fmt(helperUnitPrice)} c/u` },
-                ].filter(opt => !(serviceType === 'mudanza' && opt.v === 'none')).map(opt => {
-                  const isRecommended = invVol > 0 && suggestHelperMode !== 'none' && opt.v === suggestHelperMode;
-                  const isActive = helpMode === opt.v;
-                  const recommendedActive = isActive && isRecommended && !helpModeManual;
-                  return (
-                  <button key={opt.v} type="button" onClick={() => {
-                    setHelpModeManual(true);
-                    setHelpMode(opt.v);
-                  }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 12, width: '100%',
-                      padding: '10px 12px', marginBottom: 8, borderRadius: 10,
-                      border: `1.5px solid ${recommendedActive || (isRecommended && !isActive) ? '#f59e0b' : isActive ? 'var(--accent)' : '#E2E8F0'}`,
-                      background: recommendedActive ? '#fff7ed' : isActive ? '#EEF4FF' : '#fff',
-                      cursor: 'pointer', textAlign: 'left', transition: 'all .15s',
-                    }}
-                  >
-                    <div style={{
-                      width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                      border: `2px solid ${recommendedActive ? '#f59e0b' : isActive ? 'var(--accent)' : '#CBD5E1'}`,
-                      background: recommendedActive ? '#f59e0b' : isActive ? 'var(--accent)' : '#fff',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      {isActive && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff' }} />}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: recommendedActive ? '#b45309' : isActive ? 'var(--accent)' : '#0f172a' }}>
-                        {isRecommended && <span style={{ color: '#f59e0b', marginRight: 5 }}>★</span>}{opt.title}
-                      </div>
-                      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>{isRecommended ? `${opt.desc} · Recomendado para lo que llevas` : opt.desc}</div>
-                    </div>
-                  </button>
-                );})}
-                {helpMode === 'helpers' && (
-                  <div style={{ marginTop: 4, padding: '10px 12px', background: '#EEF4FF', borderRadius: 10, border: '1px solid #0052FF20' }}>
-                    <ExtraRow
-                      label="Número de ayudantes"
-                      sub={requiredHelpers > 0 ? `Recomendado por carga: ${requiredHelpers} ayudante${requiredHelpers > 1 ? 's' : ''}` : 'Ademas del chofer'}
-                      value={numHelpers}
-                      onDec={() => setNumHelpers(n => Math.max(1, n - 1))}
-                      onInc={() => setNumHelpers(n => n + 1)}
-                      onSet={v => setNumHelpers(Math.max(1, Number(v) || 1))}
-                    />
-                  </div>
-                )}
-              </div>
-
               {/* 6. Other extras */}
               <div style={{ background: '#f8fbff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, color: '#64748b', textTransform: 'uppercase', marginBottom: 12 }}>
@@ -1213,148 +1263,6 @@ export default function LandingView() {
                 <CheckRow label="Coordinar conserjería" sub="Trámite y aviso en edificio" checked={isConserjeria} onChange={setIsConserjeria} />
               </div>
 
-              {/* 7. Price calculator — shown in final step */}
-              <div style={{
-                display: 'none',
-                background: 'linear-gradient(135deg,#f4f7ff,#e8f0ff)',
-                border: '2px solid #0052FF20', borderRadius: 14, padding: '14px 16px',
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div>
-                    <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>
-                      Precio calculado
-                    </div>
-                    {partialDiscount > 0 && (
-                      <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 800, textDecoration: 'line-through', marginBottom: 2 }}>
-                        ${fmt(displayFletePriceBeforeDiscount)}
-                      </div>
-                    )}
-                    <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--accent)', letterSpacing: '-.5px', lineHeight: 1, transition: 'color .2s ease' }}>
-                      ${fmt(displayFletePrice)}
-                    </div>
-                    <div style={{ fontSize: 10, color: partialDiscount > 0 ? '#16a34a' : '#94a3b8', marginTop: 2, fontWeight: partialDiscount > 0 ? 800 : 500 }}>
-                      {partialDiscount > 0
-                        ? `Ahorras $${fmt(partialDiscount)} por ${partialDiscountStage}; al sumar carga el descuento baja.`
-                        : 'El precio final se confirma al contactarte'}
-                    </div>
-                  </div>
-                  {vehicleLabel && (
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: numTrucks > 1 ? 18 : 24 }}>{vehicleLabel.icon}{numTrucks > 1 ? ` ×${numTrucks}` : ''}</div>
-                      <div style={{ fontSize: 10, fontWeight: 800, color: numTrucks > 1 ? '#b91c1c' : '#475569' }}>
-                        {numTrucks > 1 ? `${numTrucks} camiones` : vehicleLabel.name}
-                      </div>
-                      <div style={{ fontSize: 9, color: '#94a3b8' }}>{numTrucks > 1 ? `${invVol.toFixed(0)} m³ en total` : vehicleLabel.desc}</div>
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ marginBottom: invVol > 0 ? 10 : 0 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginBottom: 4 }}>
-                    <span style={{ fontWeight: 700 }}>{invVol.toFixed(1)} m³</span>
-                    <span>{invVol === 0 ? 'Agrega artículos para calcular' : `${vehicleLoadPct}% de ${vehicleLabel?.name || 'vehículo'}`}</span>
-                  </div>
-                  <div style={{ height: 8, background: '#E2E8F0', borderRadius: 99, overflow: 'hidden' }}>
-                    <div style={{
-                      height: '100%', borderRadius: 99,
-                      width: `${vehicleLoadPct}%`,
-                      background: vehicleLoadPct > 85 ? '#ef4444' : vehicleLoadPct > 55 ? '#f59e0b' : 'var(--accent)',
-                      transition: 'width .5s cubic-bezier(.2,.8,.25,1), background .3s',
-                    }} />
-                  </div>
-                  {partialDiscount > 0 && (
-                    <div style={{ fontSize: 10, color: '#16a34a', fontWeight: 700, marginTop: 6 }}>
-                      Tramo de {partialDiscountStage}: mientras menos espacio ocupas, mayor descuento; al llenar el camión el descuento llega a $0.
-                    </div>
-                  )}
-                </div>
-
-                {invVol > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, borderTop: '1px solid #0052FF15', paddingTop: 8 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                      <span>
-                        {numTrucks > 1
-                          ? `${vehicleLabel?.name || ''} × ${numTrucks} camiones`
-                          : `Precio base ${vehicleLabel?.name || ''}`}
-                      </span>
-                      <span style={{ fontWeight: 700 }}>
-                        {numTrucks > 1 ? `$${fmt(rawVehicleBasePrice)} × ${numTrucks}` : `$${fmt(rawVehicleBasePrice)}`}
-                      </span>
-                    </div>
-                    {partialDiscount > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#16a34a' }}>
-                        <span>Descuento {partialDiscountStage} ({partialDiscountPct.toFixed(0)}%)</span>
-                        <span style={{ fontWeight: 700 }}>-${fmt(partialDiscount)}</span>
-                      </div>
-                    )}
-                    {serviceType !== 'mudanza' && extraVol > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                        <span>{extraVol.toFixed(2)} m³ adicionales sobre {includedM3} m³ × ${fmt(extraM3Price)}</span>
-                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(extraVolCost)}</span>
-                      </div>
-                    )}
-                    {distanceKm > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                        <span>
-                          {distanceKm} km × ${fmt(vehicleKmPrice)}/km
-                          {numTrucks > 1 ? ` × ${numTrucks}` : ''}
-                        </span>
-                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(distanceCost * numTrucks)}</span>
-                      </div>
-                    )}
-                    {numFloors > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                        <span>{numFloors} piso{numFloors > 1 ? 's' : ''} sin ascensor ({originFloors} retiro + {destinationFloors} entrega)</span>
-                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(floorCost)}</span>
-                      </div>
-                    )}
-                    {helpMode === 'driver' && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                        <span>
-                          {serviceType === 'mudanza'
-                            ? `Ayuda chofer${numTrucks > 1 ? ` × ${numTrucks} choferes` : ''}`
-                            : 'Ayuda del chofer incluida'}
-                        </span>
-                        <span style={{ fontWeight: 700, color: serviceType === 'mudanza' ? '#f59e0b' : '#22c55e' }}>
-                          {serviceType === 'mudanza' ? `+$${fmt(driverHelpCost)}` : '$0'}
-                        </span>
-                      </div>
-                    )}
-                    {helpMode === 'helpers' && (
-                      <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                          <span>
-                            {serviceType === 'mudanza'
-                              ? `Ayuda chofer${numTrucks > 1 ? ` × ${numTrucks} choferes` : ''}`
-                              : 'Ayuda del chofer incluida'}
-                          </span>
-                          <span style={{ fontWeight: 700, color: serviceType === 'mudanza' ? '#f59e0b' : '#22c55e' }}>
-                            {serviceType === 'mudanza' ? `+$${fmt(driverHelpCost)}` : '$0'}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                          <span>{numHelpers} ayudante{numHelpers > 1 ? 's' : ''} × ${fmt(helperUnitPrice)}</span>
-                          <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(helpersCost)}</span>
-                        </div>
-                      </>
-                    )}
-                    {needsPacking && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
-                        <span>
-                          Embalaje profesional
-                          {serviceType === 'mudanza' && invVol > 0 ? ` (${invVol.toFixed(1)} m³)` : ''}
-                        </span>
-                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(packCost)}</span>
-                      </div>
-                    )}
-                    {helpMode === 'none' && numFloors === 0 && !needsPacking && extraVolCost === 0 && (
-                      <div style={{ fontSize: 10, color: '#22c55e', fontWeight: 700, textAlign: 'center', marginTop: 2 }}>
-                        ✓ Sin costos adicionales — dejar en recepción no tiene cargo extra
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
 
               </div>
             </div>
@@ -1456,33 +1364,190 @@ export default function LandingView() {
               /* ── FORM — compact, no scroll ─────────────────────────── */
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-                {/* Price range — compact (solo si no es cotización grande) */}
-                {!isLargeQuote && priceRange && (
+                {/* Live price card */}
+                {!isLargeQuote && (
                   <div style={{
                     background: 'linear-gradient(135deg,#f4f7ff,#e8f0ff)',
                     border: '2px solid #0052FF20', borderRadius: 14, padding: '14px 16px',
-                    textAlign: 'center',
                   }}>
-                    <div style={{ fontSize: 10, color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-                      Precio calculado para tu {serviceType}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+                          Precio calculado para tu {serviceType}
+                        </div>
+                        {partialDiscount > 0 && (
+                          <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 800, textDecoration: 'line-through', marginBottom: 2 }}>
+                            ${fmt(displayFletePriceBeforeDiscount)}
+                          </div>
+                        )}
+                        <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--accent)', letterSpacing: '-.5px', lineHeight: 1.1 }}>
+                          {addressesVerified ? `$${fmt(finalDisplayPrice)}` : 'Sujeto a evaluación'}
+                        </div>
+                      </div>
+                      {vehicleLabel && (
+                        <div style={{ textAlign: 'right', flexShrink: 0, maxWidth: 110 }}>
+                          <div style={{ fontSize: numTrucks > 1 ? 18 : 24, lineHeight: 1 }}>{vehicleLabel.icon}{numTrucks > 1 ? ` ×${numTrucks}` : ''}</div>
+                          <div style={{ fontSize: 11, fontWeight: 800, color: numTrucks > 1 ? '#b91c1c' : '#475569', marginTop: 2 }}>
+                            {numTrucks > 1 ? `${numTrucks} camiones` : vehicleLabel.name}
+                          </div>
+                          <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2, lineHeight: 1.3 }}>
+                            {vehicleLabel.desc}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--accent)', letterSpacing: '-.5px', lineHeight: 1.1 }}>
-                      {addressesVerified ? `$${fmt(priceRange.exact || priceRange.lo)}` : 'Sujeto a evaluación'}
+                    {invVol > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, borderTop: '1px solid #0052FF15', paddingTop: 8, marginTop: 6 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
+                          <span>{numTrucks > 1 ? `${vehicleLabel?.name || ''} × ${numTrucks} camiones` : `Precio base ${vehicleLabel?.name || ''}`}</span>
+                          <span style={{ fontWeight: 700 }}>{numTrucks > 1 ? `$${fmt(rawVehicleBasePrice)} × ${numTrucks}` : `$${fmt(rawVehicleBasePrice)}`}</span>
+                        </div>
+                        {partialDiscount > 0 && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#16a34a' }}>
+                            <span>Descuento {partialDiscountStage} ({partialDiscountPct.toFixed(0)}%)</span>
+                            <span style={{ fontWeight: 700 }}>-${fmt(partialDiscount)}</span>
+                          </div>
+                        )}
+                        {/* Línea de m³ — siempre visible para flete cuando hay inventario */}
+                        {serviceType !== 'mudanza' && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
+                            {extraVol > 0 ? (
+                              <>
+                                <span>{extraVol.toFixed(1)} m³ extra × ${fmt(extraM3Price)}/m³ <span style={{ color: '#94a3b8' }}>(tarifa base: {includedM3} m³)</span></span>
+                                <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(extraVolCost)}</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>{invVol.toFixed(1)} m³{includedM3 > 0 ? ` de ${includedM3} m³ incluidos en tarifa base` : ''}</span>
+                                <span style={{ fontWeight: 700, color: '#22c55e' }}>Incluido</span>
+                              </>
+                            )}
+                          </div>
+                        )}
+                        {distanceKm > 0 && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
+                            <span>{distanceKm} km × ${fmt(vehicleKmPrice)}/km{numTrucks > 1 ? ` × ${numTrucks}` : ''}</span>
+                            <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(distanceCost * numTrucks)}</span>
+                          </div>
+                        )}
+                        {numFloors > 0 && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
+                            <span>{numFloors} piso{numFloors > 1 ? 's' : ''} sin ascensor</span>
+                            <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(floorCost)}</span>
+                          </div>
+                        )}
+                        {helpMode === 'driver' && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
+                            <span>{serviceType === 'mudanza' ? `Ayuda chofer${numTrucks > 1 ? ` × ${numTrucks}` : ''}` : 'Ayuda del chofer'}</span>
+                            <span style={{ fontWeight: 700, color: serviceType === 'mudanza' && driverHelpCost > 0 ? '#f59e0b' : '#22c55e' }}>
+                              {serviceType === 'mudanza' && driverHelpCost > 0 ? `+$${fmt(driverHelpCost)}` : 'Incluido'}
+                            </span>
+                          </div>
+                        )}
+                        {helpMode === 'helpers' && (
+                          <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
+                              <span>{serviceType === 'mudanza' ? `Ayuda chofer${numTrucks > 1 ? ` × ${numTrucks}` : ''}` : 'Ayuda del chofer'}</span>
+                              <span style={{ fontWeight: 700, color: serviceType === 'mudanza' && driverHelpCost > 0 ? '#f59e0b' : '#22c55e' }}>
+                                {serviceType === 'mudanza' && driverHelpCost > 0 ? `+$${fmt(driverHelpCost)}` : 'Incluido'}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
+                              <span>{numHelpers} ayudante{numHelpers > 1 ? 's' : ''} × ${fmt(helperUnitPrice)}</span>
+                              <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(helpersCost)}</span>
+                            </div>
+                          </>
+                        )}
+                        {needsPacking && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
+                            <span>Embalaje profesional</span>
+                            <span style={{ fontWeight: 700, color: '#f59e0b' }}>+${fmt(packCost)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {!addressesVerified && (
+                      <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 6 }}>
+                        Selecciona direcciones sugeridas para cerrar el cálculo automático.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Servicio de carga — selector movido al paso 4 */}
+                {!isLargeQuote && (
+                  <div style={{ background: '#f8fbff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 16 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, color: '#64748b', textTransform: 'uppercase', marginBottom: 12 }}>
+                      Servicio de carga
                     </div>
-                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 6, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '3px 8px' }}>
-                      {vehicleLabel && <span>{vehicleLabel.icon} {vehicleLabel.name}</span>}
-                      {distanceKm && <span>· {distanceKm} km</span>}
-                      {helpMode === 'driver' && <span>· {serviceType === 'mudanza' ? 'Chofer ayuda' : 'Chofer ayuda incluido'}</span>}
-                      {helpMode === 'helpers' && <span>· +{numHelpers} ayudante{numHelpers !== 1 ? 's' : ''}</span>}
-                      {numFloors > 0 && <span>· {numFloors} piso{numFloors > 1 ? 's' : ''}</span>}
-                    </div>
-                    <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
-                      {addressesVerified ? 'Lo revisaremos contigo antes de coordinar.' : 'Selecciona direcciones sugeridas para cerrar el cálculo automático.'}
-                    </div>
+                    {[
+                      { v: 'none',    title: 'Solo traslado',     desc: 'El chofer conduce. Carga y descarga por tu cuenta.' },
+                      { v: 'driver',  title: 'Chofer ayuda',      desc: serviceType === 'mudanza' && driverHelpPrice > 0 ? `El chofer ayuda a cargar y descargar. +$${fmt(driverHelpPrice)}` : 'El chofer ayuda a cargar y descargar. Incluido en precio base.' },
+                      { v: 'helpers', title: 'Chofer + ayudante', desc: serviceType === 'mudanza'
+                          ? `Chofer${driverHelpPrice > 0 ? ` +$${fmt(driverHelpPrice)}` : ' incluido'} · ayudante +$${fmt(helperUnitPrice)} c/u`
+                          : `Chofer incluido + ayudantes. +$${fmt(helperUnitPrice)} c/u` },
+                    ].filter(opt => !(serviceType === 'mudanza' && opt.v === 'none')).map(opt => {
+                      const isRecommended = invVol > 0 && suggestHelperMode !== 'none' && opt.v === suggestHelperMode;
+                      const isActive = helpMode === opt.v;
+                      const recommendedActive = isActive && isRecommended && !helpModeManual;
+                      return (
+                        <button key={opt.v} type="button" onClick={() => { setHelpModeManual(true); setHelpMode(opt.v); }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 12, width: '100%',
+                            padding: '10px 12px', marginBottom: 8, borderRadius: 10,
+                            border: `1.5px solid ${recommendedActive || (isRecommended && !isActive) ? '#f59e0b' : isActive ? 'var(--accent)' : '#E2E8F0'}`,
+                            background: recommendedActive ? '#fff7ed' : isActive ? '#EEF4FF' : '#fff',
+                            cursor: 'pointer', textAlign: 'left', transition: 'all .15s',
+                          }}
+                        >
+                          <div style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: `2px solid ${recommendedActive ? '#f59e0b' : isActive ? 'var(--accent)' : '#CBD5E1'}`, background: recommendedActive ? '#f59e0b' : isActive ? 'var(--accent)' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {isActive && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff' }} />}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: recommendedActive ? '#b45309' : isActive ? 'var(--accent)' : '#0f172a' }}>
+                              {isRecommended && <span style={{ color: '#f59e0b', marginRight: 5 }}>★</span>}{opt.title}
+                            </div>
+                            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>
+                              {isRecommended ? `${opt.desc} · Recomendado` : opt.desc}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                    {helpMode === 'helpers' && (
+                      <div style={{ marginTop: 4, padding: '10px 12px', background: '#EEF4FF', borderRadius: 10, border: '1px solid #0052FF20' }}>
+                        <ExtraRow
+                          label="Número de ayudantes"
+                          sub={requiredHelpers > 0 ? `Recomendado por carga: 1 ayudante` : 'Además del chofer'}
+                          value={numHelpers}
+                          onDec={() => setNumHelpers(n => Math.max(1, n - 1))}
+                          onInc={() => setNumHelpers(n => n + 1)}
+                          onSet={v => setNumHelpers(Math.max(1, Number(v) || 1))}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {!isLargeQuote && recommendationCard}
+
+                {/* Resumen de carga — verificar antes de enviar */}
+                <InventoryReview
+                  inventory={inventory}
+                  inventoryExtras={inventoryExtras}
+                  origin={origin}
+                  dest={dest}
+                  numFloors={numFloors}
+                  originFloors={originFloors}
+                  destinationFloors={destinationFloors}
+                  needsPacking={needsPacking}
+                  isConserjeria={isConserjeria}
+                  deliveryDate={deliveryDate}
+                  deliveryTime={deliveryTime}
+                  invVol={invVol}
+                  vehicleLabel={vehicleLabel}
+                  onModify={() => setStep(3)}
+                />
 
                 <div style={{ background: '#f8fbff', border: '1px solid #E2E8F0', borderRadius: 14, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: '#64748b', textTransform: 'uppercase' }}>Tus datos</div>
@@ -1543,17 +1608,17 @@ export default function LandingView() {
               <button
                 type="button"
                 onClick={goNext}
-                disabled={!canGoNext()}
+                disabled={!canGoNext() || loadingAiPrice}
                 style={{
                   flex: 2, padding: '12px', borderRadius: 12, border: 'none',
-                  background: canGoNext() ? 'linear-gradient(135deg,#0052FF,#0077FF)' : '#E2E8F0',
-                  color: canGoNext() ? '#fff' : '#94a3b8',
-                  fontSize: 13, fontWeight: 800, cursor: canGoNext() ? 'pointer' : 'not-allowed',
-                  boxShadow: canGoNext() ? '0 8px 20px #0052FF28' : 'none',
+                  background: (canGoNext() && !loadingAiPrice) ? 'linear-gradient(135deg,#0052FF,#0077FF)' : '#E2E8F0',
+                  color: (canGoNext() && !loadingAiPrice) ? '#fff' : '#94a3b8',
+                  fontSize: 13, fontWeight: 800, cursor: (canGoNext() && !loadingAiPrice) ? 'pointer' : 'not-allowed',
+                  boxShadow: (canGoNext() && !loadingAiPrice) ? '0 8px 20px #0052FF28' : 'none',
                   transition: 'all .18s',
                 }}
               >
-                Siguiente →
+                {loadingAiPrice ? 'Calculando precio…' : 'Siguiente →'}
               </button>
             )}
           </div>
@@ -1562,6 +1627,123 @@ export default function LandingView() {
       </div>{/* end .quote-overlay */}
 
     </main>
+  );
+}
+
+// ── Inventory review (step 4 summary) ─────────────────────────────────────────
+
+function InventoryReview({ inventory, inventoryExtras, origin, dest, numFloors, originFloors, destinationFloors, needsPacking, isConserjeria, deliveryDate, deliveryTime, invVol, vehicleLabel, onModify }) {
+  const [open, setOpen] = React.useState(false);
+  const activeItems = inventory.filter(i => i.qty > 0);
+  const hasContent = activeItems.length > 0 || inventoryExtras?.trim();
+  if (!hasContent) return null;
+
+  const totalQty = activeItems.reduce((s, i) => s + i.qty, 0);
+
+  const extras = [
+    numFloors > 0 && `${numFloors} piso${numFloors > 1 ? 's' : ''} sin ascensor (${originFloors} retiro + ${destinationFloors} entrega)`,
+    needsPacking && 'Embalaje profesional',
+    isConserjeria && 'Coordinar conserjería',
+    deliveryDate && `Fecha: ${deliveryDate}${deliveryTime ? ' · ' + deliveryTime : ''}`,
+  ].filter(Boolean);
+
+  return (
+    <div style={{ border: `1.5px solid ${open ? 'var(--accent)' : '#E2E8F0'}`, borderRadius: 14, overflow: 'hidden', transition: 'border-color .15s' }}>
+      {/* Header */}
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          width: '100%', background: open ? '#f4f8ff' : '#f8fafc',
+          border: 'none', cursor: 'pointer', padding: '12px 14px', minHeight: 48,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>📋</span>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: open ? 'var(--accent)' : '#475569' }}>
+              Resumen de lo que llevas
+            </div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>
+              {totalQty} artículo{totalQty !== 1 ? 's' : ''} · {invVol.toFixed(1)} m³
+              {vehicleLabel ? ` · ${vehicleLabel.icon} ${vehicleLabel.name}` : ''}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>
+            {open ? 'Cerrar' : 'Verificar'}
+          </span>
+          <span style={{
+            fontSize: 11, color: '#94a3b8',
+            display: 'inline-block', lineHeight: 1,
+            transform: open ? 'rotate(0deg)' : 'rotate(-90deg)',
+            transition: 'transform .2s',
+          }}>▼</span>
+        </div>
+      </button>
+
+      {/* Body */}
+      {open && (
+        <div style={{ padding: '12px 14px 14px', borderTop: '1px solid #EEF2F8' }}>
+          {/* Route */}
+          {(origin?.address || dest?.address) && (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 10, fontSize: 11, color: '#475569' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+                {origin?.address && <div><span style={{ color: '#94a3b8', fontWeight: 700 }}>DESDE</span> {origin.address}</div>}
+                {dest?.address && <div><span style={{ color: '#94a3b8', fontWeight: 700 }}>HASTA</span> {dest.address}</div>}
+              </div>
+            </div>
+          )}
+
+          {/* Items grid */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 6px', marginBottom: activeItems.length > 0 ? 10 : 0 }}>
+            {activeItems.map(item => (
+              <span key={item.id} style={{
+                fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 99,
+                background: '#EEF4FF', color: 'var(--accent)', border: '1px solid #0052FF20',
+                whiteSpace: 'nowrap',
+              }}>
+                {item.qty > 1 ? `${item.qty}× ` : ''}{item.name}
+              </span>
+            ))}
+          </div>
+
+          {/* Free text extras */}
+          {inventoryExtras?.trim() && (
+            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8, background: '#f8fafc', borderRadius: 8, padding: '6px 10px', border: '1px solid #e2e8f0' }}>
+              {inventoryExtras}
+            </div>
+          )}
+
+          {/* Additional services */}
+          {extras.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 6px', marginBottom: 10 }}>
+              {extras.map(e => (
+                <span key={e} style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 99, background: '#fff7ed', color: '#92400e', border: '1px solid #fed7aa' }}>
+                  {e}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Go back button */}
+          <button
+            type="button"
+            onClick={onModify}
+            style={{
+              width: '100%', padding: '9px', borderRadius: 10,
+              border: '1.5px solid #dbe3ef', background: '#fff',
+              color: '#475569', fontSize: 12, fontWeight: 700,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}
+          >
+            ← Modificar lo que llevo
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

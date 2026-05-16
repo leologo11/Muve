@@ -182,4 +182,8 @@ export const api = {
   getPublicInventoryConfigs: () => request('GET', '/public/inventory-configs'),
   calculateDistance: (data) => request('POST', '/public/distance', data),
   getQuoteEstimate: (data) => request('POST', '/public/quote-estimate', data),
+  estimateLoad: (data) => request('POST', '/public/estimate-load', data),
+  reviewPrice: (data) => request('POST', '/public/price-review', data),
+  aiQuote: (data) => request('POST', '/public/ai-quote', data),
+  aiQuoteFeedback: (data) => request('POST', '/public/ai-quote-feedback', data),
 };
