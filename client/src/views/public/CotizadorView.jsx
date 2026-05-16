@@ -182,7 +182,7 @@ function CtaBar({ children }) {
   return (
     <div style={{
       flexShrink: 0, background: SURF, borderTop: `1px solid ${BDR}`,
-      padding: '12px 16px', paddingBottom: 'max(12px,env(safe-area-inset-bottom,12px))',
+      padding: '12px 16px', paddingBottom: 'max(16px,env(safe-area-inset-bottom,16px))',
       display: 'flex', gap: 10, zIndex: 10,
     }}>{children}</div>
   );
@@ -768,10 +768,10 @@ function ScreenAddresses({ state, setState, onNext, onBack }) {
   }, [from.lat, to.lat]);
 
   return (
-    <div style={{ minHeight: '100dvh', background: BG, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100dvh', background: BG, display: 'flex', flexDirection: 'column' }}>
       <Header step={1} total={4} title="¿Desde dónde?" onBack={onBack}/>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 0' }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '16px 16px 0' }}>
 
         {/* Leaflet map */}
         <LeafletRouteMap from={from} to={to} distanceKm={distanceKm}/>
@@ -866,10 +866,10 @@ function ScreenItems({ state, setState, onNext, onBack }) {
   const selectedItems = CATALOG.filter(c => (inventory[c.id] || 0) > 0).sort((a, b) => b.vol - a.vol);
 
   return (
-    <div style={{ minHeight: '100dvh', background: BG, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100dvh', background: BG, display: 'flex', flexDirection: 'column' }}>
       <Header step={2} total={4} title="¿Qué llevas?" onBack={onBack}/>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 0' }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '14px 16px 0' }}>
 
         {/* Counter */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -981,10 +981,10 @@ function ScreenExtras({ state, setState, onNext, onBack }) {
   const selectedItems = CATALOG.filter(c => (inventory[c.id] || 0) > 0).sort((a, b) => b.vol - a.vol);
 
   return (
-    <div style={{ minHeight: '100dvh', background: BG, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100dvh', background: BG, display: 'flex', flexDirection: 'column' }}>
       <Header step={3} total={4} title="Detalles del traslado" onBack={onBack}/>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 0' }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '14px 16px 0' }}>
         <p style={{ fontSize: 13, color: T2, lineHeight: 1.5, margin: '0 0 14px' }}>
           Cuéntanos un par de detalles para ajustar el precio. Todo es opcional.
         </p>
@@ -1102,10 +1102,10 @@ function ScreenResult({ state, onRestart, onBack, onNext }) {
   ].filter(Boolean);
 
   return (
-    <div style={{ minHeight: '100dvh', background: BG, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100dvh', background: BG, display: 'flex', flexDirection: 'column' }}>
       <Header step={4} total={4} title="Tu cotización" onBack={onBack}/>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 0' }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '14px 16px 0' }}>
         {/* Vehicle hero */}
         <div style={{ background: GRAD_DEEP, borderRadius: 20, padding: '20px', marginBottom: 14, position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: -40, right: -30, width: 180, height: 180, borderRadius: '50%', background: 'rgba(63,190,237,.15)', pointerEvents: 'none' }}/>
@@ -1244,10 +1244,10 @@ function ScreenContact({ state, onBack, onSubmit, saving }) {
   const inputStyle = { flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, fontWeight: 600, color: N, fontFamily: 'Inter,system-ui,sans-serif' };
 
   return (
-    <div style={{ minHeight: '100dvh', background: BG, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100dvh', background: BG, display: 'flex', flexDirection: 'column' }}>
       <Header step={4} total={4} title="Tus datos" onBack={onBack}/>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '18px 16px 0' }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '18px 16px 0' }}>
         <p style={{ fontSize: 14, color: T2, lineHeight: 1.55, margin: '0 0 20px' }}>
           Déjanos tus datos y te contactamos para confirmar detalles y coordinar el traslado.
         </p>
