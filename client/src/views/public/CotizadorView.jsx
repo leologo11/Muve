@@ -622,7 +622,7 @@ const MOVE_ROW2 = [
 
 function ScreenWelcome({ onStart }) {
   return (
-    <div style={{ minHeight: '100dvh', background: 'linear-gradient(175deg,#E8F3FF 0%,#F7FAFF 50%,#FFFFFF 100%)', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+    <div style={{ height: '100dvh', background: 'linear-gradient(175deg,#E8F3FF 0%,#F7FAFF 50%,#FFFFFF 100%)', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
       <style>{`
         @keyframes czRipple { to { transform: scale(1); opacity: 0; } }
         @keyframes czBtnShimmer {
@@ -633,7 +633,7 @@ function ScreenWelcome({ onStart }) {
         @keyframes czTickerR { from { transform: translateX(-50%) } to { transform: translateX(0)    } }
         @keyframes czStepPop {
           0%,100% { transform: scale(1);    box-shadow: 0 3px 10px rgba(27,108,245,.3); }
-          50%      { transform: scale(1.10); box-shadow: 0 5px 22px rgba(27,108,245,.65), 0 0 0 7px rgba(27,108,245,.10); }
+          50%      { transform: scale(1.10); box-shadow: 0 5px 22px rgba(27,108,245,.65), 0 0 0 6px rgba(27,108,245,.10); }
         }
         .czStep1 { animation: czStepPop 2.4s ease-in-out 0.1s  infinite; }
         .czStep2 { animation: czStepPop 2.4s ease-in-out 0.75s infinite; }
@@ -647,41 +647,39 @@ function ScreenWelcome({ onStart }) {
       `}</style>
 
       {/* Background glow blobs */}
-      <div style={{ position:'absolute', top:-80, right:-60,  width:340, height:340, borderRadius:'50%', background:`radial-gradient(circle,${C}1E,transparent 65%)`, pointerEvents:'none' }}/>
-      <div style={{ position:'absolute', bottom:0, left:-80,  width:300, height:300, borderRadius:'50%', background:`radial-gradient(circle,${B}10,transparent 68%)`, pointerEvents:'none' }}/>
-      <div style={{ position:'absolute', top:'40%', right:-40, width:200, height:200, borderRadius:'50%', background:`radial-gradient(circle,${B}0A,transparent 70%)`, pointerEvents:'none' }}/>
+      <div style={{ position:'absolute', top:-80, right:-60, width:300, height:300, borderRadius:'50%', background:`radial-gradient(circle,${C}1E,transparent 65%)`, pointerEvents:'none' }}/>
+      <div style={{ position:'absolute', bottom:0, left:-80, width:260, height:260, borderRadius:'50%', background:`radial-gradient(circle,${B}10,transparent 68%)`, pointerEvents:'none' }}/>
 
       {/* Logo bar */}
-      <div style={{ padding:'20px 22px 0', display:'flex', justifyContent:'space-between', alignItems:'center', position:'relative', zIndex:2 }}>
-        <img src="/logo_reducido.png" alt="MUVE" style={{ height:42, objectFit:'contain' }}/>
-        <span style={{ fontSize:10, fontWeight:800, padding:'4px 10px', borderRadius:99, background:`${B}14`, color:B, letterSpacing:0.8, textTransform:'uppercase' }}>Beta</span>
+      <div style={{ padding:'14px 20px 0', flexShrink:0, position:'relative', zIndex:2 }}>
+        <img src="/logo_reducido.png" alt="MUVE" style={{ height:36, objectFit:'contain' }}/>
       </div>
 
       {/* Hero */}
-      <div style={{ padding:'16px 24px 0', position:'relative', zIndex:2, display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center' }}>
-        <div style={{ fontSize:11, fontWeight:800, color:B, textTransform:'uppercase', letterSpacing:1.5, marginBottom:10 }}>
+      <div style={{ padding:'10px 22px 0', flexShrink:0, position:'relative', zIndex:2, display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center' }}>
+        <div style={{ fontSize:10, fontWeight:800, color:B, textTransform:'uppercase', letterSpacing:1.5, marginBottom:8 }}>
           Fletes · Mudanzas · Chile
         </div>
-        <h1 style={{ margin:'0 0 10px', fontSize:38, lineHeight:1.07, fontWeight:900, letterSpacing:'-1.5px', color:N }}>
+        <h1 style={{ margin:'0 0 8px', fontSize:32, lineHeight:1.1, fontWeight:900, letterSpacing:'-1.2px', color:N }}>
           Tu precio de traslado,<br/>
           <span style={{ background:GRAD, WebkitBackgroundClip:'text', backgroundClip:'text', color:'transparent' }}>en 30 segundos</span>
         </h1>
-        <p style={{ color:T2, fontSize:13.5, lineHeight:1.6, margin:'0 0 18px', maxWidth:268 }}>
+        <p style={{ color:T2, fontSize:13, lineHeight:1.5, margin:'0 0 12px', maxWidth:264 }}>
           Sin registro ni llamadas. Ingresa origen, destino y artículos — precio al instante.
         </p>
 
-        {/* Compact step bar */}
-        <div style={{ display:'flex', alignItems:'center', width:'100%', maxWidth:320, marginBottom:20 }}>
+        {/* Step bar */}
+        <div style={{ display:'flex', alignItems:'center', width:'100%', maxWidth:300, marginBottom:14 }}>
           {[{n:'1',t:'Ruta',cls:'czStep1'},{n:'2',t:'Artículos',cls:'czStep2'},{n:'3',t:'Precio',cls:'czStep3'}].map((s,i) => (
             <React.Fragment key={s.n}>
               {i > 0 && <div style={{ flex:1, height:2, background:`linear-gradient(90deg,${B}55,${C}55)`, borderRadius:99 }}/>}
-              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:5 }}>
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
                 <div className={s.cls} style={{
-                  width:46, height:46, borderRadius:'50%', background:GRAD,
-                  display:'grid', placeItems:'center', color:'#fff', fontSize:19, fontWeight:900,
+                  width:40, height:40, borderRadius:'50%', background:GRAD,
+                  display:'grid', placeItems:'center', color:'#fff', fontSize:17, fontWeight:900,
                   flexShrink:0, boxShadow:`0 3px 10px ${B}35`,
                 }}>{s.n}</div>
-                <div style={{ fontSize:11, fontWeight:700, color:T2, letterSpacing:0.1 }}>{s.t}</div>
+                <div style={{ fontSize:10, fontWeight:700, color:T2 }}>{s.t}</div>
               </div>
               {i < 2 && <div style={{ flex:1, height:2, background:`linear-gradient(90deg,${B}55,${C}55)`, borderRadius:99 }}/>}
             </React.Fragment>
@@ -693,59 +691,59 @@ function ScreenWelcome({ onStart }) {
           type="button"
           onClick={onStart}
           onMouseDown={addRipple}
-          className="czCta czRippleBtn"
+          className="czCta"
           style={{
-            width:'100%', maxWidth:360, padding:'19px', borderRadius:18, border:'none',
-            color:'#fff', fontSize:18, fontWeight:900, cursor:'pointer', letterSpacing:'-0.3px',
-            boxShadow:`0 14px 36px rgba(27,108,245,.48), 0 3px 10px rgba(27,108,245,.28)`,
-            display:'flex', alignItems:'center', justifyContent:'center', gap:12,
-            marginBottom:14, position:'relative', overflow:'hidden',
+            width:'100%', maxWidth:360, padding:'15px', borderRadius:16, border:'none',
+            color:'#fff', fontSize:17, fontWeight:900, cursor:'pointer', letterSpacing:'-0.3px',
+            boxShadow:`0 10px 28px rgba(27,108,245,.45), 0 3px 8px rgba(27,108,245,.25)`,
+            display:'flex', alignItems:'center', justifyContent:'center', gap:10,
+            marginBottom:10, position:'relative', overflow:'hidden',
           }}
         >
           <span>Cotizar mi traslado</span>
-          <ArrowRight size={21} color="#fff" strokeWidth={2.7}/>
+          <ArrowRight size={19} color="#fff" strokeWidth={2.7}/>
         </button>
 
         {/* Trust chips */}
-        <div style={{ display:'flex', gap:7, flexWrap:'wrap', justifyContent:'center', marginBottom:18 }}>
+        <div style={{ display:'flex', gap:6, flexWrap:'wrap', justifyContent:'center', marginBottom:10 }}>
           {[{e:'⚡',t:'Menos de 1 min'},{e:'🚫',t:'Sin registro'},{e:'💰',t:'Precio real'}].map(b => (
-            <div key={b.t} style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 11px', background:SURF, border:`1.5px solid ${BDR}`, borderRadius:99, boxShadow:'0 1px 4px rgba(10,31,61,.05)' }}>
-              <span style={{ fontSize:12 }}>{b.e}</span>
+            <div key={b.t} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 10px', background:SURF, border:`1.5px solid ${BDR}`, borderRadius:99 }}>
+              <span style={{ fontSize:11 }}>{b.e}</span>
               <span style={{ fontSize:11, fontWeight:700, color:T2 }}>{b.t}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* ── What we move — slow ticker ────────────────────────────── */}
-      <div style={{ flex:1, display:'flex', flexDirection:'column', justifyContent:'center', gap:10, padding:'0 0 max(20px,env(safe-area-inset-bottom,20px))', position:'relative', zIndex:2 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10, padding:'0 20px', marginBottom:4 }}>
+      {/* ── Ticker — ocupa el espacio restante ───────────────────── */}
+      <div style={{ flex:1, display:'flex', flexDirection:'column', justifyContent:'center', gap:8, paddingBottom:'max(16px,env(safe-area-inset-bottom,16px))', position:'relative', zIndex:2, minHeight:0 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'0 20px', marginBottom:2 }}>
           <div style={{ flex:1, height:1, background:BDR }}/>
-          <span style={{ fontSize:10, fontWeight:800, color:T3, textTransform:'uppercase', letterSpacing:1.2, whiteSpace:'nowrap' }}>
+          <span style={{ fontSize:9, fontWeight:800, color:T3, textTransform:'uppercase', letterSpacing:1.2, whiteSpace:'nowrap' }}>
             Movemos lo que importa
           </span>
           <div style={{ flex:1, height:1, background:BDR }}/>
         </div>
 
-        {/* Row 1 — izquierda, 38s */}
+        {/* Row 1 — izquierda */}
         <div style={{ overflow:'hidden', maskImage:'linear-gradient(90deg,transparent,black 6%,black 94%,transparent)', WebkitMaskImage:'linear-gradient(90deg,transparent,black 6%,black 94%,transparent)' }}>
-          <div style={{ display:'flex', gap:10, width:'max-content', animation:'czTicker 38s linear infinite' }}>
+          <div style={{ display:'flex', gap:8, width:'max-content', animation:'czTicker 38s linear infinite' }}>
             {[...MOVE_ROW1, ...MOVE_ROW1].map(({ icon, label }, i) => (
-              <div key={i} style={{ flexShrink:0, display:'flex', alignItems:'center', gap:7, padding:'9px 15px', borderRadius:13, background:'rgba(255,255,255,.9)', border:'1.5px solid rgba(27,108,245,.10)', boxShadow:'0 2px 8px rgba(27,108,245,.07)' }}>
-                <span style={{ fontSize:18 }}>{icon}</span>
-                <span style={{ fontSize:13, fontWeight:700, color:T2 }}>{label}</span>
+              <div key={i} style={{ flexShrink:0, display:'flex', alignItems:'center', gap:6, padding:'7px 13px', borderRadius:11, background:'rgba(255,255,255,.9)', border:'1.5px solid rgba(27,108,245,.10)', boxShadow:'0 1px 6px rgba(27,108,245,.07)' }}>
+                <span style={{ fontSize:16 }}>{icon}</span>
+                <span style={{ fontSize:12, fontWeight:700, color:T2 }}>{label}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Row 2 — derecha, 44s */}
+        {/* Row 2 — derecha */}
         <div style={{ overflow:'hidden', maskImage:'linear-gradient(90deg,transparent,black 6%,black 94%,transparent)', WebkitMaskImage:'linear-gradient(90deg,transparent,black 6%,black 94%,transparent)' }}>
-          <div style={{ display:'flex', gap:10, width:'max-content', animation:'czTickerR 44s linear infinite' }}>
+          <div style={{ display:'flex', gap:8, width:'max-content', animation:'czTickerR 44s linear infinite' }}>
             {[...MOVE_ROW2, ...MOVE_ROW2].map(({ icon, label }, i) => (
-              <div key={i} style={{ flexShrink:0, display:'flex', alignItems:'center', gap:7, padding:'9px 15px', borderRadius:13, background:'rgba(255,255,255,.9)', border:'1.5px solid rgba(27,108,245,.10)', boxShadow:'0 2px 8px rgba(27,108,245,.07)' }}>
-                <span style={{ fontSize:18 }}>{icon}</span>
-                <span style={{ fontSize:13, fontWeight:700, color:T2 }}>{label}</span>
+              <div key={i} style={{ flexShrink:0, display:'flex', alignItems:'center', gap:6, padding:'7px 13px', borderRadius:11, background:'rgba(255,255,255,.9)', border:'1.5px solid rgba(27,108,245,.10)', boxShadow:'0 1px 6px rgba(27,108,245,.07)' }}>
+                <span style={{ fontSize:16 }}>{icon}</span>
+                <span style={{ fontSize:12, fontWeight:700, color:T2 }}>{label}</span>
               </div>
             ))}
           </div>
