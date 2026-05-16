@@ -441,6 +441,49 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
   const [approving,   setApproving]   = useState(false);
   const [priceEdited, setPriceEdited] = useState(false);
 
+  // Bot training feedback
+  const fromCotizador = (q.clientNotes || '').includes('Cotizador 2.0');
+  const aiMidPrice = (q.priceMin && q.priceMax) ? Math.round((Number(q.priceMin) + Number(q.priceMax)) / 2) : 0;
+  const [fbOpen,       setFbOpen]       = useState(false);
+  const [fbRealPrice,  setFbRealPrice]  = useState('');
+  const [fbStatus,     setFbStatus]     = useState('approved');
+  const [fbVehicle,    setFbVehicle]    = useState(q.vehicleType || '');
+  const [fbNotes,      setFbNotes]      = useState('');
+  const [fbSaving,     setFbSaving]     = useState(false);
+  const [fbDone,       setFbDone]       = useState(false);
+
+  const saveFeedback = async () => {
+    const realPrice = Number(fbRealPrice);
+    if (!realPrice || realPrice < 5000) return toast('❌ Ingresa el precio real acordado');
+    setFbSaving(true);
+    try {
+      const invArr = inventory.filter(i => i.qty > 0);
+      const itemsText = invArr.map(i => `${i.qty}x ${i.name}`).join(', ');
+      await api.aiQuoteFeedback({
+        itemsText: itemsText || inventoryExtras || q.itemsDescription || '',
+        itemsJson: invArr.length ? invArr : null,
+        freeText: inventoryExtras || '',
+        distanceKm: km || null,
+        origin: originAddr,
+        destination: destAddr,
+        numHelpers: actualHelpers,
+        numFloors: floors,
+        aiVehicle: q.vehicleType || '',
+        aiVehicleName: VEHICLE_NAMES[q.vehicleType] || q.vehicleType || '',
+        aiDetectedType: q.serviceType || 'flete',
+        aiPrice: fbStatus === 'approved' ? realPrice : (aiMidPrice || realPrice),
+        aiTwoTrips: false,
+        status: fbStatus,
+        correctPrice: fbStatus === 'corrected' ? realPrice : null,
+        correctVehicle: fbStatus === 'corrected' ? (fbVehicle || null) : null,
+        notes: fbNotes || `Cotización real − ${q.quoteCode}`,
+      });
+      setFbDone(true);
+      toast('✅ Caso guardado para el bot');
+    } catch (err) { toast('❌ ' + err.message); }
+    finally { setFbSaving(false); }
+  };
+
   const cfg = allConfigs.find(c => c.vehicleType === vehicleType) || allConfigs[0];
   const km  = Number(distKm) || 0;
   const driverHelps = helpMode !== 'none';
@@ -803,6 +846,80 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
           style={{ ...tinp, resize: 'vertical' }}
         />
       </Section>
+
+      {/* ── ENTRENAR BOT ── */}
+      {fromCotizador && !fbDone && (
+        <div style={{ marginBottom: 12, borderRadius: 12, border: '1.5px solid #7c3aed28', overflow: 'hidden' }}>
+          <button
+            onClick={() => setFbOpen(o => !o)}
+            style={{ width: '100%', padding: '10px 14px', background: '#7c3aed0a', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, fontWeight: 700, color: '#7c3aed' }}
+          >
+            <span>🤖 Entrenar bot con este caso</span>
+            <span>{fbOpen ? '▲' : '▼'}</span>
+          </button>
+          {fbOpen && (
+            <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {aiMidPrice > 0 && (
+                <div style={{ fontSize: 12, color: 'var(--muted)', background: 'var(--card2)', padding: '8px 10px', borderRadius: 8 }}>
+                  Precio que el bot estimó: <strong>${fmt(aiMidPrice)}</strong>
+                  {(q.clientNotes || '').includes('REVISIÓN MANUAL') && <span style={{ color: '#f59e0b', marginLeft: 6 }}>⚠ No se mostró al cliente</span>}
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 4 }}>Precio real acordado con el cliente *</div>
+                <input
+                  type="number"
+                  value={fbRealPrice}
+                  onChange={e => setFbRealPrice(e.target.value)}
+                  placeholder="Ej: 120000"
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', fontSize: 13, fontWeight: 700 }}
+                />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 4 }}>¿El bot acertó?</div>
+                <div style={{ display: 'flex', gap: 7 }}>
+                  {[['approved','✅ Sí, precio correcto'],['corrected','⚠️ No, hay corrección']].map(([v,l]) => (
+                    <button key={v} onClick={() => setFbStatus(v)} style={{ flex: 1, padding: '8px', borderRadius: 8, border: `1.5px solid ${fbStatus === v ? '#7c3aed' : 'var(--border)'}`, background: fbStatus === v ? '#7c3aed12' : 'transparent', fontSize: 12, fontWeight: 700, color: fbStatus === v ? '#7c3aed' : 'var(--muted)', cursor: 'pointer' }}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {fbStatus === 'corrected' && (
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 4 }}>Vehículo correcto</div>
+                  <select value={fbVehicle} onChange={e => setFbVehicle(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', fontSize: 13 }}>
+                    <option value="">Sin cambio</option>
+                    {['furgon','camion34','camionLargo'].map(v => <option key={v} value={v}>{VEHICLE_ICONS[v]} {VEHICLE_NAMES[v]}</option>)}
+                  </select>
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 4 }}>Nota (opcional)</div>
+                <input
+                  type="text"
+                  value={fbNotes}
+                  onChange={e => setFbNotes(e.target.value)}
+                  placeholder="Ej: tenía piano, cliente difícil de acceso…"
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1.5px solid var(--border)', fontSize: 12 }}
+                />
+              </div>
+              <button
+                onClick={saveFeedback}
+                disabled={fbSaving}
+                style={{ padding: '10px', borderRadius: 8, border: 'none', background: fbSaving ? 'var(--border)' : '#7c3aed', color: '#fff', fontSize: 13, fontWeight: 700, cursor: fbSaving ? 'not-allowed' : 'pointer' }}
+              >
+                {fbSaving ? 'Guardando…' : '🤖 Guardar caso para el bot'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      {fbDone && (
+        <div style={{ padding: '10px 14px', borderRadius: 12, background: '#f0fdf4', border: '1px solid #22c55e30', fontSize: 12, fontWeight: 700, color: '#16a34a', marginBottom: 12 }}>
+          ✅ Caso guardado — el bot aprenderá de este traslado
+        </div>
+      )}
 
       {q.convertedRouteId && (
         <div style={{ padding: '9px 12px', borderRadius: 10, background: '#f4f7ff', border: '1px solid #0052FF28', marginBottom: 12, fontSize: 12, color: '#0052FF', fontWeight: 700 }}>

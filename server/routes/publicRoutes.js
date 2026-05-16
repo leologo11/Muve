@@ -273,6 +273,7 @@ router.post('/ai-quote', publicCalculationLimiter, async (req, res) => {
     // Fetch real vehicle configs + learning examples in parallel
     let configsSection = '';
     let learningSection = '';
+    let realCasesSection = '';
     let rawVehicleConfigs = [];  // kept for server-side km adjustment after AI response
     await Promise.allSettled([
       (async () => {
@@ -291,7 +292,7 @@ router.post('/ai-quote', publicCalculationLimiter, async (req, res) => {
         }
       })(),
       (async () => {
-        const examples = await supabaseRequest(`/ai_quote_feedback${qs({ select: '*', order: 'created_at.desc', limit: '60' })}`);
+        const examples = await supabaseRequest(`/ai_quote_feedback${qs({ select: '*', order: 'created_at.desc', limit: '500' })}`);
         if (!examples || examples.length === 0) return;
 
         const corrections = examples.filter(e => e.status === 'corrected');
@@ -339,10 +340,50 @@ router.post('/ai-quote', publicCalculationLimiter, async (req, res) => {
           }
         }
       })(),
+      (async () => {
+        const submitted = await supabaseRequest(
+          `/quotes${qs({ select: 'service_type,vehicle_type,distance_km,items_description,price_min,price_max,num_helpers,num_floors,needs_packing', status: 'in.(submitted,approved)', service_type: 'in.(flete,mudanza)', order: 'created_at.desc', limit: '200' })}`
+        );
+        if (!submitted || submitted.length === 0) return;
+
+        const reqKm = Number(distanceKm) || 0;
+        const similar = submitted.filter(q => {
+          if (!q.price_min && !q.price_max) return false;
+          if (reqKm === 0) return true;
+          const qKm = Number(q.distance_km) || 0;
+          if (qKm === 0) return false;
+          return qKm >= reqKm * 0.3 && qKm <= reqKm * 1.7;
+        }).slice(0, 20);
+
+        if (similar.length === 0) return;
+
+        realCasesSection = `\n━━ CASOS REALES COTIZADOS (clientes reales que completaron el formulario) ━━\n`;
+        realCasesSection += 'REGLA DE COMPARACIÓN: Si hay un caso con distancia similar (±50%) y artículos parecidos, ';
+        realCasesSection += 'usa su precio como ancla principal. Ajusta proporcionalmente por km y extras. ';
+        realCasesSection += 'Estos precios son lo que el cliente aceptó pagar — son la referencia más confiable.\n';
+        for (const q of similar) {
+          const km  = q.distance_km ? `${q.distance_km}km` : '?km';
+          const ref = q.price_min && q.price_max
+            ? `$${Math.round((Number(q.price_min) + Number(q.price_max)) / 2).toLocaleString('es-CL')} (rango $${Number(q.price_min).toLocaleString('es-CL')}–$${Number(q.price_max).toLocaleString('es-CL')})`
+            : q.price_min ? `$${Number(q.price_min).toLocaleString('es-CL')}` : '';
+          const extras = [
+            q.num_helpers > 0 && `${q.num_helpers} ayudante(s)`,
+            q.num_floors > 0 && `${q.num_floors} piso(s)`,
+            q.needs_packing && 'embalaje',
+          ].filter(Boolean).join(', ') || 'sin extras';
+          const desc = (q.items_description || '').slice(0, 100);
+          realCasesSection += `  📋 ${q.service_type} ${q.vehicle_type || '?'}, ${km}, ${extras}: "${desc}" → ${ref}\n`;
+        }
+      })(),
     ]);
 
+    const totalVolumeM3 = items.reduce((sum, i) => sum + (Number(i.vol) || 0) * Number(i.qty || 1), 0);
     const itemsList = items.length > 0
-      ? items.map(i => `${i.qty}x ${i.name}`).join(', ')
+      ? items.map(i => {
+          const vol = Number(i.vol) || 0;
+          const total = vol * Number(i.qty || 1);
+          return `${i.qty}x ${i.name}${vol > 0 ? ` (${total.toFixed(1)}m3)` : ''}`;
+        }).join(', ') + `\nVolumen total estimado: ${totalVolumeM3.toFixed(1)}m3`
       : 'No se seleccionaron articulos del catalogo';
 
     const extrasDesc = [
@@ -358,37 +399,53 @@ ${configsSection}
 
 AUTO (sedan/hatchback particular)
   Capacidad: maletero de auto (~0.3m3)
-  PUEDE: 1-3 items que literalmente caben en el maletero — sobres, documentos, 1 caja pequeña,
-         flores, ropa en bolsas, notebook, tablet, microondas solo, 1-2 paquetes pequeños
+  PUEDE: sobres, documentos, 1 caja pequeña, flores, ropa en bolsas, notebook, microondas, 1-2 paquetes pequeños
   NO PUEDE: nada mas grande que un microondas, cajas grandes, muebles, electrodomesticos grandes
-  Precio: SOLO base $5.000 + $800/km — sin extras de ayudantes, pisos ni embalaje
-  Ejemplos: 5km=$9.000 | 10km=$13.000 | 15km=$17.000 | 20km=$21.000
-  recommendedHelpers siempre 0 para auto.
-  Solo cuando la carga es MUY pequeña y liviana — si hay duda, usar furgon
+  Precio: base + km. Sin ayudantes ni extras.
+  Ejemplos: 5km~$9.000 | 10km~$13.000 | 15km~$17.000 | 20km~$21.000
+  recommendedHelpers siempre 0. Solo si la carga es MUY pequeña — si hay duda, usar furgon.
 
 FURGON N400 (furgoneta cerrada)
   Capacidad: ~6m3, altura max 1.5m interior
   PUEDE: cajas, colchon, TV, lavadora, microondas, muebles livianos, comoda, escritorio,
-         camas de 1 PLAZA, 1 cama de 2 PLAZAS (sola, sin cabecero grande), mesas, sillas
-  NO PUEDE: refrigerador grande, 2+ camas 2P armadas, camas Queen/King, sofa grande, closet
-  REGLA: 1 sola cama de 2 plazas SÍ cabe en el furgon. 2 camas de 2 plazas o Queen/King → camion 3/4.
-  Flete simple (1-3 cosas, <10km): $25.000-$40.000
-  Flete mediano (4-6 cosas): $35.000-$50.000
-  Lleno (traslado completo): $45.000-$65.000
+         camas 1 plaza, 1 cama 2 plazas sola, mesas, sillas
+  NO PUEDE: refrigerador grande, 2+ camas 2P, camas Queen/King, sofa grande, closet
+  Rango de precios: $20.000 – $50.000
+  Flete liviano (1-3 cosas pequeñas): $20.000-$30.000
+  Flete mediano (4-6 cosas): $30.000-$40.000
+  Furgon lleno (traslado pieza completa): $40.000-$50.000
 
-CAMION 3/4 (plataforma abierta + RACK en techo del cabinado)
-  RACK: espacio adicional donde caben 2 camas King/Queen acostadas (encima del cabinado)
-  PUEDE: refrigerador, closet, sofas, camas 2P/Queen/King, lavadora, muebles 1-2 dormitorios
-  Flete simple (1-3 articulos grandes, <10km): $35.000-$55.000
-  Flete mediano (carga parcial): $45.000-$70.000
-  Semi-lleno (traslado parcial): $55.000-$80.000
-  Lleno (traslado completo): $80.000-$100.000
-  El chofer ayuda a cargar/descargar: INCLUIDO en el precio, NO cobrar extra
+CAMION 3/4 (plataforma abierta + rack en techo)
+  Capacidad: ~15m3. PUEDE: refrigerador, closet, sofas, camas Queen/King, muebles 1-2 dormitorios
+  El chofer ayuda a cargar/descargar: INCLUIDO, no cobrar extra.
+  Rango de precios: $60.000 – $100.000
+  Flete articulos grandes (1-3 items): $60.000-$70.000
+  Carga parcial / mudanza chica: $70.000-$85.000
+  Camion lleno / mudanza completa 1-2D: $85.000-$100.000
 
-CAMION LARGO (= 2 camiones 3/4 — JAMAS revelar al cliente, para el cliente es "un camion mas grande")
-  Capacidad: el doble exacto del camion 3/4
-  Solo usar cuando la carga es GENUINAMENTE 2 camiones 3/4 llenos (casa grande de 3+ dormitorios)
-  Traslado completo: $160.000-$220.000 | Flete grande: $100.000-$160.000
+CAMION LARGO (vehiculo grande para mudanzas que superan el camion 3/4)
+  Capacidad: ~30m3. Usar cuando la carga supera 15m3.
+  Rango de precios: $170.000 – $240.000
+  Mudanza mediana-grande (15-22m3, casa 2-3D con todo): $170.000-$195.000
+  Mudanza grande (22-26m3, casa 3D completa): $195.000-$215.000
+  Mudanza muy grande (26-30m3, casa 4D): $215.000-$240.000
+  Si la carga supera 30m3: needsManualReview: true
+
+━━ VOLUMEN INTERNO POR ARTICULO (confidencial — para dimensionar correctamente) ━━━━━━
+
+  Cama 1 plaza: 1.5m3 | Cama 2 plazas: 2.0m3 | Cama Queen/King: 2.8m3
+  Closet/Ropero: 2.5m3 | Comoda: 0.8m3 | Mesa de noche: 0.3m3
+  Sofa 2 plazas: 2.0m3 | Sofa 3 plazas: 3.2m3
+  Refrigerador: 1.5m3 | Lavadora/Secadora: 0.8m3 | Cocina/Horno: 1.0m3 | Microondas: 0.1m3
+  TV 50 pulgadas o menos: 0.3m3 | TV 55 pulgadas o mas: 0.6m3
+  Mesa comedor: 1.2m3 | Silla: 0.3m3 | Escritorio: 0.8m3
+  Caja grande: 0.35m3 | Caja mediana: 0.18m3 | Caja pequeña: 0.08m3
+
+  REGLA DE DIMENSION (usa el volumen total calculado que aparece en la solicitud):
+  Total <6m3   → FURGON
+  Total 6-15m3 → CAMION 3/4
+  Total 15-30m3 → CAMION LARGO
+  Total >30m3  → needsManualReview: true
 
 ━━ DETECCION FLETE vs MUDANZA ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -400,21 +457,7 @@ MUDANZA = contenido de un lugar (pieza, depto, oficina), cosas variadas que se m
   Cobro por camion completo (mas conveniente)
   Ej: camas + closet + comoda + nevera + sofa + electrodomesticos + cajas = mudanza
 
-ESCALA: 1-2 items muy pequeños (maletero de auto) → auto | 1-3 cosas simples → flete furgon | 4-6 variadas → analizar | 7+ variadas → mudanza siempre
-
-━━ OPCION 2 VIAJES (franja intermedia — evitar salto directo a camion largo) ━━━━━━━━
-
-Si la carga supera un camion 3/4 lleno pero NO requiere 2 camiones llenos:
-→ RECOMENDAR 2 viajes en camion 3/4 (mucho mas economico que camion largo)
-→ 1er viaje: precio completo (~$80.000-$100.000)
-→ 2do viaje: 50% de descuento sobre el precio del 1er viaje
-→ price = total de ambos viajes (ej: $90.000 + $45.000 = $135.000)
-→ vehicle = "camion34", twoTrips = true, vehicleName = "Camion 3/4 · 2 viajes"
-→ vehicleIcon = "🚚"
-→ Ahorran $25.000-$85.000 vs camion largo
-
-Usar 2 viajes cuando la carga equivale a ~1.2x-1.8x un camion 3/4 lleno.
-Solo escalar a camion largo si la carga es REALMENTE 2 camiones llenos completos.
+ESCALA: items de maletero → auto | 1-3 cosas simples → flete furgon | 4-6 variadas → analizar | 7+ variadas → mudanza
 
 ━━ PEAJES / TAGS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -459,6 +502,13 @@ ADICIONALES (sumar sobre precio base):
 
   Nunca mencionar m3. Nunca revelar 2 camiones. clientExplanation: max 2 frases naturales.
 
+CUANDO USAR needsManualReview = true:
+  - Si el volumen total supera 30m3 (no cabe ni en el camion largo)
+  - Si el precio estimado supera $250.000
+  - Si la descripcion es ambigua y el precio podria variar mas de $80.000
+  En esos casos, pon needsManualReview: true — el sistema derivara al cliente con un agente humano.
+  Para camion largo con carga ≤30m3: da el precio normalmente, needsManualReview: false.
+
 AYUDANTES RECOMENDADOS (recommendedHelpers):
   El chofer SIEMPRE carga — "solo chofer" es cuando el puede solo sin ayuda extra.
   0 (solo chofer): flete liviano (cajas, muebles livianos, items de menos de 50kg que el chofer mueve solo)
@@ -467,14 +517,14 @@ AYUDANTES RECOMENDADOS (recommendedHelpers):
   3 ayudantes: mudanza grande/enorme (15+ items), camion largo, traslados muy pesados
   El precio base NO incluye ayudantes — son adicionales que el operador decide.
   El campo recommendedHelpers es la recomendacion, no lo que el cliente pidio.
-${learningSection}
+
+${learningSection}${realCasesSection}
 Responde SOLO con JSON valido, sin markdown:
 {
   "detectedType": "flete|mudanza",
   "vehicle": "auto|furgon|camion34|camionLargo",
   "vehicleName": "<nombre para mostrar al cliente>",
   "vehicleIcon": "🚗|🚐|🚚|🚛",
-  "twoTrips": <true|false>,
   "price": <entero multiplo de 1000>,
   "priceMin": <entero multiplo de 1000>,
   "priceMax": <entero multiplo de 1000>,
@@ -517,13 +567,12 @@ Extras: ${extrasDesc}`;
     }
 
     // ── Server-side km adjustment ─────────────────────────────────────────────
-    // The AI is trained on short-distance examples (~4km). Its price reflects the
-    // cargo component correctly, but the km cost anchors to training examples.
-    // We recalculate: for the AI's chosen vehicle, compute the km cost at the
-    // actual distance vs at the base training distance, and add the delta.
-    const BASE_TRAINING_KM = 4; // all training examples are ~4km runs
+    // Only applies when the AI had NO tariff data in the prompt (configsSection empty).
+    // When tariffs ARE available, the AI already computed: base + actualKm * rate.
+    // Adding km again would double-count it.
     const kmDist = Number(distanceKm) || 0;
-    if (kmDist > BASE_TRAINING_KM && rawVehicleConfigs.length > 0) {
+    if (!configsSection && kmDist > 4 && rawVehicleConfigs.length > 0) {
+      const BASE_TRAINING_KM = 4;
       const aiVehicleType = (['auto', 'furgon', 'camion34', 'camionLargo'].includes(result.vehicle))
         ? result.vehicle : 'furgon';
       const vc = rawVehicleConfigs.find(c => c.vehicle_type === aiVehicleType);
@@ -544,15 +593,20 @@ Extras: ${extrasDesc}`;
     }
 
     const price = Math.max(15000, Math.round(Number(result.price || 0) / 1000) * 1000);
+    // Always derive range from price — never trust AI's priceMin/priceMax independently
+    const priceMin = Math.max(15000, Math.round(price * 0.88 / 1000) * 1000);
+    const priceMax = Math.round(price * 1.15 / 1000) * 1000;
+    const vehicleKey = ['auto', 'furgon', 'camion34', 'camionLargo'].includes(result.vehicle) ? result.vehicle : 'camion34';
+    const VEHICLE_NAMES = { auto: 'Auto', furgon: 'Furgón N400', camion34: 'Camión 3/4', camionLargo: 'Camión Largo' };
+    const VEHICLE_ICONS = { auto: '🚗', furgon: '🚐', camion34: '🚚', camionLargo: '🚛' };
     return res.json({
       detectedType: ['flete', 'mudanza'].includes(result.detectedType) ? result.detectedType : 'mudanza',
-      vehicle: ['auto', 'furgon', 'camion34', 'camionLargo'].includes(result.vehicle) ? result.vehicle : 'camion34',
-      vehicleName: result.vehicleName || 'Camion 3/4',
-      vehicleIcon: result.vehicleIcon || '🚚',
-      twoTrips: Boolean(result.twoTrips),
+      vehicle: vehicleKey,
+      vehicleName: VEHICLE_NAMES[vehicleKey],
+      vehicleIcon: VEHICLE_ICONS[vehicleKey],
       price,
-      priceMin: Math.max(15000, Math.round(Number(result.priceMin || 0) / 1000) * 1000),
-      priceMax: Math.max(15000, Math.round(Number(result.priceMax || 0) / 1000) * 1000),
+      priceMin,
+      priceMax,
       tollEstimate: Math.round(Math.max(0, Number(result.tollEstimate || 0)) / 1000) * 1000,
       recommendedHelpers: Math.min(3, Math.max(0, Math.round(Number(result.recommendedHelpers ?? 0)))),
       clientExplanation: String(result.clientExplanation || '').slice(0, 300),

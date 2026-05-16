@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../api/index.js';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
-import { CATALOG } from '../../components/InventoryPicker.jsx';
+import { CATALOG, serializeInventory, totalVol } from '../../components/InventoryPicker.jsx';
 import { trackMetaEvent, initMetaPixel } from '../../utils/metaPixel.js';
 import { trackLanding as _trackLandingDB, trackEvent as _trackEventDB, trackSubmit as _trackSubmitDB } from '../../utils/pageTracker.js';
 
@@ -604,20 +604,49 @@ function addRipple(e) {
   el.appendChild(s);
 }
 
-// ─── Floating WhatsApp button ─────────────────────────────────
+// ─── Floating WhatsApp button (descartable) ───────────────────
 function FloatingWA() {
+  const [hidden, setHidden] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const url = `https://wa.me/56952023504?text=${encodeURIComponent('Hola MUVE! 👋 Quiero consultar sobre un traslado.')}`;
+  if (hidden) return null;
   return (
-    <a href={url} target="_blank" rel="noreferrer" style={{
-      position: 'fixed', bottom: 90, right: 16, zIndex: 200,
-      width: 52, height: 52, borderRadius: '50%',
-      background: WA, display: 'grid', placeItems: 'center',
-      boxShadow: '0 4px 20px rgba(37,211,102,.55)', textDecoration: 'none',
+    <div style={{
+      position: 'fixed', bottom: 96, left: 12, zIndex: 200,
+      display: 'flex', alignItems: 'center', gap: 0,
+      filter: 'drop-shadow(0 4px 12px rgba(37,211,102,.40))',
     }}>
-      <svg width={26} height={26} viewBox="0 0 24 24" fill="white">
-        <path d="M20.5 3.5A11 11 0 003.4 17.4L2 22l4.7-1.4A11 11 0 1020.5 3.5z"/>
-      </svg>
-    </a>
+      {!collapsed ? (
+        <div style={{ display: 'flex', alignItems: 'center', borderRadius: 99, overflow: 'hidden', background: WA }}>
+          <a href={url} target="_blank" rel="noreferrer" style={{
+            display: 'flex', alignItems: 'center', gap: 7,
+            padding: '10px 14px 10px 12px', textDecoration: 'none',
+          }}>
+            <svg width={20} height={20} viewBox="0 0 24 24" fill="white">
+              <path d="M20.5 3.5A11 11 0 003.4 17.4L2 22l4.7-1.4A11 11 0 1020.5 3.5z"/>
+            </svg>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap' }}>¿Dudas?</span>
+          </a>
+          <button onClick={() => setCollapsed(true)} style={{
+            background: 'rgba(0,0,0,.18)', border: 'none', cursor: 'pointer',
+            padding: '10px 10px', color: '#fff', fontSize: 13, lineHeight: 1,
+          }}>‹</button>
+          <button onClick={() => setHidden(true)} style={{
+            background: 'rgba(0,0,0,.18)', border: 'none', cursor: 'pointer',
+            padding: '10px 10px', color: '#fff', fontSize: 13, lineHeight: 1,
+          }}>✕</button>
+        </div>
+      ) : (
+        <button onClick={() => setCollapsed(false)} style={{
+          width: 42, height: 42, borderRadius: '50%', border: 'none',
+          background: WA, cursor: 'pointer', display: 'grid', placeItems: 'center',
+        }}>
+          <svg width={20} height={20} viewBox="0 0 24 24" fill="white">
+            <path d="M20.5 3.5A11 11 0 003.4 17.4L2 22l4.7-1.4A11 11 0 1020.5 3.5z"/>
+          </svg>
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -991,7 +1020,6 @@ function ScreenItems({ state, setState, onNext, onBack }) {
           />
         </div>
       </div>
-      </div>{/* end scroll */}
 
       {/* Scroll hint — gradient + bounce arrow, desaparece al llegar al fondo */}
       {!atBottom && (
@@ -1108,7 +1136,7 @@ function ScreenExtras({ state, setState, onNext, onBack }) {
 // ─── SCREEN 4 — RESULTADO ─────────────────────────────────────
 function ScreenResult({ state, onRestart, onBack, onNext }) {
   const { result } = state;
-  const [helpers, setHelpers] = useState(result.recommendedHelpers || 0);
+  const [helpers, setHelpers] = useState(state.selectedHelpers ?? result.recommendedHelpers ?? 0);
 
   const items = Object.keys(state.inventory)
     .filter(id => state.inventory[id] > 0)
@@ -1119,25 +1147,21 @@ function ScreenResult({ state, onRestart, onBack, onNext }) {
   const floorsTotal = state.extras.floors * 5000;
   const packingCost = state.extras.packing ? (result.vehicle === 'furgon' ? 12000 : 20000) : 0;
 
-  // Adjust price when user changes helpers count
-  const helpersDelta = (helpers - (result.recommendedHelpers || 0)) * helpersRate;
-  const adjustedPrice = Math.max(15000, Math.round((result.price + helpersDelta) / 1000) * 1000);
   const helpersTotal = helpers * helpersRate;
-  const baseTotal = Math.max(0, adjustedPrice - floorsTotal - helpersTotal - packingCost);
-
-  const secondTripDiscount = result.twoTrips ? Math.round(result.price * 0.33 / 1000) * 1000 : 0;
+  const adjustedPrice = Math.max(15000, Math.round(
+    (result.price + helpersTotal + floorsTotal + packingCost + (result.tollEstimate || 0)) / 1000
+  ) * 1000);
 
   const distLabel = state.distanceKm
     ? `Traslado · ${state.distanceKm} km recorridos`
     : 'Tarifa base del servicio';
 
   const breakdown = [
-    { label: distLabel, value: fmt(baseTotal) },
-    state.extras.floors > 0 && { label: `${state.extras.floors} piso${state.extras.floors > 1 ? 's' : ''} sin ascensor`, value: `+ ${fmt(floorsTotal)}` },
+    { label: distLabel, value: fmt(result.price) },
     helpers > 0 && { label: `${helpers} ayudante${helpers > 1 ? 's' : ''}`, value: `+ ${fmt(helpersTotal)}` },
+    state.extras.floors > 0 && { label: `${state.extras.floors} piso${state.extras.floors > 1 ? 's' : ''} sin ascensor`, value: `+ ${fmt(floorsTotal)}` },
     state.extras.packing && { label: 'Embalaje profesional', value: `+ ${fmt(packingCost)}` },
     result.tollEstimate > 0 && { label: 'Peaje autopista estimado', value: `+ ${fmt(result.tollEstimate)}` },
-    result.twoTrips && { label: '2do viaje (50% descuento)', value: `+ ${fmt(secondTripDiscount)}` },
   ].filter(Boolean);
 
   return (
@@ -1163,17 +1187,6 @@ function ScreenResult({ state, onRestart, onBack, onNext }) {
           </div>
           <p style={{ margin: '14px 0 0', fontSize: 13, color: 'rgba(255,255,255,.8)', lineHeight: 1.5, position: 'relative' }}>{result.clientExplanation}</p>
 
-          {/* 2-trip notice */}
-          {result.twoTrips && (
-            <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 12, background: 'rgba(255,255,255,.13)', border: '1px solid rgba(255,255,255,.2)' }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: '#fff', marginBottom: 4 }}>
-                🚚🚚 Estimamos 2 viajes
-              </div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,.82)', lineHeight: 1.5 }}>
-                El precio incluye ambos viajes (el 2do con 50% descuento). Si todo entra en un solo viaje sin correr riesgo, te descontamos el 2do viaje al confirmar.
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Price card */}
@@ -1185,7 +1198,7 @@ function ScreenResult({ state, onRestart, onBack, onNext }) {
             </div>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, background: '#f0fdf4', border: `1.5px solid rgba(24,169,87,.25)` }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: N }}>
-                Rango: <span style={{ color: SUC }}>{fmt(result.priceMin)}</span> – <span style={{ color: SUC }}>{fmt(result.priceMax)}</span>
+                Rango: <span style={{ color: SUC }}>{fmt(Math.round(adjustedPrice * 0.88 / 1000) * 1000)}</span> – <span style={{ color: SUC }}>{fmt(Math.round(adjustedPrice * 1.15 / 1000) * 1000)}</span>
               </span>
             </div>
           </div>
@@ -1288,18 +1301,23 @@ function ScreenContact({ state, onBack, onSubmit, saving }) {
 
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '18px 16px 0' }}>
         <p style={{ fontSize: 14, color: T2, lineHeight: 1.55, margin: '0 0 20px' }}>
-          Déjanos tus datos y te contactamos para confirmar detalles y coordinar el traslado.
+          {state.manualReview
+            ? 'Completa tus datos y te entregamos el precio exacto para tu traslado.'
+            : 'Déjanos tus datos y te contactamos para confirmar detalles y coordinar el traslado.'
+          }
         </p>
 
-        {/* Price mini recap */}
-        <div style={{ background: GRAD_DEEP, borderRadius: 16, padding: '14px 18px', marginBottom: 22, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,.6)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Tu estimado</div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: '#fff', letterSpacing: '-0.7px' }}>{fmt(state.result?.price)}</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.6)', marginTop: 2 }}>{state.result?.vehicleName}</div>
+        {/* Price mini recap — solo si hay precio calculado */}
+        {state.result && !state.manualReview && (
+          <div style={{ background: GRAD_DEEP, borderRadius: 16, padding: '14px 18px', marginBottom: 22, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,.6)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Tu estimado</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: '#fff', letterSpacing: '-0.7px' }}>{fmt(state.result?.price)}</div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,.6)', marginTop: 2 }}>{state.result?.vehicleName}</div>
+            </div>
+            <span style={{ fontSize: 38 }}>{state.result?.vehicleIcon}</span>
           </div>
-          <span style={{ fontSize: 38 }}>{state.result?.vehicleIcon}</span>
-        </div>
+        )}
 
         {/* Name */}
         <div style={{ marginBottom: 14 }}>
@@ -1341,7 +1359,9 @@ function ScreenContact({ state, onBack, onSubmit, saving }) {
         <BtnPrimary onClick={() => valid && !saving && onSubmit(name.trim(), phone.trim(), email.trim())} disabled={!valid || saving}>
           {saving
             ? <><span className="czSavingDot">●</span> Enviando…</>
-            : <><Check size={16} strokeWidth={2.5}/> Solicitar cotización</>
+            : state.manualReview
+              ? <>Saber el precio exacto <ArrowRight size={16} strokeWidth={2.4}/></>
+              : <><Check size={16} strokeWidth={2.5}/> Solicitar cotización</>
           }
         </BtnPrimary>
       </CtaBar>
@@ -1400,9 +1420,11 @@ function CyclingTips() {
 }
 
 function ScreenSuccess({ state, onRestart }) {
-  const { result, from, to, distanceKm, extras, selectedHelpers } = state;
+  const { result, from, to, distanceKm, extras, selectedHelpers, manualReview } = state;
   const helpers = selectedHelpers ?? result?.recommendedHelpers ?? 0;
-  const waMsg = `Hola MUVE! 👋 Acabo de solicitar una cotización.\n🚚 ${result?.vehicleName || ''}\n📍 ${from?.address || ''} → ${to?.address || ''}\n💰 Estimado: ${fmt(result?.price)}`;
+  const waMsg = manualReview
+    ? `Hola MUVE! 👋 Solicité una cotización de mudanza grande.\n📍 ${from?.address || ''} → ${to?.address || ''}`
+    : `Hola MUVE! 👋 Acabo de solicitar una cotización.\n🚚 ${result?.vehicleName || ''}\n📍 ${from?.address || ''} → ${to?.address || ''}\n💰 Estimado: ${fmt(result?.price)}`;
   const waUrl = `https://wa.me/56952023504?text=${encodeURIComponent(waMsg)}`;
 
   return (
@@ -1414,7 +1436,7 @@ function ScreenSuccess({ state, onRestart }) {
         <img src="/logo_reducido.png" alt="MUVE" style={{ height: 38, objectFit: 'contain' }}/>
       </div>
 
-      {/* Body — fixed height, no scroll */}
+      {/* Body */}
       <div style={{ flex: 1, padding: '20px 20px 0', display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
 
         {/* Check + title */}
@@ -1428,40 +1450,55 @@ function ScreenSuccess({ state, onRestart }) {
           }}>
             <Check size={38} color="#fff" strokeWidth={3}/>
           </div>
-          <h2 style={{ fontSize: 24, fontWeight: 900, color: N, margin: '0 0 6px', letterSpacing: '-0.6px' }}>¡Cotización enviada!</h2>
-          <p style={{ fontSize: 13, color: T2, margin: 0, lineHeight: 1.5, maxWidth: 270 }}>
-            Revisaremos tu solicitud y te contactaremos pronto.
+          <h2 style={{ fontSize: 24, fontWeight: 900, color: N, margin: '0 0 6px', letterSpacing: '-0.6px' }}>¡Solicitud enviada!</h2>
+          <p style={{ fontSize: 13, color: T2, margin: 0, lineHeight: 1.5, maxWidth: 280 }}>
+            {manualReview
+              ? 'Tienes muchas cosas — para darte el mejor precio un asesor MUVE se comunicará contigo en un instante.'
+              : 'Revisaremos tu solicitud y te contactaremos pronto.'
+            }
           </p>
         </div>
 
-        {/* Quote recap — compact */}
-        <div style={{ background: SURF, borderRadius: 16, border: `1px solid ${BDR}`, padding: '12px 14px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', minWidth: 0 }}>
-              <span style={{ fontSize: 26, flexShrink: 0 }}>{result?.vehicleIcon || '🚐'}</span>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 800, color: N }}>{result?.vehicleName}</div>
-                <div style={{ fontSize: 11, color: T3, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>
-                  <MapPin size={10} style={{ verticalAlign: 'middle', marginRight: 2 }}/>{from?.address?.split(',')[0] || '—'} → {to?.address?.split(',')[0] || '—'}
-                  {distanceKm ? ` · ${distanceKm} km` : ''}
-                </div>
+        {/* Recap — normal si hay precio, tarjeta de agente si es manual */}
+        {manualReview ? (
+          <div style={{ background: GRAD_DEEP, borderRadius: 16, padding: '16px 18px', display: 'flex', gap: 14, alignItems: 'center' }}>
+            <div style={{ fontSize: 40, flexShrink: 0 }}>📞</div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#fff', marginBottom: 4 }}>Un asesor te contactará</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,.75)', lineHeight: 1.5 }}>
+                Revisamos artículo por artículo y te damos el precio justo para tu mudanza.
               </div>
             </div>
-            <div style={{ textAlign: 'right', flexShrink: 0 }}>
-              <div style={{ fontSize: 22, fontWeight: 900, color: B, letterSpacing: '-0.5px' }}>{fmt(result?.price)}</div>
-              {result?.priceMin && result?.priceMax && result.priceMin !== result.priceMax && (
-                <div style={{ fontSize: 10, color: T3 }}>{fmt(result.priceMin)} – {fmt(result.priceMax)}</div>
-              )}
-            </div>
           </div>
-          {(helpers > 0 || extras?.floors > 0 || extras?.packing) && (
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}>
-              {helpers > 0 && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${B}12`, color: B, fontWeight: 700 }}>👷 {helpers} ayudante{helpers !== 1 ? 's' : ''}</span>}
-              {extras?.floors > 0 && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${B}12`, color: B, fontWeight: 700 }}>🏢 {extras.floors} piso{extras.floors !== 1 ? 's' : ''}</span>}
-              {extras?.packing && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${B}12`, color: B, fontWeight: 700 }}>📦 Embalaje</span>}
+        ) : (
+          <div style={{ background: SURF, borderRadius: 16, border: `1px solid ${BDR}`, padding: '12px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', minWidth: 0 }}>
+                <span style={{ fontSize: 26, flexShrink: 0 }}>{result?.vehicleIcon || '🚐'}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: N }}>{result?.vehicleName}</div>
+                  <div style={{ fontSize: 11, color: T3, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>
+                    <MapPin size={10} style={{ verticalAlign: 'middle', marginRight: 2 }}/>{from?.address?.split(',')[0] || '—'} → {to?.address?.split(',')[0] || '—'}
+                    {distanceKm ? ` · ${distanceKm} km` : ''}
+                  </div>
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: 22, fontWeight: 900, color: B, letterSpacing: '-0.5px' }}>{fmt(result?.price)}</div>
+                {result?.priceMin && result?.priceMax && result.priceMin !== result.priceMax && (
+                  <div style={{ fontSize: 10, color: T3 }}>{fmt(result.priceMin)} – {fmt(result.priceMax)}</div>
+                )}
+              </div>
             </div>
-          )}
-        </div>
+            {(helpers > 0 || extras?.floors > 0 || extras?.packing) && (
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}>
+                {helpers > 0 && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${B}12`, color: B, fontWeight: 700 }}>👷 {helpers} ayudante{helpers !== 1 ? 's' : ''}</span>}
+                {extras?.floors > 0 && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${B}12`, color: B, fontWeight: 700 }}>🏢 {extras.floors} piso{extras.floors !== 1 ? 's' : ''}</span>}
+                {extras?.packing && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${B}12`, color: B, fontWeight: 700 }}>📦 Embalaje</span>}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Cycling tips */}
         <CyclingTips/>
@@ -1678,6 +1715,7 @@ const INIT = {
   extras: { floors: 0, packing: false },
   result: null,
   selectedHelpers: 0,
+  manualReview: false,
 };
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -1732,9 +1770,17 @@ export default function CotizadorView() {
         numHelpers: 0,
         needsPacking: extras.packing,
       });
-      setState(s => ({ ...s, result: res, step: 4 }));
-      trackStep(4);
-      _trackEventDB(6, res.detectedType);
+
+      const isManualReview = res.needsManualReview || res.price > 250000;
+      if (isManualReview) {
+        setState(s => ({ ...s, result: res, manualReview: true, step: 5 }));
+        trackStep(5);
+        _trackEventDB(8);
+      } else {
+        setState(s => ({ ...s, result: res, manualReview: false, step: 4 }));
+        trackStep(4);
+        _trackEventDB(6, res.detectedType);
+      }
     } catch {
       setState(s => ({ ...s, step: 3 }));
     } finally {
@@ -1744,16 +1790,18 @@ export default function CotizadorView() {
 
   const submitContact = async (name, phone, email) => {
     setSaving(true);
-    const { from, to, extras, freeText, inventory, distanceKm, result } = state;
-    const items = Object.keys(inventory).filter(id => inventory[id] > 0).map(id => {
-      const cat = CATALOG.find(c => c.id === id);
-      return cat ? `${inventory[id]}x ${cat.name}` : null;
-    }).filter(Boolean);
-    const itemsDesc = [items.join(', '), freeText].filter(Boolean).join('; ');
+    const { from, to, extras, freeText, inventory, distanceKm, result, manualReview } = state;
+    const inventoryArray = Object.keys(inventory)
+      .filter(id => inventory[id] > 0)
+      .map(id => {
+        const cat = CATALOG.find(c => c.id === id);
+        return cat ? { id, name: cat.name, qty: inventory[id] } : null;
+      }).filter(Boolean);
+    const itemsDesc = serializeInventory(inventoryArray, freeText || '');
 
     try {
       await api.createPublicQuote({
-        serviceType: result?.detectedType === 'mudanza' ? 'mudanza' : 'flete',
+        serviceType: (manualReview && !result) ? 'mudanza' : (result?.detectedType === 'mudanza' ? 'mudanza' : 'flete'),
         contactPerson: name,
         contactPhone: phone,
         contactEmail: email || null,
@@ -1765,9 +1813,9 @@ export default function CotizadorView() {
         numFloors: extras.floors,
         needsPacking: extras.packing,
         itemsDescription: itemsDesc,
-        priceMin: result?.priceMin || null,
-        priceMax: result?.priceMax || null,
-        clientNotes: `Cotizador 2.0 | ${result?.vehicleName || ''}`,
+        priceMin: manualReview ? null : (result?.priceMin || null),
+        priceMax: manualReview ? null : (result?.priceMax || null),
+        clientNotes: `Cotizador 2.0 | ${result?.vehicleName || ''}${manualReview ? ' | REVISIÓN MANUAL — mudanza grande' : ''}`,
       });
       trackMetaEvent('Lead', { content_name: 'Cotizador 2.0', value: result?.price });
       _trackSubmitDB(result?.detectedType || 'flete_mudanza');
@@ -1826,10 +1874,25 @@ export default function CotizadorView() {
     switch (state.step) {
       case 0: return <ScreenWelcome onStart={() => go(1)}/>;
       case 1: return <ScreenAddresses state={state} setState={setState} onNext={() => go(2)} onBack={() => go(0)}/>;
-      case 2: return <ScreenItems state={state} setState={setState} onNext={() => go(3)} onBack={() => go(1)}/>;
+      case 2: return <ScreenItems state={state} setState={setState}
+        onNext={() => {
+          const invArr = Object.keys(state.inventory)
+            .filter(id => state.inventory[id] > 0)
+            .map(id => ({ id, qty: state.inventory[id] }));
+          const vol = totalVol(invArr); // m3 totales seleccionados
+          if (vol > 30) {
+            setState(s => ({ ...s, manualReview: true, step: 5 }));
+            trackStep(5); _trackEventDB(7);
+            frameRef.current?.scrollTo?.({ top: 0 });
+          } else {
+            setState(s => ({ ...s, manualReview: false }));
+            go(3);
+          }
+        }}
+        onBack={() => go(1)}/>;
       case 3: return <ScreenExtras state={state} setState={setState} onNext={calculate} onBack={() => go(2)}/>;
       case 4: return <ScreenResult state={state} onRestart={restart} onBack={() => go(3)} onNext={h => { setState(s => ({...s, selectedHelpers: h})); go(5); }}/>;
-      case 5: return <ScreenContact state={state} onBack={() => go(4)} onSubmit={submitContact} saving={saving}/>;
+      case 5: return <ScreenContact state={state} onBack={() => go(state.manualReview ? 2 : 4)} onSubmit={submitContact} saving={saving}/>;
       case 6: return <ScreenSuccess state={state} onRestart={restart}/>;
       default: return <ScreenWelcome onStart={() => go(1)}/>;
     }
@@ -1857,6 +1920,7 @@ export default function CotizadorView() {
           {screen}
         </div>
       </div>
+      {state.step >= 1 && state.step <= 5 && !calculating && <FloatingWA/>}
     </>
   );
 }
