@@ -609,13 +609,15 @@ function FloatingWA() {
 }
 
 // ─── SCREEN 0 — WELCOME ──────────────────────────────────────
-const MOVE_ITEMS = [
-  { icon: '🛋️', label: 'Sillones'   }, { icon: '📦', label: 'Cajas'       },
+const MOVE_ROW1 = [
+  { icon: '🛋️', label: 'Sillones'    }, { icon: '📦', label: 'Cajas'       },
   { icon: '🧊', label: 'Refrigerador'}, { icon: '🛏️', label: 'Camas'       },
-  { icon: '🖥️', label: 'TV'         }, { icon: '🍽️', label: 'Comedor'     },
-  { icon: '🌿', label: 'Plantas'    }, { icon: '🪑', label: 'Muebles'     },
-  { icon: '🏢', label: 'Oficinas'   }, { icon: '📚', label: 'Libros'      },
-  { icon: '🚚', label: 'Camión'     }, { icon: '🎮', label: 'Gaming'      },
+  { icon: '🍽️', label: 'Comedor'    }, { icon: '📺', label: 'Televisores'  },
+];
+const MOVE_ROW2 = [
+  { icon: '🌿', label: 'Plantas'     }, { icon: '🪑', label: 'Muebles'     },
+  { icon: '💻', label: 'Oficina'    }, { icon: '📚', label: 'Estantes'     },
+  { icon: '🚿', label: 'Lavadora'   }, { icon: '🎨', label: 'Arte y deco'  },
 ];
 
 function ScreenWelcome({ onStart }) {
@@ -627,10 +629,8 @@ function ScreenWelcome({ onStart }) {
           0%   { background-position: -220% center; }
           100% { background-position: 220% center; }
         }
-        @keyframes czFloat0 { 0%,100%{transform:translateY(0px) rotate(-1.5deg)} 50%{transform:translateY(-7px) rotate(1deg)} }
-        @keyframes czFloat1 { 0%,100%{transform:translateY(0px) rotate(1deg)}    50%{transform:translateY(-9px) rotate(-1.5deg)} }
-        @keyframes czFloat2 { 0%,100%{transform:translateY(0px) rotate(-0.5deg)} 50%{transform:translateY(-6px) rotate(1.5deg)} }
-        @keyframes czFloat3 { 0%,100%{transform:translateY(0px) rotate(1.5deg)}  50%{transform:translateY(-8px) rotate(-0.5deg)} }
+        @keyframes czTicker  { from { transform: translateX(0)    } to { transform: translateX(-50%) } }
+        @keyframes czTickerR { from { transform: translateX(-50%) } to { transform: translateX(0)    } }
         @keyframes czStepPop {
           0%,100% { transform: scale(1);    box-shadow: 0 3px 10px rgba(27,108,245,.3); }
           50%      { transform: scale(1.10); box-shadow: 0 5px 22px rgba(27,108,245,.65), 0 0 0 7px rgba(27,108,245,.10); }
@@ -717,10 +717,9 @@ function ScreenWelcome({ onStart }) {
         </div>
       </div>
 
-      {/* ── What we move ─────────────────────────────────────────── */}
-      <div style={{ flex:1, padding:'0 20px max(20px,env(safe-area-inset-bottom,20px))', position:'relative', zIndex:2, display:'flex', flexDirection:'column' }}>
-        {/* Divider with label */}
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
+      {/* ── What we move — slow ticker ────────────────────────────── */}
+      <div style={{ flex:1, display:'flex', flexDirection:'column', justifyContent:'center', gap:10, padding:'0 0 max(20px,env(safe-area-inset-bottom,20px))', position:'relative', zIndex:2 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, padding:'0 20px', marginBottom:4 }}>
           <div style={{ flex:1, height:1, background:BDR }}/>
           <span style={{ fontSize:10, fontWeight:800, color:T3, textTransform:'uppercase', letterSpacing:1.2, whiteSpace:'nowrap' }}>
             Movemos lo que importa
@@ -728,21 +727,28 @@ function ScreenWelcome({ onStart }) {
           <div style={{ flex:1, height:1, background:BDR }}/>
         </div>
 
-        {/* Floating item pills */}
-        <div style={{ display:'flex', flexWrap:'wrap', gap:9, justifyContent:'center', alignContent:'flex-start' }}>
-          {MOVE_ITEMS.map(({ icon, label }, i) => (
-            <div key={i} style={{
-              display:'flex', alignItems:'center', gap:6,
-              padding:'8px 13px', borderRadius:13,
-              background:'rgba(255,255,255,.88)',
-              border:'1.5px solid rgba(27,108,245,.09)',
-              boxShadow:'0 3px 12px rgba(27,108,245,.09)',
-              animation:`czFloat${i % 4} ${2.5+(i%4)*0.35}s ease-in-out ${i*0.11}s infinite`,
-            }}>
-              <span style={{ fontSize:17 }}>{icon}</span>
-              <span style={{ fontSize:12, fontWeight:700, color:T2 }}>{label}</span>
-            </div>
-          ))}
+        {/* Row 1 — izquierda, 38s */}
+        <div style={{ overflow:'hidden', maskImage:'linear-gradient(90deg,transparent,black 6%,black 94%,transparent)', WebkitMaskImage:'linear-gradient(90deg,transparent,black 6%,black 94%,transparent)' }}>
+          <div style={{ display:'flex', gap:10, width:'max-content', animation:'czTicker 38s linear infinite' }}>
+            {[...MOVE_ROW1, ...MOVE_ROW1].map(({ icon, label }, i) => (
+              <div key={i} style={{ flexShrink:0, display:'flex', alignItems:'center', gap:7, padding:'9px 15px', borderRadius:13, background:'rgba(255,255,255,.9)', border:'1.5px solid rgba(27,108,245,.10)', boxShadow:'0 2px 8px rgba(27,108,245,.07)' }}>
+                <span style={{ fontSize:18 }}>{icon}</span>
+                <span style={{ fontSize:13, fontWeight:700, color:T2 }}>{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Row 2 — derecha, 44s */}
+        <div style={{ overflow:'hidden', maskImage:'linear-gradient(90deg,transparent,black 6%,black 94%,transparent)', WebkitMaskImage:'linear-gradient(90deg,transparent,black 6%,black 94%,transparent)' }}>
+          <div style={{ display:'flex', gap:10, width:'max-content', animation:'czTickerR 44s linear infinite' }}>
+            {[...MOVE_ROW2, ...MOVE_ROW2].map(({ icon, label }, i) => (
+              <div key={i} style={{ flexShrink:0, display:'flex', alignItems:'center', gap:7, padding:'9px 15px', borderRadius:13, background:'rgba(255,255,255,.9)', border:'1.5px solid rgba(27,108,245,.10)', boxShadow:'0 2px 8px rgba(27,108,245,.07)' }}>
+                <span style={{ fontSize:18 }}>{icon}</span>
+                <span style={{ fontSize:13, fontWeight:700, color:T2 }}>{label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -1738,7 +1744,9 @@ export default function CotizadorView() {
           <SceneStatic/>
           <TruckAnim phase={truckPhase}/>
         </div>
-        <button type="button" className="czTestBtn" onClick={triggerTruckTest}>🚚 Probar animación</button>
+        {import.meta.env.DEV && (
+          <button type="button" className="czTestBtn" onClick={triggerTruckTest}>🚚 Probar animación</button>
+        )}
         <div className="cz-inner" ref={frameRef} style={{
           opacity: frameHidden ? 0 : 1,
           transform: frameHidden ? 'scale(0.96)' : 'scale(1)',
