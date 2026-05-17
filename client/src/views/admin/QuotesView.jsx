@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
@@ -468,9 +468,10 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
   const [distKm,      setDistKm]      = useState(q.distanceKm || recovered?.km || '');
   const [vehicleType, setVehicleType] = useState(q.vehicleType || recovered?.vh || allConfigs[0].vehicleType);
   // Help mode: 'none' | 'driver' | 'helpers'
-  const initHelpMode = q.driverHelps
-    ? (q.numHelpers > 0 ? 'helpers' : 'driver')
-    : 'none';
+  // Cotizador sends numHelpers (client choice) but not driverHelps — read both
+  const initHelpMode = (q.numHelpers > 0)
+    ? 'helpers'
+    : (q.driverHelps ? 'driver' : 'none');
   const [helpMode,         setHelpMode]        = useState(initHelpMode);
   const [helpers,          setHelpers]         = useState(q.numHelpers || recovered?.hl || 1);
   const storedOriginFloors = Number(q.originFloors || 0);
@@ -495,11 +496,14 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
   const [driverId,    setDriverId]    = useState('');
   const [saving,      setSaving]      = useState(false);
   const [approving,   setApproving]   = useState(false);
+  const [aiRecalc,    setAiRecalc]    = useState(false);
   // If the quote already has saved prices (from cotizador), don't auto-override on mount
   const [priceEdited, setPriceEdited] = useState(!!(cotizadorMin && cotizadorMax));
 
   // Bot training feedback
   const fromCotizador = (q.clientNotes || '').includes('Cotizador 2.0');
+  // Skip first inventory effect run for cotizador quotes (don't override saved vehicle/helpers)
+  const skipInventoryEffect = useRef(fromCotizador);
   const aiMidPrice = (q.priceMin && q.priceMax) ? Math.round((Number(q.priceMin) + Number(q.priceMax)) / 2) : 0;
   const [fbOpen,       setFbOpen]       = useState(false);
   const [fbRealPrice,  setFbRealPrice]  = useState('');
@@ -556,8 +560,12 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
     setPriceMax(r.max);
   }, [vehicleType, km, helpMode, helpers, floors, packing, priceEdited]);
 
-  // Auto-recommend vehicle from inventory (if price not manually edited)
+  // Auto-recommend vehicle from inventory — skips first run for cotizador quotes
   useEffect(() => {
+    if (skipInventoryEffect.current) {
+      skipInventoryEffect.current = false;
+      return;
+    }
     const vol = totalVol(inventory);
     if (vol === 0) return;
     const rec = recommendVehicleType(vol, inventory);
@@ -569,6 +577,32 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
     if (recHelpers > 0 && helpMode !== 'helpers') setHelpMode('helpers');
     if (recHelpers > 0) setHelpers(n => Math.max(n, recHelpers));
   }, [inventory]);
+
+  // Recalculate using AI (same as cotizador)
+  const recalcWithAI = async () => {
+    setAiRecalc(true);
+    try {
+      const invArr = inventory.filter(i => i.qty > 0);
+      const res = await api.aiQuote({
+        items: invArr,
+        freeText: inventoryExtras || '',
+        distanceKm: km || 4,
+      });
+      if (res.priceMin && res.priceMax) {
+        setPriceMin(res.priceMin);
+        setPriceMax(res.priceMax);
+        setPriceEdited(true);
+        if (res.vehicle) setVehicleType(res.vehicle);
+        toast('✅ Precio recalculado con IA');
+      } else {
+        toast('⚠ La IA no pudo calcular precio — revisa manualmente');
+      }
+    } catch (err) {
+      toast('❌ Error al consultar IA: ' + err.message);
+    } finally {
+      setAiRecalc(false);
+    }
+  };
 
   const isDone = ['approved', 'rejected'].includes(q.status);
 
@@ -873,9 +907,21 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
         </div>
 
         {!isDone && (
-          <button onClick={() => { setPriceEdited(false); }} style={{ ...ab('#475569'), fontSize: 10, marginTop: 6, padding: '4px 10px' }}>
-            ⚙ Recalcular con tarifas internas
-          </button>
+          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+            <button
+              onClick={recalcWithAI}
+              disabled={aiRecalc}
+              style={{ ...ab('var(--accent)'), fontSize: 11, padding: '5px 12px', opacity: aiRecalc ? .6 : 1 }}
+            >
+              {aiRecalc ? '⏳ Calculando…' : '✨ Recalcular con IA'}
+            </button>
+            <button
+              onClick={() => { setPriceEdited(false); }}
+              style={{ ...ab('#94a3b8'), fontSize: 11, padding: '5px 12px' }}
+            >
+              ⚙ Usar tarifas internas
+            </button>
+          </div>
         )}
 
         {(priceMin > 0 || priceMax > 0) && (
