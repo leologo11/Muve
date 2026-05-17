@@ -729,7 +729,7 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {allConfigs.map(c => {
             const active = vehicleType === c.vehicleType;
-            const est = km > 0 ? calcRange(calcExactPrice(c, km, driverHelps, actualHelpers, floors, packing)) : null;
+            const est = km > 0 ? calcRange(calcExactPrice(c, km, false, actualHelpers, floors, packing)) : null;
             return (
               <button
                 key={c.vehicleType}
