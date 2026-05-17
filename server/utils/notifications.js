@@ -61,6 +61,39 @@ async function postWithTimeout(url, options, timeoutMs = 8000) {
   }
 }
 
+async function sendNtfyNotification({ quote, payload }) {
+  const topic = process.env.NTFY_TOPIC;
+  if (!topic) return { skipped: true };
+
+  const service = String(payload?.service_type || '').toUpperCase();
+  const name    = payload?.contact_person || 'Sin nombre';
+  const phone   = payload?.contact_phone  || '';
+  const price   = payload?.price_min && payload?.price_max
+    ? `${money(payload.price_min)} – ${money(payload.price_max)}`
+    : 'Por revisar';
+  const origin  = payload?.origin || '';
+  const dest    = payload?.destination || '';
+
+  const title = `📋 Nueva cotización ${service} — ${name}`;
+  const body  = [
+    phone,
+    origin && dest ? `${origin} → ${dest}` : (origin || dest),
+    `Precio: ${price}`,
+    quote?.quote_code || '',
+  ].filter(Boolean).join('\n');
+
+  return postWithTimeout(`https://ntfy.sh/${encodeURIComponent(topic)}`, {
+    method: 'POST',
+    headers: {
+      'Title':    title,
+      'Priority': 'high',
+      'Tags':     'truck,muve',
+      'Content-Type': 'text/plain; charset=utf-8',
+    },
+    body,
+  });
+}
+
 async function sendWebhookNotification(message, context) {
   const url = process.env.ADMIN_NOTIFICATION_WEBHOOK_URL;
   if (!url) return { skipped: true };
@@ -109,6 +142,7 @@ export async function notifyAdminQuoteCreated({ quote, payload }) {
   const message = quoteSummaryLines({ quote, payload }).join('\n');
   const context = { quote, payload };
   const tasks = [
+    sendNtfyNotification({ quote, payload }),
     sendWhatsAppNotification(message, context),
     sendWebhookNotification(message, context),
   ];
