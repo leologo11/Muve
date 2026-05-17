@@ -488,12 +488,15 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
   const [clientNotes, setClientNotes] = useState(stripFleteTag(q.clientNotes) || '');
   const [adminNotes,  setAdminNotes]  = useState(q.adminNotes || '');
   const [deliveryDate,setDeliveryDate]= useState(q.deliveryDate ? new Date(q.deliveryDate).toISOString().slice(0,10) : '');
-  const [priceMin,    setPriceMin]    = useState(q.priceMin   || 0);
-  const [priceMax,    setPriceMax]    = useState(q.priceMax   || 0);
+  const cotizadorMin  = q.priceMin || 0;
+  const cotizadorMax  = q.priceMax || 0;
+  const [priceMin,    setPriceMin]    = useState(cotizadorMin);
+  const [priceMax,    setPriceMax]    = useState(cotizadorMax);
   const [driverId,    setDriverId]    = useState('');
   const [saving,      setSaving]      = useState(false);
   const [approving,   setApproving]   = useState(false);
-  const [priceEdited, setPriceEdited] = useState(false);
+  // If the quote already has saved prices (from cotizador), don't auto-override on mount
+  const [priceEdited, setPriceEdited] = useState(!!(cotizadorMin && cotizadorMax));
 
   // Bot training feedback
   const fromCotizador = (q.clientNotes || '').includes('Cotizador 2.0');
@@ -812,6 +815,24 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
 
       {/* ── PRECIO ── */}
       <Section title="💰 PRECIO ESTIMADO">
+
+        {/* Original cotizador price — what the client actually saw */}
+        {cotizadorMin > 0 && cotizadorMax > 0 && (
+          <div style={{ background: '#fffbeb', border: '1px solid #f59e0b40', borderRadius: 10, padding: '10px 12px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 18, flexShrink: 0 }}>👁️</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: '#92400e', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 2 }}>Lo que vio el cliente en el cotizador</div>
+              <div style={{ fontSize: 17, fontWeight: 900, color: '#b45309' }}>${fmt(cotizadorMin)} – ${fmt(cotizadorMax)}</div>
+            </div>
+            {(priceMin !== cotizadorMin || priceMax !== cotizadorMax) && !isDone && (
+              <button
+                onClick={() => { setPriceMin(cotizadorMin); setPriceMax(cotizadorMax); setPriceEdited(true); }}
+                style={{ flexShrink: 0, fontSize: 11, fontWeight: 800, padding: '5px 10px', borderRadius: 8, border: '1px solid #f59e0b60', background: '#fef3c7', color: '#92400e', cursor: 'pointer' }}
+              >↺ Restaurar</button>
+            )}
+          </div>
+        )}
+
         {bd && km > 0 && (
           <div style={{ background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.3, color: 'var(--muted)', marginBottom: 8 }}>DESGLOSE DEL CALCULO</div>
@@ -851,9 +872,9 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
           </div>
         </div>
 
-        {priceEdited && !isDone && (
-          <button onClick={() => { setPriceEdited(false); }} style={{ ...ab('var(--accent)'), fontSize: 10, marginTop: 6, padding: '4px 10px' }}>
-            ↺ Recalcular automático
+        {!isDone && (
+          <button onClick={() => { setPriceEdited(false); }} style={{ ...ab('#475569'), fontSize: 10, marginTop: 6, padding: '4px 10px' }}>
+            ⚙ Recalcular con tarifas internas
           </button>
         )}
 
