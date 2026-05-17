@@ -663,10 +663,34 @@ const MOVE_ROW2 = [
 ];
 
 const CASES = [
-  { type:'Mudanza chica', icon:'🏠', items:['🛏️ Cama 1 plaza','🗄️ Cómoda','💻 Escritorio','🪑 Silla','🖥️ Monitor','📦 5 cajas'], km:8, price:45000, name:'María G.', comment:'Todo llegó perfecto, muy puntuales y cuidadosos con los muebles.' },
-  { type:'Mudanza mediana', icon:'🏘️', items:['🛏️ Cama 2 plazas','🪞 Clóset','🛋️ Sofá 2 plazas','🧊 Refrigerador','🍽️ Mesa comedor','🪑 4 sillas','💻 Escritorio','🗄️ Cómoda','📦 10 cajas'], km:15, price:120000, name:'Carlos M.', comment:'Muy profesionales, cubrieron todo bien. Lo recomiendo 100%.' },
-  { type:'Flete express', icon:'🚚', items:['🛋️ Sofá 2 plazas','🍽️ Mesa comedor','🪑 4 sillas','📺 Televisor','📦 4 cajas'], km:5, price:35000, name:'Paula R.', comment:'Rápido y sin complicaciones. El precio fue exacto al cotizado.' },
-  { type:'Mudanza grande', icon:'🏡', items:['🛏️ Cama Queen','🛏️ Cama 1 plaza','🪞 Clóset doble','🛋️ Sofá 3 plazas','🧊 Refrigerador','🫧 Lavadora','🍳 Cocina','🍽️ Mesa comedor','🪑 6 sillas','🗄️ Cómoda','📦 18 cajas'], km:22, price:185000, name:'Rodrigo T.', comment:'¡Mudanza completa sin ningún problema! Excelentes profesionales.' },
+  {
+    type:'Mini flete — 1 cama', icon:'🛏️',
+    items:['🛏️ Cama 1 plaza','🛌 Colchón','📦 2 cajas'],
+    km:5, price:32000,
+    name:'Valentina S.',
+    comment:'En menos de una hora tenía la cama instalada en mi nuevo depto. ¡Súper rápido y cuidadoso!',
+  },
+  {
+    type:'Flete camión 3/4', icon:'🚚',
+    items:['🛏️ Cama 2 plazas','🪞 Clóset','🧊 Refrigerador'],
+    km:8, price:58000,
+    name:'Felipe A.',
+    comment:'Llegaron con el equipo correcto para los muebles pesados. Sin rasguños y exactamente a la hora.',
+  },
+  {
+    type:'Mudanza mediana', icon:'🏘️',
+    items:['🛏️ Cama 2 plazas','🪞 Clóset','🛋️ Sofá 2 plazas','🧊 Refrigerador','🫧 Lavadora','🍽️ Mesa comedor','💻 Escritorio','📦 8 cajas'],
+    km:14, price:72000,
+    name:'Ana M.',
+    comment:'Todo organizado y sin contratiempos. Los muebles llegaron perfectos. ¡Los recomiendo al 100%!',
+  },
+  {
+    type:'Mudanza grande', icon:'🏡',
+    items:['🛏️ Cama Queen','🛏️ Cama 1 plaza','🪞 Clóset doble','🛋️ Sofá 3 plazas','🧊 Refrigerador','🫧 Lavadora','🌀 Secadora','🍳 Cocina','🍽️ Mesa comedor','🪑 6 sillas','🗄️ Cómoda','💻 Escritorio','📚 Librero','📺 TV 65"','🎨 Cuadros','📦 15 cajas','🌿 Plantas'],
+    km:25, price:148000,
+    name:'Jorge & Claudia R.',
+    comment:'Mudanza completa de 3 dormitorios, impecables. Cuidaron cada mueble como si fuera de ellos.',
+  },
 ];
 
 function ScreenWelcome({ onStart }) {
