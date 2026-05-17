@@ -663,10 +663,10 @@ const MOVE_ROW2 = [
 ];
 
 const CASES = [
-  { type:'Mudanza chica', icon:'🏠', items:['🛏️ Cama 1 plaza','🗄️ Cómoda','💻 Escritorio','📦 4 cajas'], km:8, price:45000, name:'María G.', comment:'Todo llegó perfecto, muy puntuales y cuidadosos con los muebles.' },
-  { type:'Mudanza mediana', icon:'🏘️', items:['🛏️ Cama 2 plazas','🪞 Clóset','🛋️ Sofá','🧊 Refrigerador','📦 8 cajas'], km:15, price:120000, name:'Carlos M.', comment:'Muy profesionales, cubrieron todo bien. Lo recomiendo 100%.' },
-  { type:'Flete express', icon:'🚚', items:['🛋️ Sofá 2 plazas','🍽️ Mesa comedor','📦 3 cajas'], km:5, price:35000, name:'Paula R.', comment:'Rápido y sin complicaciones. El precio fue exacto al cotizado.' },
-  { type:'Mudanza grande', icon:'🏡', items:['🛏️ Cama Queen','🪞 Clóset','🛋️ Sofá 3 plazas','🧊 Refrigerador','🫧 Lavadora'], km:22, price:185000, name:'Rodrigo T.', comment:'¡Mudanza completa sin ningún problema! Excelentes profesionales.' },
+  { type:'Mudanza chica', icon:'🏠', items:['🛏️ Cama 1 plaza','🗄️ Cómoda','💻 Escritorio','🪑 Silla','🖥️ Monitor','📦 5 cajas'], km:8, price:45000, name:'María G.', comment:'Todo llegó perfecto, muy puntuales y cuidadosos con los muebles.' },
+  { type:'Mudanza mediana', icon:'🏘️', items:['🛏️ Cama 2 plazas','🪞 Clóset','🛋️ Sofá 2 plazas','🧊 Refrigerador','🍽️ Mesa comedor','🪑 4 sillas','💻 Escritorio','🗄️ Cómoda','📦 10 cajas'], km:15, price:120000, name:'Carlos M.', comment:'Muy profesionales, cubrieron todo bien. Lo recomiendo 100%.' },
+  { type:'Flete express', icon:'🚚', items:['🛋️ Sofá 2 plazas','🍽️ Mesa comedor','🪑 4 sillas','📺 Televisor','📦 4 cajas'], km:5, price:35000, name:'Paula R.', comment:'Rápido y sin complicaciones. El precio fue exacto al cotizado.' },
+  { type:'Mudanza grande', icon:'🏡', items:['🛏️ Cama Queen','🛏️ Cama 1 plaza','🪞 Clóset doble','🛋️ Sofá 3 plazas','🧊 Refrigerador','🫧 Lavadora','🍳 Cocina','🍽️ Mesa comedor','🪑 6 sillas','🗄️ Cómoda','📦 18 cajas'], km:22, price:185000, name:'Rodrigo T.', comment:'¡Mudanza completa sin ningún problema! Excelentes profesionales.' },
 ];
 
 function ScreenWelcome({ onStart }) {
@@ -822,7 +822,7 @@ function ScreenWelcome({ onStart }) {
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end' }}>
                 <div>
                   <div style={{ fontSize:9, color:T3, fontWeight:700, textTransform:'uppercase', letterSpacing:.6 }}>Precio cobrado</div>
-                  <div style={{ fontSize:26, fontWeight:900, color:B, letterSpacing:'-1px', lineHeight:1.1 }}>${fmt(c.price)}</div>
+                  <div style={{ fontSize:26, fontWeight:900, color:B, letterSpacing:'-1px', lineHeight:1.1 }}>{'$' + String(c.price).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}</div>
                 </div>
                 <div style={{ textAlign:'right' }}>
                   <div style={{ fontSize:9, color:T3, fontWeight:700, textTransform:'uppercase', letterSpacing:.6 }}>Distancia</div>
