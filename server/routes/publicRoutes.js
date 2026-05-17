@@ -187,21 +187,9 @@ router.post('/quote-estimate', publicCalculationLimiter, validatePublicCalculati
 // Fallback pricer — runs when Claude is unavailable or returns invalid JSON
 function fallbackQuote(items, distanceKm, numHelpers, numFloors) {
   const totalQty = items.reduce((s, i) => s + (Number(i.qty) || 1), 0);
-  const totalVol = items.reduce((s, i) => s + (Number(i.vol) || 0) * (Number(i.qty) || 1), 0);
   const names = items.map(i => (i.name || '').toLowerCase()).join(' ');
   const hasHeavy = /nevera|refrigerador|lavadora|secadora|cocina|piano|moto/.test(names);
   const hasBig   = /sofa|sofá|closet|ropero|queen|king|2 plaza/.test(names);
-
-  // Genuinely too large — route to agent
-  if (totalVol > 30) {
-    return {
-      detectedType: 'mudanza', vehicle: 'camionLargo', vehicleName: 'Camión Largo', vehicleIcon: '🚛',
-      price: 0, priceMin: 0, priceMax: 0, tollEstimate: 0, recommendedHelpers: 3,
-      clientExplanation: 'Tu mudanza es muy grande. Un asesor te contactará con una cotización personalizada.',
-      internalNote: `Fallback: volumen ${totalVol.toFixed(1)}m3 supera 30m3`,
-      confidence: 'low', needsManualReview: true,
-    };
-  }
 
   let vehicle = 'furgon', detectedType = 'flete', basePrice = 30000;
 
@@ -244,7 +232,7 @@ function fallbackQuote(items, distanceKm, numHelpers, numFloors) {
     clientExplanation: 'Precio estimado según los artículos y distancia indicados. Un asesor confirmará el valor exacto.',
     internalNote: `Fallback (sin IA): ${totalQty} items, ${distanceKm}km`,
     confidence: 'low',
-    needsManualReview: false,
+    needsManualReview: true,
   };
 }
 
