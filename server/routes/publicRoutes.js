@@ -250,8 +250,11 @@ router.post('/ai-quote', publicCalculationLimiter, async (req, res) => {
 
   // If no Claude key, return fallback immediately — never error to client
   if (!process.env.CLAUDE_API_KEY) {
+    console.warn('[ai-quote] CLAUDE_API_KEY no configurada — usando fallback manual');
     return res.json(fallbackQuote(items, Number(distanceKm), Number(numHelpers), Number(numFloors)));
   }
+
+  console.log(`[ai-quote] items=${items.length} freeText="${freeText?.slice(0,40)}" km=${distanceKm}`);
 
   try {
     const client = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
@@ -533,6 +536,7 @@ Articulos: ${itemsList}
 Notas adicionales: ${freeText?.trim() || 'Ninguno'}
 Extras: ${extrasDesc}`;
 
+    console.log(`[ai-quote] llamando a Claude (prompt ${prompt.length} chars)...`);
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 1024,
@@ -540,18 +544,21 @@ Extras: ${extrasDesc}`;
     });
 
     const text = message.content[0].text.trim();
+    console.log(`[ai-quote] respuesta Claude: ${text.slice(0, 200)}`);
+
     // Extract JSON — handle ```json blocks and bare objects
     const jsonMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/) || text.match(/(\{[\s\S]*\})/);
     if (!jsonMatch) {
-      console.warn('ai-quote: no JSON in response, using fallback');
+      console.warn('[ai-quote] sin JSON en respuesta, fallback. Respuesta completa:', text);
       return res.json(fallbackQuote(items, Number(distanceKm), Number(numHelpers), Number(numFloors)));
     }
 
     let result;
     try {
       result = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+      console.log(`[ai-quote] resultado: vehicle=${result.vehicle} price=${result.price} needsManualReview=${result.needsManualReview}`);
     } catch (parseErr) {
-      console.warn('ai-quote: JSON parse failed, using fallback:', parseErr.message);
+      console.warn('[ai-quote] JSON parse falló, fallback:', parseErr.message);
       return res.json(fallbackQuote(items, Number(distanceKm), Number(numHelpers), Number(numFloors)));
     }
 
@@ -603,8 +610,8 @@ Extras: ${extrasDesc}`;
       needsManualReview: Boolean(result.needsManualReview),
     });
   } catch (err) {
-    // Any unexpected error — always return a price, never a blank error to the client
-    console.error('ai-quote error, serving fallback:', err.message);
+    console.error('[ai-quote] ERROR → fallback manual. Tipo:', err.constructor?.name, '| Msg:', err.message);
+    if (err.status) console.error('[ai-quote] HTTP status:', err.status, '| body:', JSON.stringify(err.error || {}));
     return res.json(fallbackQuote(items, Number(distanceKm), Number(numHelpers), Number(numFloors)));
   }
 });
