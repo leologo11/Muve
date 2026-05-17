@@ -397,15 +397,15 @@ AUTO (sedan/hatchback particular)
 FURGON N400 (furgoneta cerrada)
   Capacidad: ~6m3, altura max 1.5m interior
   PUEDE: cajas, colchon, TV, lavadora, microondas, muebles livianos, comoda, escritorio,
-         camas 1 plaza, 1 cama 2 plazas sola, mesas, sillas
-  NO PUEDE: refrigerador grande, 2+ camas 2P, camas Queen/King, sofa grande, closet
+         camas 1 plaza, mesas, sillas
+  NO PUEDE: cama 2 plazas o mayor, refrigerador grande, sofas grandes, closet/ropero
   Rango de precios: $20.000 – $50.000
   Flete liviano (1-3 cosas pequeñas): $20.000-$30.000
   Flete mediano (4-6 cosas): $30.000-$40.000
   Furgon lleno (traslado pieza completa): $40.000-$50.000
 
 CAMION 3/4 (plataforma abierta + rack en techo)
-  Capacidad: ~15m3. PUEDE: refrigerador, closet, sofas, camas Queen/King, muebles 1-2 dormitorios
+  Capacidad: ~15m3. PUEDE: cama 2 plazas/Queen/King, refrigerador, closet, sofas, muebles 1-2 dormitorios
   El chofer ayuda a cargar/descargar: INCLUIDO, no cobrar extra.
   Rango de precios: $60.000 – $100.000
   Flete articulos grandes (1-3 items): $60.000-$70.000
@@ -470,13 +470,14 @@ MUDANZAS: el costo principal es la mano de obra (2-4h), NO la distancia corta
 FLETES: se cobra por lo que entra, no por camion entero
   Furgon flete simple (<10km): $25.000-$40.000 | Camion 3/4 flete simple: $35.000-$55.000
   Ej: 2 camas 1 plaza + 4km = furgon → $30.000-$38.000
-  Ej: 1 sofa o 1 nevera + 4km = camion 3/4 → $35.000-$45.000
+  Ej: 1 cama 2 plazas + 4km = camion 3/4 (NUNCA furgon) → $60.000-$70.000
+  Ej: 1 sofa o 1 nevera + 4km = camion 3/4 → $60.000-$70.000
 
 VEHICULO:
   Cajas, muebles livianos, camas 1 PLAZA, colchones → Furgon
-  Refrigerador, sofa grande, cama 2P/Queen/King, closet → minimo Camion 3/4
+  Cama 2 plazas/Queen/King, refrigerador, sofa grande, closet → SIEMPRE Camion 3/4 o superior
   Carga grande que no cabe en camion 3/4 → Camion Largo
-  ⚠ cama 1 plaza → furgon | 1 cama 2 plazas sola → furgon | 2+ camas 2P o Queen/King → camion 3/4
+  ⚠ cama 1 plaza → furgon | cama 2 plazas o mayor → CAMION 3/4 (NUNCA furgon)
 
 REGLA CRITICA DE PRECIO:
   El campo "price" que devuelves es el costo de la CARGA (sin km).
