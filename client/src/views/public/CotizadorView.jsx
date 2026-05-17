@@ -1665,8 +1665,8 @@ const CZ_CSS = `
       transform: translateZ(0);
     }
     .cz-inner {
-      width: 100%; max-width: 660px;
-      height: calc(100dvh - 48px); max-height: 940px;
+      width: 100%; max-width: 820px;
+      height: calc(100dvh - 48px); max-height: 960px;
       border-radius: 24px; overflow: hidden;
       box-shadow: 0 40px 100px rgba(10,31,61,.28), 0 0 0 1px rgba(0,0,0,.07);
       position: relative; display: flex; flex-direction: column;
