@@ -74,10 +74,10 @@ async function sendNtfyNotification({ quote, payload }) {
   const origin  = payload?.origin || '';
   const dest    = payload?.destination || '';
 
-  const title = `📋 Nueva cotización ${service} — ${name}`;
+  const title = `Nueva cotizacion ${service} - ${name}`;
   const body  = [
     phone,
-    origin && dest ? `${origin} → ${dest}` : (origin || dest),
+    origin && dest ? `${origin} -> ${dest}` : (origin || dest),
     `Precio: ${price}`,
     quote?.quote_code || '',
   ].filter(Boolean).join('\n');
