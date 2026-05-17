@@ -425,9 +425,9 @@ function QuoteCard({ quote: q, onOpen }) {
 
 // Fallback configs when vehicle_configs table not yet migrated
 const FALLBACK_CONFIGS = [
-  { id: 'furgon',      vehicleType: 'furgon',      name: 'Furgón',      basePrice: 20000, kmTiers: [{max_km:50,price_per_km:1000},{max_km:150,price_per_km:800},{max_km:9999,price_per_km:600}], extras:{driver_help:20000,helper:15000,floor:5000,packing:15000} },
-  { id: 'camion34',    vehicleType: 'camion34',    name: 'Camión 3/4',  basePrice: 35000, kmTiers: [{max_km:50,price_per_km:1000},{max_km:150,price_per_km:800},{max_km:9999,price_per_km:600}], extras:{driver_help:20000,helper:15000,floor:5000,packing:15000} },
-  { id: 'camionLargo', vehicleType: 'camionLargo', name: 'Camión Largo',basePrice: 80000, kmTiers: [{max_km:200,price_per_km:700},{max_km:500,price_per_km:550},{max_km:9999,price_per_km:400}], extras:{driver_help:20000,helper:15000,floor:6000,packing:20000} },
+  { id: 'furgon',      vehicleType: 'furgon',      name: 'Furgón',      basePrice: 20000, kmTiers: [{max_km:50,price_per_km:1000},{max_km:150,price_per_km:800},{max_km:9999,price_per_km:600}], extras:{helper:10000,floor:5000,packing:15000} },
+  { id: 'camion34',    vehicleType: 'camion34',    name: 'Camión 3/4',  basePrice: 35000, kmTiers: [{max_km:50,price_per_km:1000},{max_km:150,price_per_km:800},{max_km:9999,price_per_km:600}], extras:{helper:10000,floor:5000,packing:15000} },
+  { id: 'camionLargo', vehicleType: 'camionLargo', name: 'Camión Largo',basePrice: 80000, kmTiers: [{max_km:200,price_per_km:700},{max_km:500,price_per_km:550},{max_km:9999,price_per_km:400}], extras:{helper:20000,floor:6000,packing:20000} },
 ];
 
 // ── Flete / Mudanza detail panel ──────────────────────────────────────────────
@@ -547,14 +547,16 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
 
   const cfg = allConfigs.find(c => c.vehicleType === vehicleType) || allConfigs[0];
   const km  = Number(distKm) || 0;
-  const driverHelps = helpMode !== 'none';
   const actualHelpers = helpMode === 'helpers' ? helpers : 0;
-  const bd  = calcBreakdown(cfg, km, driverHelps, actualHelpers, floors, packing);
+  // Helper price: flete=$10k, mudanza=$20k — overrides whatever the config table says
+  const helperCost = quoteServiceType === 'mudanza' ? 20000 : 10000;
+  const cfgWithHelperCost = { ...cfg, extras: { ...(cfg.extras || {}), helper: helperCost } };
+  const bd  = calcBreakdown(cfgWithHelperCost, km, false, actualHelpers, floors, packing);
 
   // Auto-recalculate price when vehicle/distance/extras change (unless manually overridden)
   useEffect(() => {
     if (!km || priceEdited) return;
-    const exact = calcExactPrice(cfg, km, driverHelps, actualHelpers, floors, packing);
+    const exact = calcExactPrice(cfgWithHelperCost, km, false, actualHelpers, floors, packing);
     const r = calcRange(exact);
     setPriceMin(r.min);
     setPriceMax(r.max);
@@ -760,13 +762,12 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
       {/* ── EXTRAS ── */}
       <Section title="⚡ EXTRAS Y SERVICIOS">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {/* ── Help mode selector ── */}
+          {/* ── Ayudantes: solo traslado o con ayudantes ── */}
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>Servicio de carga</div>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>Ayudantes</div>
             {[
-              { v: 'none',    title: 'Solo traslado',         desc: 'El chofer solo conduce el camión', cost: null },
-              { v: 'driver',  title: 'Chofer ayuda',          desc: 'Incluido en precio base', cost: null },
-              { v: 'helpers', title: 'Chofer + ayudantes',    desc: 'Chofer incluido + ayudantes extra', cost: null },
+              { v: 'none',    title: 'Sin ayudantes',          desc: 'El chofer solo conduce el vehículo' },
+              { v: 'helpers', title: 'Con ayudantes',          desc: `+$${fmt(helperCost)} por ayudante` },
             ].map(opt => (
               <button key={opt.v} type="button" onClick={() => !isDone && setHelpMode(opt.v)}
                 style={{
@@ -784,17 +785,13 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
                   <div style={{ fontSize: 13, fontWeight: 700, color: helpMode === opt.v ? 'var(--accent)' : '#0f172a' }}>{opt.title}</div>
                   <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{opt.desc}</div>
                 </div>
-                {opt.cost > 0 && (
-                  <span style={{ fontSize: 11, fontWeight: 800, color: helpMode === opt.v ? 'var(--accent)' : 'var(--muted)', flexShrink: 0 }}>+${fmt(opt.cost)}</span>
-                )}
               </button>
             ))}
-            {/* Count stepper — only shown when mode = 'helpers' */}
             {helpMode === 'helpers' && (
               <div style={{ marginLeft: 8, marginTop: 2 }}>
                 <ExtraRow
                   label="Número de ayudantes"
-                  sub={`Además del chofer${cfg?.extras?.helper ? ` · +$${fmt(cfg.extras.helper)} c/u` : ''}`}
+                  sub={`+$${fmt(helperCost)} c/u`}
                   value={helpers}
                   onDec={() => setHelpers(n => Math.max(1, n - 1))}
                   onInc={() => setHelpers(n => n + 1)}
@@ -806,7 +803,7 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
 
           <ExtraRow
             label="Pisos en retiro"
-            sub={`Escaleras al cargar${cfg?.extras?.floor ? ` · +$${fmt(cfg.extras.floor)} c/piso` : ''}`}
+            sub={`Escaleras al cargar · +$${fmt(cfgWithHelperCost?.extras?.floor || 5000)} c/piso`}
             value={originFloors}
             onDec={() => setOriginFloors(n => Math.max(0, n - 1))}
             onInc={() => setOriginFloors(n => n + 1)}
@@ -814,7 +811,7 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
           />
           <ExtraRow
             label="Pisos en entrega"
-            sub={`Escaleras al descargar${cfg?.extras?.floor ? ` · +$${fmt(cfg.extras.floor)} c/piso` : ''}`}
+            sub={`Escaleras al descargar · +$${fmt(cfgWithHelperCost?.extras?.floor || 5000)} c/piso`}
             value={destinationFloors}
             onDec={() => setDestinationFloors(n => Math.max(0, n - 1))}
             onInc={() => setDestinationFloors(n => n + 1)}
@@ -822,16 +819,9 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
           />
           <CheckRow
             label="Embalaje profesional"
-            sub={cfg?.extras?.packing ? `+$${fmt(cfg.extras.packing)} — empaque de todos los items` : 'Empaque de todos los items'}
+            sub={`+$${fmt(cfgWithHelperCost?.extras?.packing || 15000)} — empaque de todos los artículos`}
             checked={packing}
             onChange={v => { setPacking(v); }}
-            disabled={isDone}
-          />
-          <CheckRow
-            label="Coordinacion conserjeria"
-            sub="Aviso y tramite en edificio / condominio — sin costo adicional"
-            checked={conserjeria}
-            onChange={setConserjeria}
             disabled={isDone}
           />
         </div>
@@ -872,9 +862,8 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.3, color: 'var(--muted)', marginBottom: 8 }}>DESGLOSE DEL CALCULO</div>
             <BDRow label={`Precio base ${VEHICLE_NAMES[vehicleType] || ''}`} val={bd.base} />
             {bd.kmCost > 0 && <BDRow label={`Distancia (${km} km × $${fmt(bd.ppk)}/km)`} val={bd.kmCost} />}
-            {driverHelps && <BDRow label="Ayuda del chofer incluida" val={0} />}
-            {bd.hlCost > 0 && <BDRow label={`Ayudantes adicionales (${actualHelpers} × $${fmt(cfg?.extras?.helper)})`} val={bd.hlCost} />}
-            {bd.flCost > 0 && <BDRow label={`Pisos (${originFloors} retiro + ${destinationFloors} entrega) × $${fmt(cfg?.extras?.floor)}`} val={bd.flCost} />}
+            {bd.hlCost > 0 && <BDRow label={`Ayudantes (${actualHelpers} × $${fmt(helperCost)})`} val={bd.hlCost} />}
+            {bd.flCost > 0 && <BDRow label={`Pisos (${originFloors} retiro + ${destinationFloors} entrega) × $${fmt(cfgWithHelperCost?.extras?.floor || 5000)}`} val={bd.flCost} />}
             {bd.pkCost > 0 && <BDRow label="Embalaje" val={bd.pkCost} />}
             <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, marginTop: 4, borderTop: '1px solid var(--border)', fontSize: 13, fontWeight: 800 }}>
               <span>Total exacto</span>

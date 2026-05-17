@@ -184,7 +184,10 @@ const OPEN_BY_DEFAULT = new Set(['Dormitorio', 'Living', 'Cocina']);
 export default function InventoryPicker({ inventory, onChange, extras, onExtrasChange, disabled = false, catalog = CATALOG }) {
   const cats = React.useMemo(() => [...new Set(catalog.map(c => c.cat))], [catalog]);
   const [collapsed, setCollapsed] = React.useState(() =>
-    Object.fromEntries(cats.map(c => [c, !OPEN_BY_DEFAULT.has(c)]))
+    // In disabled mode: start all collapsed (only non-empty ones are shown, auto-expand them)
+    disabled
+      ? Object.fromEntries(cats.map(c => [c, false]))
+      : Object.fromEntries(cats.map(c => [c, !OPEN_BY_DEFAULT.has(c)]))
   );
 
   const getQty = id => inventory.find(i => i.id === id)?.qty || 0;
@@ -207,6 +210,8 @@ export default function InventoryPicker({ inventory, onChange, extras, onExtrasC
         const isOpen = !collapsed[cat];
         const catItems = catalog.filter(c => c.cat === cat);
         const selectedCount = catItems.reduce((s, i) => s + (getQty(i.id) > 0 ? 1 : 0), 0);
+        // In disabled (read-only) mode, hide empty categories entirely
+        if (disabled && selectedCount === 0) return null;
         return (
           <div key={cat} style={{ marginBottom: 6, borderRadius: 10, overflow: 'hidden', border: '1px solid #e8edf5' }}>
             {/* Category accordion header */}
