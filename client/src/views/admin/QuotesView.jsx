@@ -184,6 +184,7 @@ export default function QuotesView() {
   const [creating, setCreating]       = useState(false);
   const [detailQuote, setDetailQuote] = useState(null);
   const [serviceFilter, setServiceFilter] = useState('all');
+  const [periodFilter, setPeriodFilter]   = useState('mes');
 
   useEffect(() => {
     Promise.all([
@@ -221,7 +222,22 @@ export default function QuotesView() {
 
   if (loading) return <div style={{ padding: 30, textAlign: 'center', color: 'var(--muted)' }}>Cargando…</div>;
 
-  const visible = serviceFilter === 'all' ? quotes : quotes.filter(q => (q.serviceType || 'flete') === serviceFilter);
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayCount = quotes.filter(q => q.createdAt && new Date(q.createdAt) >= startOfDay).length;
+
+  const periodStart = (() => {
+    if (periodFilter === 'hoy')   return startOfDay;
+    if (periodFilter === 'semana') { const d = new Date(startOfDay); d.setDate(d.getDate() - 6); return d; }
+    if (periodFilter === 'mes')   { return new Date(now.getFullYear(), now.getMonth(), 1); }
+    return null; // 'todo'
+  })();
+
+  const visible = quotes.filter(q => {
+    const matchService = serviceFilter === 'all' || (q.serviceType || 'flete') === serviceFilter;
+    const matchPeriod  = !periodStart || (q.createdAt && new Date(q.createdAt) >= periodStart);
+    return matchService && matchPeriod;
+  });
 
   return (
     <>
@@ -258,7 +274,35 @@ export default function QuotesView() {
 
       {/* ── Quotes list ───────────────────────────────────────────────── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '10px 10px calc(90px + env(safe-area-inset-bottom))' }}>
-        {/* Filter tabs */}
+
+        {/* Today counter */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <div style={{ flex: 1, background: todayCount > 0 ? '#0052FF0d' : 'var(--card)', border: `1px solid ${todayCount > 0 ? '#0052FF30' : 'var(--border)'}`, borderRadius: 12, padding: '9px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 20 }}>📋</span>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, lineHeight: 1 }}>Hoy</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: todayCount > 0 ? 'var(--accent)' : 'var(--text)', lineHeight: 1.1 }}>{todayCount}</div>
+            </div>
+            <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+              <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, lineHeight: 1 }}>Total</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--text)', lineHeight: 1.1 }}>{quotes.length}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Period filter */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+          {[['hoy','Hoy'],['semana','7 días'],['mes','Este mes'],['todo','Todo']].map(([v, l]) => (
+            <button key={v} onClick={() => setPeriodFilter(v)} style={{
+              flex: 1, borderRadius: 20, border: '1px solid var(--border)', padding: '6px 0',
+              background: periodFilter === v ? '#1e293b' : '#fff',
+              color: periodFilter === v ? '#fff' : 'var(--muted)',
+              fontSize: 11, fontWeight: 800, cursor: 'pointer'
+            }}>{l}</button>
+          ))}
+        </div>
+
+        {/* Service filter tabs */}
         <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '0 0 10px', scrollbarWidth: 'none' }}>
           {[['all','Todas'],['flete','Fletes'],['mudanza','Mudanzas'],['paqueteria','Paqueteria']].map(([v, l]) => (
             <button key={v} onClick={() => setServiceFilter(v)} style={{
@@ -284,7 +328,13 @@ export default function QuotesView() {
         {visible.length === 0 && (
           <div style={{ textAlign: 'center', padding: '50px 20px', color: 'var(--muted)' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>💼</div>
-            <p style={{ fontSize: 14 }}>No hay cotizaciones.</p>
+            <p style={{ fontSize: 14 }}>Sin cotizaciones en este período.</p>
+          </div>
+        )}
+
+        {visible.length > 0 && (
+          <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, marginBottom: 8, paddingLeft: 2 }}>
+            {visible.length} cotizacion{visible.length !== 1 ? 'es' : ''}
           </div>
         )}
 
