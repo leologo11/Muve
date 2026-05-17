@@ -392,6 +392,10 @@ function recoverFleteFromNotes(notes) {
 function stripFleteTag(notes) {
   return (notes || '').replace(/\n?__flete__:\{[\s\S]+?\}\s*$/, '').trim();
 }
+function cleanCotizadorNotes(notes) {
+  // Remove internal prefix "Cotizador 2.0 | VehicleName | ..." — only show human-readable part
+  return (notes || '').replace(/^Cotizador 2\.0\s*\|[^|]*\|?\s*/i, '').replace(/REVISIÓN MANUAL[^\n]*/i, '').trim();
+}
 
 function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelete }) {
   const quoteServiceType = q.serviceType === 'mudanza' ? 'mudanza' : 'flete';
@@ -1045,9 +1049,9 @@ function PaqueteriaDetailPanel({ quote: q, drivers, onReload, onDelete }) {
           </InfoRow>
         )}
         {q.clientCompany && <InfoRow label="Empresa" value={q.clientCompany} />}
-        {q.clientNotes && (
+        {q.clientNotes && cleanCotizadorNotes(q.clientNotes) && (
           <div style={{ marginTop: 8, padding: '8px 10px', background: '#e3f2fd', borderRadius: 8, fontSize: 12, color: '#0077aa', lineHeight: 1.4 }}>
-            💬 {q.clientNotes}
+            💬 {cleanCotizadorNotes(q.clientNotes)}
           </div>
         )}
       </Section>

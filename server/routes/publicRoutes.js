@@ -486,21 +486,25 @@ FLETES: se cobra por lo que entra, no por camion entero
 VEHICULO:
   Cajas, muebles livianos, camas 1 PLAZA, colchones → Furgon
   Refrigerador, sofa grande, cama 2P/Queen/King, closet → minimo Camion 3/4
-  Carga entre camion lleno y 2 camiones → 2 viajes camion 3/4 (twoTrips = true)
-  Genuinamente 2 camiones llenos → Camion Largo
+  Carga grande que no cabe en camion 3/4 → Camion Largo
   ⚠ cama 1 plaza → furgon | 1 cama 2 plazas sola → furgon | 2+ camas 2P o Queen/King → camion 3/4
 
-ADICIONALES (sumar sobre precio base):
-  Piso sin ascensor: +$5.000/piso (retiro Y entrega por separado)
+REGLA CRITICA DE PRECIO:
+  El campo "price" que devuelves es el costo de la CARGA (sin km).
+  El servidor calcula y agrega el km automaticamente usando las tarifas reales.
+  Los casos de entrenamiento que ves estan todos a ~4km — tu precio refleja la carga sola.
+  NO sumes km al price. Solo da el costo base del tipo y tamaño de carga.
+
+ADICIONALES sobre el precio base de carga (NO incluir km):
+  Piso sin ascensor: +$5.000/piso
   Ayudante en MUDANZA: +$20.000/persona | Ayudante en FLETE: +$10.000/persona
   Embalaje: +$12.000 (furgon) / +$20.000 (camion 3/4) / +$35.000 (largo)
-  Distancia >15km: (distancia - 15) × precio_km segun tarifa configurada
 
   Redondear todo a multiplos de $1.000
   priceMin = 88% del price | priceMax = 115% del price
   Si info vaga → confidence "low" y rango amplio
 
-  Nunca mencionar m3. Nunca revelar 2 camiones. clientExplanation: max 2 frases naturales.
+  Nunca mencionar viajes, camiones multiples, ni detalles operativos. clientExplanation: max 2 frases naturales.
 
 CUANDO USAR needsManualReview = true:
   - Si el volumen total supera 30m3 (no cabe ni en el camion largo)
@@ -525,7 +529,7 @@ Responde SOLO con JSON valido, sin markdown:
   "vehicle": "auto|furgon|camion34|camionLargo",
   "vehicleName": "<nombre para mostrar al cliente>",
   "vehicleIcon": "🚗|🚐|🚚|🚛",
-  "price": <entero multiplo de 1000>,
+  "price": <precio de la CARGA sin km, entero multiplo de 1000 — el servidor agrega el costo de km automaticamente>,
   "priceMin": <entero multiplo de 1000>,
   "priceMax": <entero multiplo de 1000>,
   "tollEstimate": <entero multiplo de 1000, 0 si no aplica>,
@@ -567,11 +571,10 @@ Extras: ${extrasDesc}`;
     }
 
     // ── Server-side km adjustment ─────────────────────────────────────────────
-    // Only applies when the AI had NO tariff data in the prompt (configsSection empty).
-    // When tariffs ARE available, the AI already computed: base + actualKm * rate.
-    // Adding km again would double-count it.
+    // AI returns cargo-only base price (trained on 4km examples).
+    // Server always adds the km cost delta on top using real tariff configs.
     const kmDist = Number(distanceKm) || 0;
-    if (!configsSection && kmDist > 4 && rawVehicleConfigs.length > 0) {
+    if (kmDist > 4 && rawVehicleConfigs.length > 0) {
       const BASE_TRAINING_KM = 4;
       const aiVehicleType = (['auto', 'furgon', 'camion34', 'camionLargo'].includes(result.vehicle))
         ? result.vehicle : 'furgon';
