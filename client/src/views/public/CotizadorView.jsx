@@ -662,7 +662,24 @@ const MOVE_ROW2 = [
   { icon: '🚿', label: 'Lavadora'   }, { icon: '🎨', label: 'Arte y deco'  },
 ];
 
+const CASES = [
+  { type:'Mudanza chica', icon:'🏠', items:['🛏️ Cama 1 plaza','🗄️ Cómoda','💻 Escritorio','📦 4 cajas'], km:8, price:45000, name:'María G.', comment:'Todo llegó perfecto, muy puntuales y cuidadosos con los muebles.' },
+  { type:'Mudanza mediana', icon:'🏘️', items:['🛏️ Cama 2 plazas','🪞 Clóset','🛋️ Sofá','🧊 Refrigerador','📦 8 cajas'], km:15, price:120000, name:'Carlos M.', comment:'Muy profesionales, cubrieron todo bien. Lo recomiendo 100%.' },
+  { type:'Flete express', icon:'🚚', items:['🛋️ Sofá 2 plazas','🍽️ Mesa comedor','📦 3 cajas'], km:5, price:35000, name:'Paula R.', comment:'Rápido y sin complicaciones. El precio fue exacto al cotizado.' },
+  { type:'Mudanza grande', icon:'🏡', items:['🛏️ Cama Queen','🪞 Clóset','🛋️ Sofá 3 plazas','🧊 Refrigerador','🫧 Lavadora'], km:22, price:185000, name:'Rodrigo T.', comment:'¡Mudanza completa sin ningún problema! Excelentes profesionales.' },
+];
+
 function ScreenWelcome({ onStart }) {
+  const [activeCase, setActiveCase] = useState(0);
+  const [fading, setFading] = useState(false);
+  useEffect(() => {
+    const t = setInterval(() => {
+      setFading(true);
+      setTimeout(() => { setActiveCase(i => (i + 1) % CASES.length); setFading(false); }, 320);
+    }, 4500);
+    return () => clearInterval(t);
+  }, []);
+  const c = CASES[activeCase];
   return (
     <div style={{ height: '100dvh', background: 'linear-gradient(175deg,#E8F3FF 0%,#F7FAFF 50%,#FFFFFF 100%)', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
       <style>{`
@@ -774,50 +791,68 @@ function ScreenWelcome({ onStart }) {
         </div>
 
         {/* Side panel — desktop right column (hidden on mobile) */}
-        <div className="czSideCards" style={{ display:'none', gap:12 }}>
+        <div className="czSideCards" style={{ display:'none', gap:10 }}>
 
-          {/* Combined Fletes & Mudanzas card */}
-          <div onClick={onStart} style={{ borderRadius:18, overflow:'hidden', cursor:'pointer', transition:'transform .15s, box-shadow .15s', boxShadow:`0 4px 20px ${B}20` }}
-            onMouseEnter={e => { e.currentTarget.style.transform='scale(1.02)'; e.currentTarget.style.boxShadow=`0 8px 28px ${B}35`; }}
-            onMouseLeave={e => { e.currentTarget.style.transform='scale(1)'; e.currentTarget.style.boxShadow=`0 4px 20px ${B}20`; }}
-          >
-            {/* Header gradient */}
-            <div style={{ background:`linear-gradient(135deg,${B},${C})`, padding:'18px 20px 14px', display:'flex', alignItems:'center', gap:14 }}>
-              <div style={{ display:'flex', gap:8 }}>
-                <div style={{ width:44, height:44, borderRadius:12, background:'rgba(255,255,255,.2)', display:'grid', placeItems:'center', fontSize:22 }}>🚚</div>
-                <div style={{ width:44, height:44, borderRadius:12, background:'rgba(255,255,255,.2)', display:'grid', placeItems:'center', fontSize:22 }}>🏠</div>
+          {/* Rotating testimonial card */}
+          <div style={{ borderRadius:18, overflow:'hidden', boxShadow:`0 4px 24px ${B}22`, opacity: fading ? 0 : 1, transition:'opacity .32s ease' }}>
+            {/* Header */}
+            <div style={{ background:GRAD, padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <div style={{ width:40, height:40, borderRadius:10, background:'rgba(255,255,255,.2)', display:'grid', placeItems:'center', fontSize:20, flexShrink:0 }}>{c.icon}</div>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:800, color:'#fff', letterSpacing:'-0.2px' }}>{c.type}</div>
+                  <div style={{ fontSize:10, color:'rgba(255,255,255,.75)', marginTop:1 }}>{c.km} km recorridos</div>
+                </div>
               </div>
-              <div>
-                <div style={{ fontSize:16, fontWeight:900, color:'#fff', letterSpacing:'-0.3px' }}>Fletes & Mudanzas</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,.8)', marginTop:2 }}>Cotización instantánea y sin compromiso</div>
+              <div style={{ color:'#FFD700', fontSize:15, letterSpacing:2 }}>★★★★★</div>
+            </div>
+
+            {/* Items */}
+            <div style={{ background:'#fff', padding:'12px 16px', borderBottom:`1px solid ${BDR}` }}>
+              <div style={{ fontSize:9, fontWeight:700, color:T3, textTransform:'uppercase', letterSpacing:.8, marginBottom:6 }}>Lo que llevamos</div>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+                {c.items.map(item => (
+                  <span key={item} style={{ fontSize:11, fontWeight:600, color:T2, background:`${B}08`, border:`1px solid ${B}18`, borderRadius:6, padding:'3px 9px' }}>{item}</span>
+                ))}
               </div>
             </div>
-            {/* Features list */}
-            <div style={{ background:'#fff', padding:'14px 20px' }}>
-              {[
-                { icon:'📍', text:'Retiro y entrega en Santiago y alrededores' },
-                { icon:'🚐', text:'Furgón, Camión 3/4 o Camión largo según carga' },
-                { icon:'👷', text:'Con o sin ayudantes — tú decides' },
-                { icon:'📦', text:'Embalaje profesional disponible' },
-              ].map((f,i,arr) => (
-                <div key={f.text} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderBottom: i < arr.length-1 ? `1px solid ${BDR}` : 'none' }}>
-                  <div style={{ width:30, height:30, borderRadius:8, background:`${B}10`, display:'grid', placeItems:'center', fontSize:15, flexShrink:0 }}>{f.icon}</div>
-                  <span style={{ fontSize:12, color:T2, lineHeight:1.3, fontWeight:500 }}>{f.text}</span>
+
+            {/* Price + km */}
+            <div style={{ background:'#fff', padding:'12px 16px 10px', borderBottom:`1px solid ${BDR}` }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end' }}>
+                <div>
+                  <div style={{ fontSize:9, color:T3, fontWeight:700, textTransform:'uppercase', letterSpacing:.6 }}>Precio cobrado</div>
+                  <div style={{ fontSize:26, fontWeight:900, color:B, letterSpacing:'-1px', lineHeight:1.1 }}>${fmt(c.price)}</div>
                 </div>
-              ))}
+                <div style={{ textAlign:'right' }}>
+                  <div style={{ fontSize:9, color:T3, fontWeight:700, textTransform:'uppercase', letterSpacing:.6 }}>Distancia</div>
+                  <div style={{ fontSize:26, fontWeight:900, color:N, letterSpacing:'-1px', lineHeight:1.1 }}>{c.km} km</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Testimonial */}
+            <div style={{ background:'#FAFBFF', padding:'12px 16px' }}>
+              <div style={{ background:'#fff', borderRadius:10, padding:'10px 13px', border:`1px solid ${BDR}`, boxShadow:'0 1px 6px rgba(0,0,0,.04)' }}>
+                <div style={{ fontSize:11, color:T2, lineHeight:1.6, fontStyle:'italic' }}>"{c.comment}"</div>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:8 }}>
+                  <div style={{ width:22, height:22, borderRadius:'50%', background:GRAD, display:'grid', placeItems:'center', fontSize:10, color:'#fff', fontWeight:800, flexShrink:0 }}>
+                    {c.name[0]}
+                  </div>
+                  <div style={{ fontSize:11, fontWeight:800, color:N }}>{c.name}</div>
+                  <div style={{ marginLeft:'auto', color:'#FFD700', fontSize:11 }}>★★★★★</div>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Stats bar */}
-          <div style={{ borderRadius:14, padding:'14px 18px', background:'rgba(255,255,255,.75)', border:`1.5px solid ${BDR}`, backdropFilter:'blur(8px)' }}>
-            <div style={{ display:'flex' }}>
-              {[['500+','Fletes realizados'],['98%','Satisfacción'],['30s','Precio']].map(([n,l],i) => (
-                <div key={l} style={{ flex:1, textAlign:'center', borderRight: i < 2 ? `1px solid ${BDR}` : 'none', padding:'0 8px' }}>
-                  <div style={{ fontSize:22, fontWeight:900, color:B, letterSpacing:'-0.5px' }}>{n}</div>
-                  <div style={{ fontSize:10, fontWeight:700, color:T3, textTransform:'uppercase', letterSpacing:.5, lineHeight:1.4 }}>{l}</div>
-                </div>
-              ))}
-            </div>
+          {/* Navigation dots */}
+          <div style={{ display:'flex', justifyContent:'center', gap:6 }}>
+            {CASES.map((_, i) => (
+              <div key={i} onClick={() => { setActiveCase(i); setFading(false); }}
+                style={{ width: i === activeCase ? 22 : 7, height:7, borderRadius:99, background: i === activeCase ? B : BDR, cursor:'pointer', transition:'all .35s' }}
+              />
+            ))}
           </div>
         </div>
       </div>
