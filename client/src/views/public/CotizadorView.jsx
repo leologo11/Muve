@@ -744,8 +744,8 @@ function ScreenWelcome({ onStart }) {
       <div style={{ position:'absolute', bottom:0, left:-80, width:260, height:260, borderRadius:'50%', background:`radial-gradient(circle,${B}10,transparent 68%)`, pointerEvents:'none' }}/>
 
       {/* Logo bar */}
-      <div style={{ padding:'14px 20px 0', flexShrink:0, position:'relative', zIndex:2, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <img src="/logo_reducido.png" alt="MUVE" style={{ height:36, objectFit:'contain' }}/>
+      <div style={{ padding:'16px 22px 0', flexShrink:0, position:'relative', zIndex:2, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <img src="/logo_reducido.png" alt="MUVE" style={{ height:52, objectFit:'contain' }}/>
         <a href={WA_URL} target="_blank" rel="noreferrer" style={{
           width:36, height:36, borderRadius:10,
           background:'rgba(37,211,102,.12)', border:'1px solid rgba(37,211,102,.28)',
@@ -756,18 +756,18 @@ function ScreenWelcome({ onStart }) {
       </div>
 
       {/* Content: hero left + service cards right (desktop two-col) */}
-      <div className="czContent" style={{ flexShrink:0, position:'relative', zIndex:2, display:'flex', flexDirection:'column', padding:'10px 22px 0' }}>
+      <div className="czContent" style={{ flexShrink:0, position:'relative', zIndex:2, display:'flex', flexDirection:'column', padding:'14px 28px 0' }}>
 
         {/* Hero inner column */}
         <div className="czHeroInner" style={{ display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center', flex:1 }}>
-          <div style={{ fontSize:10, fontWeight:800, color:B, textTransform:'uppercase', letterSpacing:1.5, marginBottom:8 }}>
+          <div style={{ fontSize:10, fontWeight:800, color:B, textTransform:'uppercase', letterSpacing:1.8, marginBottom:10 }}>
             Fletes · Mudanzas · Santiago
           </div>
-          <h1 className="czHeroTitle" style={{ margin:'0 0 8px', fontSize:32, lineHeight:1.1, fontWeight:900, letterSpacing:'-1.2px', color:N }}>
+          <h1 className="czHeroTitle" style={{ margin:'0 0 10px', fontSize:34, lineHeight:1.1, fontWeight:900, letterSpacing:'-1.4px', color:N }}>
             Tu precio de traslado,<br/>
             <span style={{ background:GRAD, WebkitBackgroundClip:'text', backgroundClip:'text', color:'transparent' }}>en 30 segundos</span>
           </h1>
-          <p className="czHeroSub" style={{ color:T2, fontSize:13, lineHeight:1.5, margin:'0 0 12px', maxWidth:264 }}>
+          <p className="czHeroSub" style={{ color:T2, fontSize:14, lineHeight:1.55, margin:'0 0 14px', maxWidth:290 }}>
             Sin registro ni llamadas. Ingresa origen, destino y artículos — precio al instante.
           </p>
 
@@ -792,15 +792,15 @@ function ScreenWelcome({ onStart }) {
             onMouseDown={addRipple}
             className="czCta czHeroCta"
             style={{
-              width:'100%', maxWidth:360, padding:'15px', borderRadius:16, border:'none',
-              color:'#fff', fontSize:17, fontWeight:900, cursor:'pointer', letterSpacing:'-0.3px',
-              boxShadow:`0 10px 28px rgba(27,108,245,.45), 0 3px 8px rgba(27,108,245,.25)`,
-              display:'flex', alignItems:'center', justifyContent:'center', gap:10,
-              marginBottom:10, position:'relative', overflow:'hidden',
+              width:'100%', maxWidth:380, padding:'18px 20px', borderRadius:18, border:'none',
+              color:'#fff', fontSize:19, fontWeight:900, cursor:'pointer', letterSpacing:'-0.4px',
+              boxShadow:`0 14px 36px rgba(27,108,245,.50), 0 4px 12px rgba(27,108,245,.28)`,
+              display:'flex', alignItems:'center', justifyContent:'center', gap:12,
+              marginBottom:12, position:'relative', overflow:'hidden',
             }}
           >
             <span>Cotizar mi traslado</span>
-            <ArrowRight size={19} color="#fff" strokeWidth={2.7}/>
+            <ArrowRight size={21} color="#fff" strokeWidth={2.7}/>
           </button>
 
           {/* Trust chips */}
