@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../../api/index.js';
 
 const PERIODS = [
+  { days: 1,  label: 'Hoy' },
   { days: 7,  label: '7 días' },
   { days: 30, label: '30 días' },
   { days: 90, label: '90 días' },
@@ -136,7 +137,7 @@ function BreakdownRow({ icon, label, sessions, submits, total, color }) {
 }
 
 export default function AnalyticsView({ onBack }) {
-  const [days, setDays]       = useState(7);
+  const [days, setDays]       = useState(1);
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
