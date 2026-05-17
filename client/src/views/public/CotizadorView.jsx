@@ -773,25 +773,46 @@ function ScreenWelcome({ onStart }) {
           </div>
         </div>
 
-        {/* Service cards — desktop right column (hidden on mobile) */}
-        <div className="czSideCards" style={{ display:'none', gap:10 }}>
-          {[
-            { v:'flete',      label:'Flete',      sub:'Traslado de objetos o carga entre dos puntos', icon:'🚚', g:['#0052FF','#00DAFF'] },
-            { v:'mudanza',    label:'Mudanza',    sub:'Cambio de residencia o traslado completo', icon:'🏠', g:['#7C3AED','#A78BFA'] },
-            { v:'paqueteria', label:'Paquetería', sub:'Envíos y mensajería para empresas', icon:'📦', g:['#059669','#34D399'] },
-          ].map(s => (
-            <div key={s.v} onClick={onStart}
-              style={{ borderRadius:16, padding:'14px 16px', display:'flex', alignItems:'center', gap:13, background:`linear-gradient(135deg,${s.g[0]}14,${s.g[1]}08)`, border:`1.5px solid ${s.g[0]}30`, cursor:'pointer', transition:'transform .15s, box-shadow .15s' }}
-              onMouseEnter={e => { e.currentTarget.style.transform='scale(1.02)'; e.currentTarget.style.boxShadow=`0 6px 20px ${s.g[0]}30`; }}
-              onMouseLeave={e => { e.currentTarget.style.transform='scale(1)'; e.currentTarget.style.boxShadow='none'; }}
-            >
-              <div style={{ width:46, height:46, borderRadius:13, background:`linear-gradient(135deg,${s.g[0]},${s.g[1]})`, display:'grid', placeItems:'center', flexShrink:0, boxShadow:`0 4px 14px ${s.g[0]}45`, fontSize:22 }}>{s.icon}</div>
+        {/* Side panel — desktop right column (hidden on mobile) */}
+        <div className="czSideCards" style={{ display:'none', gap:12 }}>
+
+          {/* Combined Fletes & Mudanzas card */}
+          <div onClick={onStart} style={{ borderRadius:18, overflow:'hidden', cursor:'pointer', transition:'transform .15s, box-shadow .15s', boxShadow:`0 4px 20px ${B}20` }}
+            onMouseEnter={e => { e.currentTarget.style.transform='scale(1.02)'; e.currentTarget.style.boxShadow=`0 8px 28px ${B}35`; }}
+            onMouseLeave={e => { e.currentTarget.style.transform='scale(1)'; e.currentTarget.style.boxShadow=`0 4px 20px ${B}20`; }}
+          >
+            {/* Header gradient */}
+            <div style={{ background:`linear-gradient(135deg,${B},${C})`, padding:'18px 20px 14px', display:'flex', alignItems:'center', gap:14 }}>
+              <div style={{ display:'flex', gap:8 }}>
+                <div style={{ width:44, height:44, borderRadius:12, background:'rgba(255,255,255,.2)', display:'grid', placeItems:'center', fontSize:22 }}>🚚</div>
+                <div style={{ width:44, height:44, borderRadius:12, background:'rgba(255,255,255,.2)', display:'grid', placeItems:'center', fontSize:22 }}>🏠</div>
+              </div>
               <div>
-                <div style={{ fontSize:15, fontWeight:800, color:N }}>{s.label}</div>
-                <div style={{ fontSize:12, color:T2, lineHeight:1.4, marginTop:2 }}>{s.sub}</div>
+                <div style={{ fontSize:16, fontWeight:900, color:'#fff', letterSpacing:'-0.3px' }}>Fletes & Mudanzas</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,.8)', marginTop:2 }}>Cotización instantánea y sin compromiso</div>
               </div>
             </div>
-          ))}
+            {/* Features list */}
+            <div style={{ background:'#fff', padding:'14px 20px' }}>
+              {[
+                { icon:'📍', text:'Retiro y entrega en cualquier punto de Chile' },
+                { icon:'🚐', text:'Furgón, Camión 3/4 o Camión largo según carga' },
+                { icon:'👷', text:'Con o sin ayudantes — tú decides' },
+                { icon:'📦', text:'Embalaje profesional disponible' },
+              ].map(f => (
+                <div key={f.text} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 0', borderBottom:`1px solid ${BDR}` }}>
+                  <span style={{ fontSize:16, flexShrink:0 }}>{f.icon}</span>
+                  <span style={{ fontSize:12, color:T2, lineHeight:1.3 }}>{f.text}</span>
+                </div>
+              ))}
+              <div style={{ marginTop:12, background:GRAD, borderRadius:10, padding:'9px 14px', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+                <span style={{ fontSize:13, fontWeight:800, color:'#fff' }}>Ver mi precio ahora</span>
+                <ArrowRight size={14} color="#fff" strokeWidth={2.8}/>
+              </div>
+            </div>
+          </div>
+
+          {/* Stats bar */}
           <div style={{ borderRadius:14, padding:'14px 18px', background:'rgba(255,255,255,.75)', border:`1.5px solid ${BDR}`, backdropFilter:'blur(8px)' }}>
             <div style={{ display:'flex' }}>
               {[['500+','Fletes realizados'],['98%','Satisfacción'],['30s','Precio']].map(([n,l],i) => (
