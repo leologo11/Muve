@@ -187,9 +187,21 @@ router.post('/quote-estimate', publicCalculationLimiter, validatePublicCalculati
 // Fallback pricer — runs when Claude is unavailable or returns invalid JSON
 function fallbackQuote(items, distanceKm, numHelpers, numFloors) {
   const totalQty = items.reduce((s, i) => s + (Number(i.qty) || 1), 0);
+  const totalVol = items.reduce((s, i) => s + (Number(i.vol) || 0) * (Number(i.qty) || 1), 0);
   const names = items.map(i => (i.name || '').toLowerCase()).join(' ');
   const hasHeavy = /nevera|refrigerador|lavadora|secadora|cocina|piano|moto/.test(names);
   const hasBig   = /sofa|sofá|closet|ropero|queen|king|2 plaza/.test(names);
+
+  // Genuinely too large — route to agent
+  if (totalVol > 30) {
+    return {
+      detectedType: 'mudanza', vehicle: 'camionLargo', vehicleName: 'Camión Largo', vehicleIcon: '🚛',
+      price: 0, priceMin: 0, priceMax: 0, tollEstimate: 0, recommendedHelpers: 3,
+      clientExplanation: 'Tu mudanza es muy grande. Un asesor te contactará con una cotización personalizada.',
+      internalNote: `Fallback: volumen ${totalVol.toFixed(1)}m3 supera 30m3`,
+      confidence: 'low', needsManualReview: true,
+    };
+  }
 
   let vehicle = 'furgon', detectedType = 'flete', basePrice = 30000;
 
@@ -200,26 +212,13 @@ function fallbackQuote(items, distanceKm, numHelpers, numFloors) {
     vehicle = 'camion34'; detectedType = totalQty >= 6 ? 'mudanza' : 'flete';
     basePrice = 45000 + totalQty * 2000;
   } else if (totalQty <= 2 && !hasHeavy && !hasBig) {
-    vehicle = 'auto';
-    basePrice = 5000;
+    vehicle = 'furgon';
+    basePrice = 22000;
   } else {
     basePrice = 25000 + totalQty * 4000;
   }
 
-  const kmRates = { auto: 800, furgon: 700, camion34: 1000, camionLargo: 1500 };
-  if (vehicle === 'auto') {
-    const price = Math.round((basePrice + distanceKm * 800) / 1000) * 1000;
-    return {
-      detectedType: 'flete', vehicle: 'auto', vehicleName: 'Auto', vehicleIcon: '🚗',
-      twoTrips: false, price,
-      priceMin: Math.max(5000, Math.round(price * 0.88 / 1000) * 1000),
-      priceMax: Math.round(price * 1.18 / 1000) * 1000,
-      tollEstimate: 0, recommendedHelpers: 0,
-      clientExplanation: 'Precio estimado según distancia. Un asesor confirmará el valor exacto.',
-      internalNote: `Fallback auto: ${distanceKm}km`,
-      confidence: 'low', needsManualReview: true,
-    };
-  }
+  const kmRates = { furgon: 700, camion34: 1000, camionLargo: 1500 };
   const kmExtra  = distanceKm > 15 ? (distanceKm - 15) * (kmRates[vehicle] || 1000) : 0;
   const helpCost = numHelpers * (detectedType === 'mudanza' ? 20000 : 10000);
   const flrCost  = numFloors * 5000;
@@ -229,24 +228,23 @@ function fallbackQuote(items, distanceKm, numHelpers, numFloors) {
     ? (totalQty >= 15 ? 3 : totalQty >= 10 ? 2 : 1)
     : (hasHeavy ? 1 : 0);
 
-  const vehicleNames = { auto: 'Auto', furgon: 'Furgon', camion34: 'Camion 3/4', camionLargo: 'Camion Largo' };
-  const vehicleIcons = { auto: '🚗', furgon: '🚐', camion34: '🚚', camionLargo: '🚛' };
+  const vehicleNames = { furgon: 'Furgón N400', camion34: 'Camión 3/4', camionLargo: 'Camión Largo' };
+  const vehicleIcons = { furgon: '🚐', camion34: '🚚', camionLargo: '🚛' };
 
   return {
     detectedType,
     vehicle,
-    vehicleName: vehicleNames[vehicle] || 'Furgon',
+    vehicleName: vehicleNames[vehicle] || 'Furgón N400',
     vehicleIcon: vehicleIcons[vehicle] || '🚐',
-    twoTrips: false,
     price,
     priceMin: Math.max(15000, Math.round(price * 0.88 / 1000) * 1000),
-    priceMax: Math.round(price * 1.18 / 1000) * 1000,
+    priceMax: Math.round(price * 1.15 / 1000) * 1000,
     tollEstimate: 0,
     recommendedHelpers,
     clientExplanation: 'Precio estimado según los artículos y distancia indicados. Un asesor confirmará el valor exacto.',
     internalNote: `Fallback (sin IA): ${totalQty} items, ${distanceKm}km`,
     confidence: 'low',
-    needsManualReview: true,
+    needsManualReview: false,
   };
 }
 
@@ -507,11 +505,10 @@ ADICIONALES sobre el precio base de carga (NO incluir km):
   Nunca mencionar viajes, camiones multiples, ni detalles operativos. clientExplanation: max 2 frases naturales.
 
 CUANDO USAR needsManualReview = true:
-  - Si el volumen total supera 30m3 (no cabe ni en el camion largo)
-  - Si el precio estimado supera $250.000
-  - Si la descripcion es ambigua y el precio podria variar mas de $80.000
-  En esos casos, pon needsManualReview: true — el sistema derivara al cliente con un agente humano.
-  Para camion largo con carga ≤30m3: da el precio normalmente, needsManualReview: false.
+  - SOLO si el volumen total supera 30m3 (genuinamente no cabe en ningun vehiculo)
+  En todos los demas casos: needsManualReview: false — da tu mejor estimacion de precio.
+  Si el precio es alto o hay incertidumbre, pon confidence "low" — pero NO uses needsManualReview.
+  Para camion largo con carga ≤30m3: precio normalmente, needsManualReview: false.
 
 AYUDANTES RECOMENDADOS (recommendedHelpers):
   El chofer SIEMPRE carga — "solo chofer" es cuando el puede solo sin ayuda extra.

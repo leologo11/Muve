@@ -1773,7 +1773,7 @@ export default function CotizadorView() {
         needsPacking: extras.packing,
       });
 
-      const isManualReview = res.needsManualReview || res.price > 250000;
+      const isManualReview = res.needsManualReview || res.price > 400000;
       if (isManualReview) {
         setState(s => ({ ...s, result: res, manualReview: true, step: 5 }));
         trackStep(5);
