@@ -1136,7 +1136,7 @@ function ScreenExtras({ state, setState, onNext, onBack }) {
 // ─── SCREEN 4 — RESULTADO ─────────────────────────────────────
 function ScreenResult({ state, onRestart, onBack, onNext }) {
   const { result } = state;
-  const [helpers, setHelpers] = useState(state.selectedHelpers ?? result.recommendedHelpers ?? 0);
+  const [helpers, setHelpers] = useState(state.selectedHelpers ?? 0);
 
   const items = Object.keys(state.inventory)
     .filter(id => state.inventory[id] > 0)
@@ -1211,8 +1211,10 @@ function ScreenResult({ state, onRestart, onBack, onNext }) {
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 800, color: B }}>Ayudantes</div>
                   <div style={{ fontSize: 11, color: T2, marginTop: 1 }}>
-                    {helpers === 0 ? 'Solo el chofer' : `${helpers} ayudante${helpers > 1 ? 's' : ''} · +${fmt(helpersTotal)}`}
-                    {helpers === (result.recommendedHelpers || 0) && <span style={{ color: SUC, marginLeft: 4 }}>✓ Recomendado</span>}
+                    {helpers === 0
+                      ? <>Solo el chofer{result.recommendedHelpers > 0 && <span style={{ color: '#D97706', marginLeft: 4 }}>· Recomendamos {result.recommendedHelpers} ayudante{result.recommendedHelpers > 1 ? 's' : ''}</span>}</>
+                      : <>{helpers} ayudante{helpers > 1 ? 's' : ''} · +{fmt(helpersTotal)}{helpers === (result.recommendedHelpers || 0) && <span style={{ color: SUC, marginLeft: 4 }}>✓ Recomendado</span>}</>
+                    }
                   </div>
                 </div>
               </div>
