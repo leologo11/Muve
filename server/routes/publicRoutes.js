@@ -281,7 +281,7 @@ router.post('/ai-quote', publicCalculationLimiter, async (req, res) => {
         }
       })(),
       (async () => {
-        const examples = await supabaseRequest(`/ai_quote_feedback${qs({ select: '*', order: 'created_at.desc', limit: '500' })}`);
+        const examples = await supabaseRequest(`/ai_quote_feedback${qs({ select: '*', order: 'created_at.desc', limit: '80' })}`);
         if (!examples || examples.length === 0) return;
 
         const corrections = examples.filter(e => e.status === 'corrected');
@@ -313,7 +313,7 @@ router.post('/ai-quote', publicCalculationLimiter, async (req, res) => {
 
         if (corrections.length > 0) {
           learningSection += `\n⚠️ ERRORES CORREGIDOS POR EL OPERADOR — no repitas estos:\n`;
-          for (const ex of corrections.slice(0, 25)) {
+          for (const ex of corrections.slice(0, 10)) {
             const dist = ex.distance_km ? `${ex.distance_km}km` : '?km';
             const vCorr = ex.correct_vehicle ? ` → vehiculo correcto: ${ex.correct_vehicle}` : '';
             const note  = ex.notes ? ` | ${ex.notes}` : '';
@@ -323,7 +323,7 @@ router.post('/ai-quote', publicCalculationLimiter, async (req, res) => {
 
         if (approvals.length > 0) {
           learningSection += `\n✅ PRECIOS APROBADOS — referencias validas:\n`;
-          for (const ex of approvals.slice(0, 35)) {
+          for (const ex of approvals.slice(0, 20)) {
             const dist = ex.distance_km ? `${ex.distance_km}km` : '?km';
             learningSection += `  ✅ "${ex.items_text}"${ex.free_text ? ` + "${ex.free_text}"` : ''}, ${dist} → ${ex.ai_vehicle_name}, ${ex.ai_detected_type}, $${Number(ex.ai_price).toLocaleString('es-CL')}${ex.ai_two_trips ? ' (2 viajes)' : ''}\n`;
           }
@@ -331,7 +331,7 @@ router.post('/ai-quote', publicCalculationLimiter, async (req, res) => {
       })(),
       (async () => {
         const submitted = await supabaseRequest(
-          `/quotes${qs({ select: 'service_type,vehicle_type,distance_km,items_description,price_min,price_max,num_helpers,num_floors,needs_packing', status: 'in.(submitted,approved)', service_type: 'in.(flete,mudanza)', order: 'created_at.desc', limit: '200' })}`
+          `/quotes${qs({ select: 'service_type,vehicle_type,distance_km,items_description,price_min,price_max,num_helpers,num_floors,needs_packing', status: 'in.(submitted,approved)', service_type: 'in.(flete,mudanza)', order: 'created_at.desc', limit: '30' })}`
         );
         if (!submitted || submitted.length === 0) return;
 
@@ -538,8 +538,8 @@ Extras: ${extrasDesc}`;
 
     console.log(`[ai-quote] llamando a Claude (prompt ${prompt.length} chars)...`);
     const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 512,
       messages: [{ role: 'user', content: prompt }],
     });
 
