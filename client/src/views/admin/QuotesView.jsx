@@ -61,7 +61,7 @@ const fmt = n => Number(n || 0).toLocaleString('es-CL');
 
 // ── PDF generator ─────────────────────────────────────────────────────────────
 
-function printQuotePDF(q, priceMin, priceMax, cfg) {
+function printQuotePDF(q, priceMin, priceMax, cfg, priceFinal = null) {
   const isFlete = q.serviceType !== 'paqueteria';
   const km = Number(q.distanceKm) || 0;
   const dh = q.driverHelps || false;
@@ -72,14 +72,14 @@ function printQuotePDF(q, priceMin, priceMax, cfg) {
   const destinationFloors = storedOriginFloors || storedDestinationFloors ? storedDestinationFloors : 0;
   const totalFloors = Number(q.numFloors ?? (originFloors + destinationFloors)) || 0;
   const bd = cfg && km > 0 ? calcBreakdown(cfg, km, dh, nh, totalFloors, q.needsPacking || false) : null;
-  const savedExactTotal = Number(priceMin) === Number(priceMax) ? Number(priceMin) : 0;
-  const exactTotal = savedExactTotal || bd?.total || 0;
-  const priceText = exactTotal > 0
-    ? `$${fmt(exactTotal)}`
-    : `$${fmt(priceMin)} - $${fmt(priceMax)}`;
-  const priceNote = exactTotal > 0
-    ? 'Precio calculado con la configuracion vigente.'
-    : 'Precio sujeto a evaluacion por direcciones o detalles pendientes.';
+  // priceFinal = admin-set single price (what goes in the formal document)
+  const hasExact = priceFinal && priceFinal > 0;
+  const priceText = hasExact
+    ? `$${fmt(priceFinal)}`
+    : (priceMin && priceMax ? `$${fmt(priceMin)} – $${fmt(priceMax)}` : '—');
+  const priceNote = hasExact
+    ? 'Precio acordado para el servicio.'
+    : 'Precio estimado sujeto a confirmacion de detalles finales.';
 
   const helpLabel = dh
     ? (nh > 0 ? `Traslado + chofer + ${nh} ayudante${nh !== 1 ? 's' : ''}` : 'Traslado + ayuda del chofer incluida')
@@ -493,6 +493,7 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
   const cotizadorMax  = q.priceMax || 0;
   const [priceMin,    setPriceMin]    = useState(cotizadorMin);
   const [priceMax,    setPriceMax]    = useState(cotizadorMax);
+  const [priceFinal,  setPriceFinal]  = useState(q.priceFinal || '');
   const [driverId,    setDriverId]    = useState('');
   const [saving,      setSaving]      = useState(false);
   const [approving,   setApproving]   = useState(false);
@@ -651,6 +652,7 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
         clientNotes, adminNotes,
         deliveryDate: deliveryDate || null,
         priceMin, priceMax,
+        priceFinal: priceFinal !== '' ? Number(priceFinal) : null,
       });
       toast('✅ Cotizacion guardada');
       onReload();
@@ -913,16 +915,37 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
           </div>
         )}
 
+        {/* Rango referencial */}
         {(priceMin > 0 || priceMax > 0) && (
-          <div style={{ marginTop: 12, padding: '12px 14px', background: '#f4f7ff', border: '1px solid #0052FF20', borderRadius: 12, textAlign: 'center' }}>
-            <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>PRECIO A ENVIAR AL CLIENTE</div>
-            <div style={{ fontSize: 24, fontWeight: 900, color: 'var(--accent)' }}>
-              ${fmt(priceMin)} – ${fmt(priceMax)}
-            </div>
+          <div style={{ marginTop: 12, padding: '10px 14px', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>Rango estimado</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--muted)' }}>${fmt(priceMin)} – ${fmt(priceMax)}</div>
+          </div>
+        )}
+
+        {/* Precio final para PDF */}
+        <div style={{ marginTop: 10 }}>
+          <DL>Precio final para cotización ($)</DL>
+          <input
+            type="number"
+            value={priceFinal}
+            onChange={e => setPriceFinal(e.target.value)}
+            disabled={isDone}
+            placeholder={priceMin && priceMax ? `Ej: ${Math.round((Number(priceMin) + Number(priceMax)) / 2 / 1000) * 1000}` : 'Ingresa el precio acordado'}
+            style={{ ...tinp, fontSize: 18, fontWeight: 900, color: 'var(--accent)', borderColor: priceFinal ? 'var(--accent)' : undefined }}
+          />
+          {!priceFinal && !isDone && (
+            <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4, fontWeight: 600 }}>⚠ Sin precio final — el PDF mostrará el rango</div>
+          )}
+        </div>
+
+        {priceFinal > 0 && (
+          <div style={{ marginTop: 10, padding: '12px 14px', background: '#f4f7ff', border: '2px solid var(--accent)', borderRadius: 12, textAlign: 'center' }}>
+            <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4, fontWeight: 700, letterSpacing: 1 }}>PRECIO EN EL PDF</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--accent)' }}>${fmt(Number(priceFinal))}</div>
             <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>
               {VEHICLE_ICONS[vehicleType]} {VEHICLE_NAMES[vehicleType]}{km > 0 ? ` · ${km} km` : ''}
-              {helpMode === 'driver' && ' · Ayuda del chofer'}
-              {helpMode === 'helpers' && ` · Chofer + ${helpers} ayud.`}
+              {helpMode === 'helpers' && ` · ${helpers} ayudante${helpers !== 1 ? 's' : ''}`}
             </div>
           </div>
         )}
@@ -937,7 +960,7 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
             </button>
           )}
           <button
-            onClick={() => printQuotePDF({ ...q, contactPerson: name, contactPhone: phone, originAddress: originAddr, destinationAddress: destAddr, distanceKm: km, vehicleType, driverHelps: helpMode !== 'none', numHelpers: helpMode === 'helpers' ? helpers : 0, numFloors: floors, originFloors, destinationFloors, needsPacking: packing, isConserjeria: conserjeria, itemsDescription: serializeInventory(inventory, inventoryExtras) }, priceMin, priceMax, cfg)}
+            onClick={() => printQuotePDF({ ...q, contactPerson: name, contactPhone: phone, originAddress: originAddr, destinationAddress: destAddr, distanceKm: km, vehicleType, driverHelps: helpMode !== 'none', numHelpers: helpMode === 'helpers' ? helpers : 0, numFloors: floors, originFloors, destinationFloors, needsPacking: packing, isConserjeria: conserjeria, itemsDescription: serializeInventory(inventory, inventoryExtras) }, priceMin, priceMax, cfgWithHelperCost, priceFinal ? Number(priceFinal) : null)}
             style={{ flex: 1, padding: '11px', borderRadius: 10, border: '1px solid #0052FF30', background: '#0052FF10', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
           >
             📄 Generar PDF
