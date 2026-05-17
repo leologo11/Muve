@@ -934,7 +934,7 @@ function ScreenItems({ state, setState, onNext, onBack }) {
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '10px 13px', borderRadius: 12, background: `${B}09`, border: `1px solid ${B}20`, marginBottom: 12 }}>
           <span style={{ fontSize: 18, flexShrink: 0, lineHeight: 1.3 }}>💡</span>
           <span style={{ fontSize: 12, color: B, fontWeight: 600, lineHeight: 1.5 }}>
-            Selecciona del catálogo <strong>o escribe abajo</strong> lo que llevas — la IA calcula el precio de cualquier forma.
+            Selecciona del catálogo <strong>o escribe abajo</strong> lo que llevas — analizamos todo y calculamos el precio igual.
           </span>
         </div>
 
@@ -1019,7 +1019,7 @@ function ScreenItems({ state, setState, onNext, onBack }) {
         {/* Free text */}
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 2 }}>¿Llevas algo que no está en el catálogo?</div>
-          <div style={{ fontSize: 11, color: T2, marginBottom: 7 }}>Escríbelo con palabras — la IA lo incluye en el cálculo igual.</div>
+          <div style={{ fontSize: 11, color: T2, marginBottom: 7 }}>Escríbelo con palabras — lo analizamos y lo incluimos en el precio.</div>
           <textarea
             value={freeText}
             onChange={e => setState(s => ({ ...s, freeText: e.target.value }))}
