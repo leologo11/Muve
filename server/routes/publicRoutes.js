@@ -298,21 +298,20 @@ router.post('/ai-quote', publicCalculationLimiter, async (req, res) => {
           stats[v].max    = Math.max(stats[v].max, Number(ex.ai_price));
         }
 
-        learningSection = `\n━━ INTELIGENCIA ACUMULADA — ${examples.length} CASOS REALES ━━\n`;
-        learningSection += 'ESTOS CASOS SON REFERENCIA DE SELECCIÓN DE VEHÍCULO Y CARGA — no del precio final.\n';
-        learningSection += 'IMPORTANTE: el precio de cada ejemplo es para ESA distancia específica. El servidor ajustará el km automáticamente.\n';
-        learningSection += 'Tu tarea: detectar vehículo correcto y estimar el precio BASE de la carga (sin km). El precio del km se añade aparte.\n';
+        learningSection = `\n━━ CASOS ENTRENADOS POR EL OPERADOR — ${examples.length} casos ━━\n`;
+        learningSection += 'REGLA PRINCIPAL: estos precios aprobados son la FUENTE DE VERDAD. Si hay un caso similar al pedido actual, usa ESE precio como base y ajusta solo por diferencias concretas (mas articulos, mas km, extras).\n';
+        learningSection += 'Todos los casos entrenados estan a 4km — el servidor agrega el costo de km real automaticamente. El precio que ves es solo el costo de la CARGA.\n';
 
         if (Object.keys(stats).length > 0) {
-          learningSection += '\nPRECIOS PROMEDIO APROBADOS POR EL OPERADOR:\n';
+          learningSection += '\nPRECIOS APROBADOS POR TIPO DE VEHICULO (usa estos rangos como referencia principal):\n';
           for (const [v, s] of Object.entries(stats)) {
             const avg = Math.round(s.sum / s.count);
-            learningSection += `  ${v}: promedio $${avg.toLocaleString('es-CL')} | rango $${s.min.toLocaleString('es-CL')}–$${s.max.toLocaleString('es-CL')} (${s.count} casos aprobados)\n`;
+            learningSection += `  ${v}: promedio $${avg.toLocaleString('es-CL')} | rango real aprobado $${s.min.toLocaleString('es-CL')}–$${s.max.toLocaleString('es-CL')} (${s.count} casos)\n`;
           }
         }
 
         if (corrections.length > 0) {
-          learningSection += `\n⚠️ ERRORES CORREGIDOS POR EL OPERADOR — no repitas estos:\n`;
+          learningSection += `\n⚠️ CORRECCIONES DEL OPERADOR — estos precios estaban MAL, no repetir:\n`;
           for (const ex of corrections.slice(0, 10)) {
             const dist = ex.distance_km ? `${ex.distance_km}km` : '?km';
             const vCorr = ex.correct_vehicle ? ` → vehiculo correcto: ${ex.correct_vehicle}` : '';
@@ -322,10 +321,10 @@ router.post('/ai-quote', publicCalculationLimiter, async (req, res) => {
         }
 
         if (approvals.length > 0) {
-          learningSection += `\n✅ PRECIOS APROBADOS — referencias validas:\n`;
+          learningSection += `\n✅ PRECIOS APROBADOS (son la referencia mas importante — si hay uno similar, usalo):\n`;
           for (const ex of approvals.slice(0, 20)) {
             const dist = ex.distance_km ? `${ex.distance_km}km` : '?km';
-            learningSection += `  ✅ "${ex.items_text}"${ex.free_text ? ` + "${ex.free_text}"` : ''}, ${dist} → ${ex.ai_vehicle_name}, ${ex.ai_detected_type}, $${Number(ex.ai_price).toLocaleString('es-CL')}${ex.ai_two_trips ? ' (2 viajes)' : ''}\n`;
+            learningSection += `  ✅ "${ex.items_text}"${ex.free_text ? ` + "${ex.free_text}"` : ''}, ${dist} → ${ex.ai_vehicle_name}, ${ex.ai_detected_type}, $${Number(ex.ai_price).toLocaleString('es-CL')}\n`;
           }
         }
       })(),
@@ -480,10 +479,11 @@ VEHICULO:
   ⚠ cama 1 plaza → furgon | cama 2 plazas o mayor → CAMION 3/4 (NUNCA furgon)
 
 REGLA CRITICA DE PRECIO:
-  El campo "price" que devuelves es el costo de la CARGA (sin km).
-  El servidor calcula y agrega el km automaticamente usando las tarifas reales.
-  Los casos de entrenamiento que ves estan todos a ~4km — tu precio refleja la carga sola.
-  NO sumes km al price. Solo da el costo base del tipo y tamaño de carga.
+  PRIORIDAD 1: Si hay un caso entrenado similar al pedido → usa ESE precio como base.
+  PRIORIDAD 2: Si no hay caso similar → usa los rangos de la flota como referencia.
+  El campo "price" es el costo de la CARGA (sin km). El servidor agrega el km automaticamente.
+  Los casos entrenados estan a 4km — su precio refleja solo la carga.
+  NO sumes km al price.
 
 ADICIONALES sobre el precio base de carga (NO incluir km):
   Piso sin ascensor: +$5.000/piso
