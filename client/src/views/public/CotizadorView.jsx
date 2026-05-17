@@ -680,14 +680,14 @@ const CASES = [
   {
     type:'Mudanza mediana', icon:'🏘️',
     items:['🛏️ Cama 2 plazas','🪞 Clóset','🛋️ Sofá 2 plazas','🧊 Refrigerador','🫧 Lavadora','🍽️ Mesa comedor','💻 Escritorio','📦 8 cajas'],
-    km:14, price:72000,
+    km:14, price:79990,
     name:'Ana M.',
     comment:'Todo organizado y sin contratiempos. Los muebles llegaron perfectos. ¡Los recomiendo al 100%!',
   },
   {
     type:'Mudanza grande', icon:'🏡',
     items:['🛏️ Cama Queen','🛏️ Cama 1 plaza','🪞 Clóset doble','🛋️ Sofá 3 plazas','🧊 Refrigerador','🫧 Lavadora','🌀 Secadora','🍳 Cocina','🍽️ Mesa comedor','🪑 6 sillas','🗄️ Cómoda','💻 Escritorio','📚 Librero','📺 TV 65"','🎨 Cuadros','📦 15 cajas','🌿 Plantas'],
-    km:25, price:148000,
+    km:25, price:169990,
     name:'Jorge & Claudia R.',
     comment:'Mudanza completa de 3 dormitorios, impecables. Cuidaron cada mueble como si fuera de ellos.',
   },
