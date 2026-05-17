@@ -720,7 +720,7 @@ function ScreenWelcome({ onStart }) {
         {/* Hero inner column */}
         <div className="czHeroInner" style={{ display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center', flex:1 }}>
           <div style={{ fontSize:10, fontWeight:800, color:B, textTransform:'uppercase', letterSpacing:1.5, marginBottom:8 }}>
-            Fletes · Mudanzas · Chile
+            Fletes · Mudanzas · Santiago
           </div>
           <h1 className="czHeroTitle" style={{ margin:'0 0 8px', fontSize:32, lineHeight:1.1, fontWeight:900, letterSpacing:'-1.2px', color:N }}>
             Tu precio de traslado,<br/>
@@ -763,11 +763,11 @@ function ScreenWelcome({ onStart }) {
           </button>
 
           {/* Trust chips */}
-          <div className="czTrustChips" style={{ display:'flex', gap:6, flexWrap:'wrap', justifyContent:'center', marginBottom:10 }}>
-            {[{e:'⚡',t:'Menos de 1 min'},{e:'🚫',t:'Sin registro'},{e:'💰',t:'Precio real'}].map(b => (
-              <div key={b.t} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 10px', background:SURF, border:`1.5px solid ${BDR}`, borderRadius:99 }}>
-                <span style={{ fontSize:11 }}>{b.e}</span>
-                <span style={{ fontSize:11, fontWeight:700, color:T2 }}>{b.t}</span>
+          <div className="czTrustChips" style={{ display:'flex', gap:0, justifyContent:'center', marginBottom:10, background:'rgba(255,255,255,.7)', borderRadius:14, border:`1px solid ${BDR}`, overflow:'hidden', backdropFilter:'blur(8px)' }}>
+            {[{e:'⚡',t:'Menos de 1 min',c:'#F59E0B'},{e:'🔒',t:'Sin registro',c:'#10B981'},{e:'💎',t:'Precio real',c:B}].map((b,i) => (
+              <div key={b.t} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, padding:'10px 6px', borderRight: i < 2 ? `1px solid ${BDR}` : 'none' }}>
+                <div style={{ width:28, height:28, borderRadius:8, background:`${b.c}15`, display:'grid', placeItems:'center', fontSize:14 }}>{b.e}</div>
+                <span style={{ fontSize:10, fontWeight:700, color:T2, textAlign:'center', lineHeight:1.2 }}>{b.t}</span>
               </div>
             ))}
           </div>
@@ -795,20 +795,16 @@ function ScreenWelcome({ onStart }) {
             {/* Features list */}
             <div style={{ background:'#fff', padding:'14px 20px' }}>
               {[
-                { icon:'📍', text:'Retiro y entrega en cualquier punto de Chile' },
+                { icon:'📍', text:'Retiro y entrega en Santiago y alrededores' },
                 { icon:'🚐', text:'Furgón, Camión 3/4 o Camión largo según carga' },
                 { icon:'👷', text:'Con o sin ayudantes — tú decides' },
                 { icon:'📦', text:'Embalaje profesional disponible' },
-              ].map(f => (
-                <div key={f.text} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 0', borderBottom:`1px solid ${BDR}` }}>
-                  <span style={{ fontSize:16, flexShrink:0 }}>{f.icon}</span>
-                  <span style={{ fontSize:12, color:T2, lineHeight:1.3 }}>{f.text}</span>
+              ].map((f,i,arr) => (
+                <div key={f.text} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderBottom: i < arr.length-1 ? `1px solid ${BDR}` : 'none' }}>
+                  <div style={{ width:30, height:30, borderRadius:8, background:`${B}10`, display:'grid', placeItems:'center', fontSize:15, flexShrink:0 }}>{f.icon}</div>
+                  <span style={{ fontSize:12, color:T2, lineHeight:1.3, fontWeight:500 }}>{f.text}</span>
                 </div>
               ))}
-              <div style={{ marginTop:12, background:GRAD, borderRadius:10, padding:'9px 14px', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
-                <span style={{ fontSize:13, fontWeight:800, color:'#fff' }}>Ver mi precio ahora</span>
-                <ArrowRight size={14} color="#fff" strokeWidth={2.8}/>
-              </div>
             </div>
           </div>
 
