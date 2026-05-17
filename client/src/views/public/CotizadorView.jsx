@@ -930,6 +930,14 @@ function ScreenItems({ state, setState, onNext, onBack }) {
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
       <div ref={contentRef} onScroll={onScroll} style={{ overflowY: 'auto', height: '100%', padding: '14px 16px 0' }}>
 
+        {/* Tip banner */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '10px 13px', borderRadius: 12, background: `${B}09`, border: `1px solid ${B}20`, marginBottom: 12 }}>
+          <span style={{ fontSize: 18, flexShrink: 0, lineHeight: 1.3 }}>💡</span>
+          <span style={{ fontSize: 12, color: B, fontWeight: 600, lineHeight: 1.5 }}>
+            Selecciona del catálogo <strong>o escribe abajo</strong> lo que llevas — la IA calcula el precio de cualquier forma.
+          </span>
+        </div>
+
         {/* Counter */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: T2 }}>
@@ -1010,13 +1018,14 @@ function ScreenItems({ state, setState, onNext, onBack }) {
 
         {/* Free text */}
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 6 }}>Artículos adicionales</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 2 }}>¿Llevas algo que no está en el catálogo?</div>
+          <div style={{ fontSize: 11, color: T2, marginBottom: 7 }}>Escríbelo con palabras — la IA lo incluye en el cálculo igual.</div>
           <textarea
             value={freeText}
             onChange={e => setState(s => ({ ...s, freeText: e.target.value }))}
-            placeholder="Ej: bicicleta, piano, plantas grandes, herramientas…"
+            placeholder="Ej: bicicleta, piano, caja de herramientas, plantas grandes, moto…"
             rows={2}
-            style={{ width: '100%', boxSizing: 'border-box', resize: 'none', borderRadius: 12, border: `1.5px solid ${BDR}`, padding: '10px 12px', fontSize: 13, color: N, fontFamily: 'Inter,system-ui,sans-serif', outline: 'none', background: SURF }}
+            style={{ width: '100%', boxSizing: 'border-box', resize: 'none', borderRadius: 12, border: `1.5px solid ${freeText.trim() ? B : BDR}`, padding: '10px 12px', fontSize: 13, color: N, fontFamily: 'Inter,system-ui,sans-serif', outline: 'none', background: SURF }}
           />
         </div>
       </div>
@@ -1302,12 +1311,24 @@ function ScreenContact({ state, onBack, onSubmit, saving }) {
       <Header step={4} total={4} title="Tus datos" onBack={onBack}/>
 
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '18px 16px 0' }}>
-        <p style={{ fontSize: 14, color: T2, lineHeight: 1.55, margin: '0 0 20px' }}>
+        <p style={{ fontSize: 14, color: T2, lineHeight: 1.55, margin: '0 0 14px' }}>
           {state.manualReview
             ? 'Completa tus datos y te entregamos el precio exacto para tu traslado.'
             : 'Déjanos tus datos y te contactamos para confirmar detalles y coordinar el traslado.'
           }
         </p>
+
+        {/* WA direct link */}
+        <a href="https://wa.me/56952023504?text=Hola%20MUVE!%20%F0%9F%91%8B%20Quiero%20consultar%20sobre%20un%20traslado." target="_blank" rel="noreferrer"
+          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 12, background: '#f0fdf4', border: '1.5px solid rgba(37,211,102,.30)', textDecoration: 'none', marginBottom: 18 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: '#25D366', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+            <svg width={18} height={18} viewBox="0 0 24 24" fill="white"><path d="M20.5 3.5A11 11 0 003.4 17.4L2 22l4.7-1.4A11 11 0 1020.5 3.5z"/></svg>
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#15803D' }}>¿Preferís coordinar directo?</div>
+            <div style={{ fontSize: 11, color: '#16A34A', fontWeight: 600, marginTop: 1 }}>Escríbenos por WhatsApp →</div>
+          </div>
+        </a>
 
         {/* Price mini recap — solo si hay precio calculado */}
         {state.result && !state.manualReview && (
@@ -1922,7 +1943,6 @@ export default function CotizadorView() {
           {screen}
         </div>
       </div>
-      {state.step >= 1 && state.step <= 5 && !calculating && <FloatingWA/>}
     </>
   );
 }
