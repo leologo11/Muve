@@ -71,6 +71,26 @@ function priceRange(exact) {
   return { min: Math.max(low, 5000), max: Math.max(high, low + 20000) };
 }
 
+// Items that physically cannot fit in a furgón — always require camión 3/4 minimum
+const REQUIRES_CAMION34 = new Set([
+  'cama2p', 'camaQueen', 'closet', 'nevera', 'cocina', 'sofa3p',
+  // Also catch by name substring for free-text items
+]);
+const REQUIRES_CAMION34_NAMES = ['cama 2 plaza', 'cama queen', 'cama king', 'closet', 'ropero',
+  'refrigerador', 'nevera', 'cocina', 'horno', 'sofa 3', 'sofá 3'];
+
+function enforceVehicleMinimum(vehicle, items = [], freeText = '') {
+  if (vehicle === 'camion34' || vehicle === 'camionLargo') return vehicle;
+  const hasHeavyItem =
+    items.some(i => REQUIRES_CAMION34.has(i.id) && (i.qty || 0) > 0) ||
+    REQUIRES_CAMION34_NAMES.some(kw => freeText.toLowerCase().includes(kw));
+  if (hasHeavyItem) {
+    console.log(`[ai-quote] ⚠ vehicle override: ${vehicle} → camion34 (item requires camion34)`);
+    return 'camion34';
+  }
+  return vehicle;
+}
+
 // GET /api/public/vehicle-configs — active vehicle pricing (no auth)
 router.get('/vehicle-configs', publicReadLimiter, async (req, res) => {
   try {
@@ -205,6 +225,8 @@ function fallbackQuote(items, distanceKm, numHelpers, numFloors) {
   } else {
     basePrice = 25000 + totalQty * 4000;
   }
+  // Hard override: items that never fit in a furgón
+  vehicle = enforceVehicleMinimum(vehicle, items, '');
 
   const kmRates = { furgon: 700, camion34: 1000, camionLargo: 1500 };
   const kmExtra  = distanceKm > 15 ? (distanceKm - 15) * (kmRates[vehicle] || 1000) : 0;
@@ -592,7 +614,8 @@ Extras: ${extrasDesc}`;
     // Always derive range from price — never trust AI's priceMin/priceMax independently
     const priceMin = Math.max(15000, Math.round(price * 0.88 / 1000) * 1000);
     const priceMax = Math.round(price * 1.15 / 1000) * 1000;
-    const vehicleKey = ['auto', 'furgon', 'camion34', 'camionLargo'].includes(result.vehicle) ? result.vehicle : 'camion34';
+    const rawVehicle = ['auto', 'furgon', 'camion34', 'camionLargo'].includes(result.vehicle) ? result.vehicle : 'camion34';
+    const vehicleKey = enforceVehicleMinimum(rawVehicle, items, freeText || '');
     const VEHICLE_NAMES = { auto: 'Auto', furgon: 'Furgón N400', camion34: 'Camión 3/4', camionLargo: 'Camión Largo' };
     const VEHICLE_ICONS = { auto: '🚗', furgon: '🚐', camion34: '🚚', camionLargo: '🚛' };
     return res.json({
