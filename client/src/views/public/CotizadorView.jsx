@@ -686,6 +686,16 @@ function ScreenWelcome({ onStart }) {
           animation: czBtnShimmer 3s linear infinite;
         }
         .czCta:active { transform: scale(0.97) !important; transition: transform .1s ease !important; }
+        @media (min-width: 640px) {
+          .czContent { flex: 1 !important; padding: 0 40px !important; flex-direction: row !important; align-items: center; gap: 36px; }
+          .czHeroInner { align-items: flex-start !important; text-align: left !important; }
+          .czHeroTitle { font-size: 46px !important; letter-spacing: -2px !important; line-height: 1.05 !important; }
+          .czHeroSub { font-size: 15px !important; max-width: 100% !important; }
+          .czHeroCta { max-width: 300px !important; }
+          .czTrustChips { justify-content: flex-start !important; }
+          .czSideCards { display: flex !important; flex-direction: column; width: 296px; flex-shrink: 0; }
+          .czTickerArea { flex: 0 0 auto !important; }
+        }
       `}</style>
 
       {/* Background glow blobs */}
@@ -704,68 +714,99 @@ function ScreenWelcome({ onStart }) {
         </a>
       </div>
 
-      {/* Hero */}
-      <div style={{ padding:'10px 22px 0', flexShrink:0, position:'relative', zIndex:2, display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center' }}>
-        <div style={{ fontSize:10, fontWeight:800, color:B, textTransform:'uppercase', letterSpacing:1.5, marginBottom:8 }}>
-          Fletes · Mudanzas · Chile
-        </div>
-        <h1 style={{ margin:'0 0 8px', fontSize:32, lineHeight:1.1, fontWeight:900, letterSpacing:'-1.2px', color:N }}>
-          Tu precio de traslado,<br/>
-          <span style={{ background:GRAD, WebkitBackgroundClip:'text', backgroundClip:'text', color:'transparent' }}>en 30 segundos</span>
-        </h1>
-        <p style={{ color:T2, fontSize:13, lineHeight:1.5, margin:'0 0 12px', maxWidth:264 }}>
-          Sin registro ni llamadas. Ingresa origen, destino y artículos — precio al instante.
-        </p>
+      {/* Content: hero left + service cards right (desktop two-col) */}
+      <div className="czContent" style={{ flexShrink:0, position:'relative', zIndex:2, display:'flex', flexDirection:'column', padding:'10px 22px 0' }}>
 
-        {/* Step bar */}
-        <div style={{ display:'flex', alignItems:'center', width:'100%', maxWidth:300, marginBottom:14 }}>
-          {[{n:'1',t:'Ruta',cls:'czStep1'},{n:'2',t:'Artículos',cls:'czStep2'},{n:'3',t:'Precio',cls:'czStep3'}].map((s,i) => (
-            <React.Fragment key={s.n}>
-              {i > 0 && <div style={{ flex:1, height:2, background:`linear-gradient(90deg,${B}55,${C}55)`, borderRadius:99 }}/>}
-              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-                <div className={s.cls} style={{
-                  width:40, height:40, borderRadius:'50%', background:GRAD,
-                  display:'grid', placeItems:'center', color:'#fff', fontSize:17, fontWeight:900,
-                  flexShrink:0, boxShadow:`0 3px 10px ${B}35`,
-                }}>{s.n}</div>
-                <div style={{ fontSize:10, fontWeight:700, color:T2 }}>{s.t}</div>
+        {/* Hero inner column */}
+        <div className="czHeroInner" style={{ display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center', flex:1 }}>
+          <div style={{ fontSize:10, fontWeight:800, color:B, textTransform:'uppercase', letterSpacing:1.5, marginBottom:8 }}>
+            Fletes · Mudanzas · Chile
+          </div>
+          <h1 className="czHeroTitle" style={{ margin:'0 0 8px', fontSize:32, lineHeight:1.1, fontWeight:900, letterSpacing:'-1.2px', color:N }}>
+            Tu precio de traslado,<br/>
+            <span style={{ background:GRAD, WebkitBackgroundClip:'text', backgroundClip:'text', color:'transparent' }}>en 30 segundos</span>
+          </h1>
+          <p className="czHeroSub" style={{ color:T2, fontSize:13, lineHeight:1.5, margin:'0 0 12px', maxWidth:264 }}>
+            Sin registro ni llamadas. Ingresa origen, destino y artículos — precio al instante.
+          </p>
+
+          {/* Step bar */}
+          <div style={{ display:'flex', alignItems:'center', width:'100%', maxWidth:300, marginBottom:14 }}>
+            {[{n:'1',t:'Ruta',cls:'czStep1'},{n:'2',t:'Artículos',cls:'czStep2'},{n:'3',t:'Precio',cls:'czStep3'}].map((s,i) => (
+              <React.Fragment key={s.n}>
+                {i > 0 && <div style={{ flex:1, height:2, background:`linear-gradient(90deg,${B}55,${C}55)`, borderRadius:99 }}/>}
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+                  <div className={s.cls} style={{ width:40, height:40, borderRadius:'50%', background:GRAD, display:'grid', placeItems:'center', color:'#fff', fontSize:17, fontWeight:900, flexShrink:0, boxShadow:`0 3px 10px ${B}35` }}>{s.n}</div>
+                  <div style={{ fontSize:10, fontWeight:700, color:T2 }}>{s.t}</div>
+                </div>
+                {i < 2 && <div style={{ flex:1, height:2, background:`linear-gradient(90deg,${B}55,${C}55)`, borderRadius:99 }}/>}
+              </React.Fragment>
+            ))}
+          </div>
+
+          {/* CTA */}
+          <button
+            type="button"
+            onClick={onStart}
+            onMouseDown={addRipple}
+            className="czCta czHeroCta"
+            style={{
+              width:'100%', maxWidth:360, padding:'15px', borderRadius:16, border:'none',
+              color:'#fff', fontSize:17, fontWeight:900, cursor:'pointer', letterSpacing:'-0.3px',
+              boxShadow:`0 10px 28px rgba(27,108,245,.45), 0 3px 8px rgba(27,108,245,.25)`,
+              display:'flex', alignItems:'center', justifyContent:'center', gap:10,
+              marginBottom:10, position:'relative', overflow:'hidden',
+            }}
+          >
+            <span>Cotizar mi traslado</span>
+            <ArrowRight size={19} color="#fff" strokeWidth={2.7}/>
+          </button>
+
+          {/* Trust chips */}
+          <div className="czTrustChips" style={{ display:'flex', gap:6, flexWrap:'wrap', justifyContent:'center', marginBottom:10 }}>
+            {[{e:'⚡',t:'Menos de 1 min'},{e:'🚫',t:'Sin registro'},{e:'💰',t:'Precio real'}].map(b => (
+              <div key={b.t} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 10px', background:SURF, border:`1.5px solid ${BDR}`, borderRadius:99 }}>
+                <span style={{ fontSize:11 }}>{b.e}</span>
+                <span style={{ fontSize:11, fontWeight:700, color:T2 }}>{b.t}</span>
               </div>
-              {i < 2 && <div style={{ flex:1, height:2, background:`linear-gradient(90deg,${B}55,${C}55)`, borderRadius:99 }}/>}
-            </React.Fragment>
-          ))}
+            ))}
+          </div>
         </div>
 
-        {/* CTA */}
-        <button
-          type="button"
-          onClick={onStart}
-          onMouseDown={addRipple}
-          className="czCta"
-          style={{
-            width:'100%', maxWidth:360, padding:'15px', borderRadius:16, border:'none',
-            color:'#fff', fontSize:17, fontWeight:900, cursor:'pointer', letterSpacing:'-0.3px',
-            boxShadow:`0 10px 28px rgba(27,108,245,.45), 0 3px 8px rgba(27,108,245,.25)`,
-            display:'flex', alignItems:'center', justifyContent:'center', gap:10,
-            marginBottom:10, position:'relative', overflow:'hidden',
-          }}
-        >
-          <span>Cotizar mi traslado</span>
-          <ArrowRight size={19} color="#fff" strokeWidth={2.7}/>
-        </button>
-
-        {/* Trust chips */}
-        <div style={{ display:'flex', gap:6, flexWrap:'wrap', justifyContent:'center', marginBottom:10 }}>
-          {[{e:'⚡',t:'Menos de 1 min'},{e:'🚫',t:'Sin registro'},{e:'💰',t:'Precio real'}].map(b => (
-            <div key={b.t} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 10px', background:SURF, border:`1.5px solid ${BDR}`, borderRadius:99 }}>
-              <span style={{ fontSize:11 }}>{b.e}</span>
-              <span style={{ fontSize:11, fontWeight:700, color:T2 }}>{b.t}</span>
+        {/* Service cards — desktop right column (hidden on mobile) */}
+        <div className="czSideCards" style={{ display:'none', gap:10 }}>
+          {[
+            { v:'flete',      label:'Flete',      sub:'Traslado de objetos o carga entre dos puntos', icon:'🚚', g:['#0052FF','#00DAFF'] },
+            { v:'mudanza',    label:'Mudanza',    sub:'Cambio de residencia o traslado completo', icon:'🏠', g:['#7C3AED','#A78BFA'] },
+            { v:'paqueteria', label:'Paquetería', sub:'Envíos y mensajería para empresas', icon:'📦', g:['#059669','#34D399'] },
+          ].map(s => (
+            <div key={s.v} onClick={onStart}
+              style={{ borderRadius:16, padding:'14px 16px', display:'flex', alignItems:'center', gap:13, background:`linear-gradient(135deg,${s.g[0]}14,${s.g[1]}08)`, border:`1.5px solid ${s.g[0]}30`, cursor:'pointer', transition:'transform .15s, box-shadow .15s' }}
+              onMouseEnter={e => { e.currentTarget.style.transform='scale(1.02)'; e.currentTarget.style.boxShadow=`0 6px 20px ${s.g[0]}30`; }}
+              onMouseLeave={e => { e.currentTarget.style.transform='scale(1)'; e.currentTarget.style.boxShadow='none'; }}
+            >
+              <div style={{ width:46, height:46, borderRadius:13, background:`linear-gradient(135deg,${s.g[0]},${s.g[1]})`, display:'grid', placeItems:'center', flexShrink:0, boxShadow:`0 4px 14px ${s.g[0]}45`, fontSize:22 }}>{s.icon}</div>
+              <div>
+                <div style={{ fontSize:15, fontWeight:800, color:N }}>{s.label}</div>
+                <div style={{ fontSize:12, color:T2, lineHeight:1.4, marginTop:2 }}>{s.sub}</div>
+              </div>
             </div>
           ))}
+          <div style={{ borderRadius:14, padding:'14px 18px', background:'rgba(255,255,255,.75)', border:`1.5px solid ${BDR}`, backdropFilter:'blur(8px)' }}>
+            <div style={{ display:'flex' }}>
+              {[['500+','Fletes realizados'],['98%','Satisfacción'],['30s','Precio']].map(([n,l],i) => (
+                <div key={l} style={{ flex:1, textAlign:'center', borderRight: i < 2 ? `1px solid ${BDR}` : 'none', padding:'0 8px' }}>
+                  <div style={{ fontSize:22, fontWeight:900, color:B, letterSpacing:'-0.5px' }}>{n}</div>
+                  <div style={{ fontSize:10, fontWeight:700, color:T3, textTransform:'uppercase', letterSpacing:.5, lineHeight:1.4 }}>{l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* ── Ticker — ocupa el espacio restante ───────────────────── */}
-      <div style={{ flex:1, display:'flex', flexDirection:'column', justifyContent:'center', gap:8, paddingBottom:'max(16px,env(safe-area-inset-bottom,16px))', position:'relative', zIndex:2, minHeight:0 }}>
+      <div className="czTickerArea" style={{ flex:1, display:'flex', flexDirection:'column', justifyContent:'center', gap:8, paddingBottom:'max(16px,env(safe-area-inset-bottom,16px))', position:'relative', zIndex:2, minHeight:0 }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, padding:'0 20px', marginBottom:2 }}>
           <div style={{ flex:1, height:1, background:BDR }}/>
           <span style={{ fontSize:9, fontWeight:800, color:T3, textTransform:'uppercase', letterSpacing:1.2, whiteSpace:'nowrap' }}>
