@@ -1417,9 +1417,17 @@ function ScreenContact({ state, onBack, onSubmit, saving }) {
   const [name, setName]   = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const firedStep8 = useRef(false);
 
   const phoneOk = phone.replace(/\D/g, '').length >= 8;
   const valid = name.trim().length >= 2 && phoneOk;
+
+  useEffect(() => {
+    if (phoneOk && !firedStep8.current) {
+      firedStep8.current = true;
+      _trackEventDB(8);
+    }
+  }, [phoneOk]);
 
   const inputStyle = { flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, fontWeight: 600, color: N, fontFamily: 'Inter,system-ui,sans-serif' };
 
@@ -1915,7 +1923,7 @@ export default function CotizadorView() {
       if (isManualReview) {
         setState(s => ({ ...s, result: res, manualReview: true, step: 5 }));
         trackStep(5);
-        _trackEventDB(8);
+        _trackEventDB(7); // llegó al formulario de contacto (revisión manual salta la pantalla de precio)
       } else {
         setState(s => ({ ...s, result: res, manualReview: false, step: 4 }));
         trackStep(4);

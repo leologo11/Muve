@@ -10,16 +10,32 @@ router.post('/track', async (req, res) => {
     const { sessionId, step, serviceType, submitted, device, source } = req.body;
     if (!sessionId || !step) return res.status(400).json({ error: 'sessionId and step required' });
 
-    // on_conflict=session_id → upsert sobre UNIQUE session_id, no sobre el PK uuid
+    // Filtrar bots/crawlers — no contar tráfico automatizado
+    const ua = req.headers['user-agent'] || '';
+    if (/bot|crawl|spider|slurp|facebookexternalhit|preview|lighthouse|headlessChrome|Googlebot|bingbot/i.test(ua)) {
+      return res.json({ ok: true });
+    }
+
+    const newStep = Number(step) || 1;
+
+    // Leer registro existente para aplicar lógica GREATEST:
+    // max_step nunca retrocede, submitted nunca vuelve de true a false
+    const [existing] = await supabaseRequest(
+      `/analytics_sessions?session_id=eq.${encodeURIComponent(sessionId)}&select=max_step,submitted`
+    ).catch(() => []) || [];
+
+    const maxStep     = Math.max(newStep, existing?.max_step || 0);
+    const isSubmitted = submitted === true || Boolean(existing?.submitted);
+
     await supabaseRequest('/analytics_sessions?on_conflict=session_id', {
       method: 'POST',
       body: JSON.stringify({
         session_id:   sessionId,
         service_type: serviceType || null,
-        max_step:     Number(step) || 1,
-        submitted:    submitted === true,
-        device:       device   || null,
-        source:       source   || null,
+        max_step:     maxStep,
+        submitted:    isSubmitted,
+        device:       device || null,
+        source:       source || null,
         updated_at:   new Date().toISOString(),
       }),
       headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
@@ -100,15 +116,15 @@ router.get('/funnel', requireAuth, requireRole('admin'), async (req, res) => {
       days,
       total,
       funnel: [
-        { step: 1, label: 'Entraron a la página',        count: total,  pct: 100           },
-        { step: 2, label: 'Eligieron tipo de servicio',  count: step2,  pct: pct(step2)    },
-        { step: 3, label: 'Ingresaron dirección origen', count: step3,  pct: pct(step3)    },
-        { step: 4, label: 'Ingresaron dirección destino',count: step4,  pct: pct(step4)    },
-        { step: 5, label: 'Agregaron ítems al inventario',count: step5, pct: pct(step5)    },
-        { step: 6, label: 'Llegaron al formulario',      count: step6,  pct: pct(step6)    },
-        { step: 7, label: 'Escribieron su nombre',       count: step7,  pct: pct(step7)    },
-        { step: 8, label: 'Escribieron su teléfono',     count: step8,  pct: pct(step8)    },
-        { step: 9, label: 'Enviaron la cotización',      count: submits,pct: pct(submits)   },
+        { step: 1, label: 'Entraron a la página',              count: total,  pct: 100           },
+        { step: 2, label: 'Iniciaron la cotización',           count: step2,  pct: pct(step2)    },
+        { step: 3, label: 'Completaron las direcciones',       count: step3,  pct: pct(step3)    },
+        { step: 4, label: 'Seleccionaron sus artículos',       count: step4,  pct: pct(step4)    },
+        { step: 5, label: 'Solicitaron cálculo de precio',     count: step5,  pct: pct(step5)    },
+        { step: 6, label: 'Vieron el precio estimado',         count: step6,  pct: pct(step6)    },
+        { step: 7, label: 'Llegaron al formulario de contacto',count: step7,  pct: pct(step7)    },
+        { step: 8, label: 'Escribieron su teléfono',           count: step8,  pct: pct(step8)    },
+        { step: 9, label: 'Enviaron la cotización',            count: submits,pct: pct(submits)   },
       ],
       byService,
       byDevice,

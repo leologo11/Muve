@@ -10,6 +10,11 @@ function isAdminPath() {
   return p.startsWith('/admin') || p.startsWith('/app') || p.startsWith('/driver');
 }
 
+function isBot() {
+  const ua = navigator.userAgent || '';
+  return /bot|crawl|spider|headless|lighthouse|preview/i.test(ua);
+}
+
 function getSessionId() {
   let sid = sessionStorage.getItem(SESSION_KEY);
   if (!sid) {
@@ -73,7 +78,7 @@ async function post(payload) {
 
 // Nivel 1: visita inicial
 export function trackLanding() {
-  if (isAdminPath()) return;
+  if (isAdminPath() || isBot()) return;
   const state = getState();
   if (state.sent1) return;
 
@@ -86,7 +91,7 @@ export function trackLanding() {
 // Niveles 2-8: eventos granulares de interacción
 // Solo avanza — nunca retrocede el max registrado
 export function trackEvent(level, serviceType) {
-  if (isAdminPath()) return;
+  if (isAdminPath() || isBot()) return;
   const state = getState();
   const prevMax = state.maxStep || 1;
   if (level <= prevMax) return;
@@ -105,7 +110,7 @@ export function trackEvent(level, serviceType) {
 
 // Nivel 9: cotización enviada
 export function trackSubmit(serviceType) {
-  if (isAdminPath()) return;
+  if (isAdminPath() || isBot()) return;
   const state = getState();
   const updated = { ...state, submitted: true, maxStep: 9, serviceType: serviceType || state.serviceType };
   setState(updated);

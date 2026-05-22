@@ -93,7 +93,7 @@ ${dh ? `<div class="row"><span class="lbl">Ayuda del chofer incluida</span><span
 ${bd.hlCost > 0 ? `<div class="row"><span class="lbl">Ayudantes adicionales (${nh} × $${fmt(cfg?.extras?.helper)})</span><span class="val">$${fmt(bd.hlCost)}</span></div>` : ''}
 ${bd.flCost > 0 ? `<div class="row"><span class="lbl">Pisos sin ascensor (${originFloors} retiro + ${destinationFloors} entrega)</span><span class="val">$${fmt(bd.flCost)}</span></div>` : ''}
 ${bd.pkCost > 0 ? `<div class="row"><span class="lbl">Embalaje profesional</span><span class="val">$${fmt(bd.pkCost)}</span></div>` : ''}
-<div class="row" style="margin-top:4px;border-top:2px solid #0052FF20"><span class="lbl" style="font-weight:700;color:#0f172a">Total de referencia</span><span class="val" style="color:#0052FF">$${fmt(exactTotal || bd.total)}</span></div>
+<div class="row" style="margin-top:4px;border-top:2px solid #0052FF20"><span class="lbl" style="font-weight:700;color:#0f172a">Total de referencia</span><span class="val" style="color:#0052FF">$${fmt(hasExact ? priceFinal : bd.total)}</span></div>
 ` : '';
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Cotizacion MUVE ${q.quoteCode}</title>
@@ -393,7 +393,7 @@ function QuoteCard({ quote: q, onOpen }) {
           </div>
 
           {isFlete && (q.originAddress || q.origin) && (
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, lineHeight: 1.3 }}>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               📍 {q.originAddress || q.origin}
               {(q.destinationAddress || q.destination) && <span> → {q.destinationAddress || q.destination}</span>}
             </div>
@@ -960,7 +960,7 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
             </button>
           )}
           <button
-            onClick={() => printQuotePDF({ ...q, contactPerson: name, contactPhone: phone, originAddress: originAddr, destinationAddress: destAddr, distanceKm: km, vehicleType, driverHelps: helpMode !== 'none', numHelpers: helpMode === 'helpers' ? helpers : 0, numFloors: floors, originFloors, destinationFloors, needsPacking: packing, isConserjeria: conserjeria, itemsDescription: serializeInventory(inventory, inventoryExtras) }, priceMin, priceMax, cfgWithHelperCost, priceFinal ? Number(priceFinal) : null)}
+            onClick={() => { try { printQuotePDF({ ...q, contactPerson: name, contactPhone: phone, originAddress: originAddr, destinationAddress: destAddr, distanceKm: km, vehicleType, driverHelps: helpMode !== 'none', numHelpers: helpMode === 'helpers' ? helpers : 0, numFloors: floors, originFloors, destinationFloors, needsPacking: packing, isConserjeria: conserjeria, itemsDescription: serializeInventory(inventory, inventoryExtras) }, priceMin, priceMax, cfgWithHelperCost, priceFinal ? Number(priceFinal) : null); } catch(e) { toast('Error al generar PDF: ' + e.message); } }}
             style={{ flex: 1, padding: '11px', borderRadius: 10, border: '1px solid #0052FF30', background: '#0052FF10', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
           >
             📄 Generar PDF

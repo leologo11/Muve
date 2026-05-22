@@ -213,12 +213,12 @@ function fallbackQuote(items, distanceKm, numHelpers, numFloors) {
 
   let vehicle = 'furgon', detectedType = 'flete', basePrice = 30000;
 
-  if (totalQty >= 10 || (totalQty >= 6 && (hasHeavy || hasBig))) {
+  if (totalQty >= 12 || (totalQty >= 8 && (hasHeavy || hasBig))) {
     vehicle = 'camion34'; detectedType = 'mudanza';
     basePrice = totalQty >= 14 ? 90000 : 65000;
-  } else if (totalQty >= 5 || hasBig || hasHeavy) {
-    vehicle = 'camion34'; detectedType = totalQty >= 6 ? 'mudanza' : 'flete';
-    basePrice = 45000 + totalQty * 2000;
+  } else if (hasBig || hasHeavy || totalQty >= 6) {
+    vehicle = 'camion34'; detectedType = totalQty >= 8 ? 'mudanza' : 'flete';
+    basePrice = 40000 + totalQty * 2000;
   } else if (totalQty <= 2 && !hasHeavy && !hasBig) {
     vehicle = 'furgon';
     basePrice = 22000;
@@ -235,8 +235,8 @@ function fallbackQuote(items, distanceKm, numHelpers, numFloors) {
   const price    = Math.max(20000, Math.round((basePrice + kmExtra + helpCost + flrCost) / 1000) * 1000);
 
   const recommendedHelpers = detectedType === 'mudanza'
-    ? (totalQty >= 15 ? 3 : totalQty >= 10 ? 2 : 1)
-    : (hasHeavy ? 1 : 0);
+    ? (totalQty >= 18 ? 2 : 1)
+    : (hasHeavy || hasBig ? 1 : 0);
 
   const vehicleNames = { furgon: 'Furgón N400', camion34: 'Camión 3/4', camionLargo: 'Camión Largo' };
   const vehicleIcons = { furgon: '🚐', camion34: '🚚', camionLargo: '🚛' };
@@ -467,7 +467,8 @@ MUDANZA = contenido de un lugar (pieza, depto, oficina), cosas variadas que se m
   Cobro por camion completo (mas conveniente)
   Ej: camas + closet + comoda + nevera + sofa + electrodomesticos + cajas = mudanza
 
-ESCALA: items de maletero → auto | 1-3 cosas simples → flete furgon | 4-6 variadas → analizar | 7+ variadas → mudanza
+ESCALA: items de maletero → auto | 1-4 cosas simples → flete furgon/camion34 | 5-8 variadas → analizar (flete si son cosas complementarias, mudanza si son de pieza completa) | 9+ variadas → mudanza
+CLAVE FLETE: pocas cosas aunque sean grandes = flete. Ej: 1 cama 2P + colchon + 2 cajas = flete camion34. Precio bajo, sin cobro de camion completo.
 
 ━━ PEAJES / TAGS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -488,11 +489,12 @@ MUDANZAS: el costo principal es la mano de obra (2-4h), NO la distancia corta
   Diferencia entre 3km y 14km: solo $5.000-$10.000
   Camion 3/4 lleno: $85.000-$100.000 | Semi-lleno: $55.000-$80.000 | Minimo: $50.000
 
-FLETES: se cobra por lo que entra, no por camion entero
-  Furgon flete simple (<10km): $25.000-$40.000 | Camion 3/4 flete simple: $35.000-$55.000
+FLETES: se cobra por lo que entra, no por camion entero. Pocas cosas = precio bajo aunque el vehiculo sea grande.
+  Furgon flete simple (<10km): $25.000-$40.000 | Camion 3/4 flete simple (<10km): $45.000-$65.000
   Ej: 2 camas 1 plaza + 4km = furgon → $30.000-$38.000
-  Ej: 1 cama 2 plazas + 4km = camion 3/4 (NUNCA furgon) → $60.000-$70.000
-  Ej: 1 sofa o 1 nevera + 4km = camion 3/4 → $60.000-$70.000
+  Ej: 1 cama 2 plazas + colchon + 4km = camion 3/4 (NUNCA furgon), precio BAJO porque es poco = $50.000-$60.000
+  Ej: 1 sofa 3P o 1 nevera + 4km = camion 3/4 flete → $50.000-$60.000
+  Ej: cama 2P + comoda + 3 cajas + 8km = flete camion 3/4 → $55.000-$65.000 (NO es mudanza, es flete, 1 ayudante)
 
 VEHICULO:
   Cajas, muebles livianos, camas 1 PLAZA, colchones → Furgon
@@ -525,13 +527,13 @@ CUANDO USAR needsManualReview = true:
   Para camion largo con carga ≤30m3: precio normalmente, needsManualReview: false.
 
 AYUDANTES RECOMENDADOS (recommendedHelpers):
-  El chofer SIEMPRE carga — "solo chofer" es cuando el puede solo sin ayuda extra.
-  0 (solo chofer): flete liviano (cajas, muebles livianos, items de menos de 50kg que el chofer mueve solo)
-  1 ayudante: flete con 1-2 items muy pesados (nevera, lavadora, sofa grande), o mudanza chica (<8 items variados)
-  2 ayudantes: mudanza mediana (8-15 items), camion 3/4 lleno, muchos muebles o 2+ pisos
-  3 ayudantes: mudanza grande/enorme (15+ items), camion largo, traslados muy pesados
+  El chofer SIEMPRE carga — es el primer "ayudante" ya incluido en el precio.
+  0 (solo chofer): carga liviana que el chofer maneja solo — cajas, TV, escritorio, comoda, 1-3 items livianos sin nada muy pesado
+  1 ayudante: LA NORMA para la gran mayoria de fletes y mudanzas chicas. Usar cuando hay al menos 1 item muy pesado (nevera, lavadora, sofa grande, closet, cama 2 plazas) o mudanza de hasta ~10 items. Si dudas entre 0 y 1, pon 1.
+  2 ayudantes: SOLO para mudanza mediana-grande real — nevera + closet + sofa + cama + mas de 10 items variados, o camion 3/4 casi lleno. NO usar para fletes simples aunque tengan algo pesado.
+  3 ayudantes: SOLO camion largo muy cargado (mudanza 3+ dormitorios completos, 15+ items pesados). Nunca 3 con camion 3/4.
+  REGLA CLAVE: casi siempre es 1. Solo pasar a 2 si es mudanza grande real. Nunca 3 salvo camion largo lleno.
   El precio base NO incluye ayudantes — son adicionales que el operador decide.
-  El campo recommendedHelpers es la recomendacion, no lo que el cliente pidio.
 
 ${learningSection}${realCasesSection}
 Responde SOLO con JSON valido, sin markdown:
