@@ -18,22 +18,16 @@ router.post('/track', async (req, res) => {
 
     const newStep = Number(step) || 1;
 
-    // Leer registro existente para aplicar lógica GREATEST:
-    // max_step nunca retrocede, submitted nunca vuelve de true a false
-    const [existing] = await supabaseRequest(
-      `/analytics_sessions?session_id=eq.${encodeURIComponent(sessionId)}&select=max_step,submitted`
-    ).catch(() => []) || [];
-
-    const maxStep     = Math.max(newStep, existing?.max_step || 0);
-    const isSubmitted = submitted === true || Boolean(existing?.submitted);
-
+    // Upsert directo — la lógica GREATEST y submitted OR está en el trigger
+    // analytics_sessions_monotonic (migration_003). El trigger garantiza
+    // atomicidad real: no hay race condition posible entre read y write.
     await supabaseRequest('/analytics_sessions?on_conflict=session_id', {
       method: 'POST',
       body: JSON.stringify({
         session_id:   sessionId,
         service_type: serviceType || null,
-        max_step:     maxStep,
-        submitted:    isSubmitted,
+        max_step:     newStep,
+        submitted:    submitted === true,
         device:       device || null,
         source:       source || null,
         updated_at:   new Date().toISOString(),
