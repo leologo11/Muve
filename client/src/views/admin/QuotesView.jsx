@@ -827,7 +827,7 @@ function FleteDetailPanel({ quote: q, drivers, vehicleConfigs, onReload, onDelet
             disabled={isDone}
           />
         </div>
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 12 }} className="admin-inventory">
           <DL>Artículos a transportar</DL>
           <InventoryPicker
             inventory={inventory}
