@@ -1,9 +1,23 @@
 // Tracking de funnel para el cotizador público.
 // 9 niveles de eventos basados en interacciones reales del usuario.
 // Excluye rutas de admin/driver automáticamente.
+// Envía a: (1) Supabase analytics_sessions y (2) Google Analytics 4.
 
 const SESSION_KEY = 'muve_sid';
 const STATE_KEY   = 'muve_track';
+
+// Nombres de eventos GA4 por nivel de funnel
+const GA4_EVENTS = {
+  1: 'cotizador_view',
+  2: 'cotizador_inicio',
+  3: 'cotizador_direcciones',
+  4: 'cotizador_articulos',
+  5: 'cotizador_calculando',
+  6: 'cotizador_precio_visto',
+  7: 'cotizador_formulario',
+  8: 'cotizador_telefono',
+  9: 'cotizador_enviado',
+};
 
 function isAdminPath() {
   const p = window.location.pathname;
@@ -76,6 +90,15 @@ async function post(payload) {
   } catch {}
 }
 
+// Envía evento a GA4 si el script ya cargó
+function ga4(eventName, params) {
+  try {
+    if (typeof window.gtag === 'function') {
+      window.gtag('event', eventName, params);
+    }
+  } catch {}
+}
+
 // Nivel 1: visita inicial
 export function trackLanding() {
   if (isAdminPath() || isBot()) return;
@@ -86,6 +109,7 @@ export function trackLanding() {
   const source = getSource();
   setState({ ...state, sent1: true, device, source });
   post({ sessionId: getSessionId(), step: 1, submitted: false, device, source });
+  ga4(GA4_EVENTS[1], { device, source });
 }
 
 // Niveles 2-8: eventos granulares de interacción
@@ -106,6 +130,11 @@ export function trackEvent(level, serviceType) {
     device:      updated.device,
     source:      updated.source,
   });
+  ga4(GA4_EVENTS[level] || `cotizador_step_${level}`, {
+    step:         level,
+    service_type: updated.serviceType || undefined,
+    device:       updated.device,
+  });
 }
 
 // Nivel 9: cotización enviada
@@ -121,6 +150,11 @@ export function trackSubmit(serviceType) {
     submitted:   true,
     device:      updated.device,
     source:      updated.source,
+  });
+  // Evento de conversión en GA4 — márcalo como conversión en Analytics > Eventos
+  ga4(GA4_EVENTS[9], {
+    service_type: updated.serviceType,
+    device:       updated.device,
   });
 }
 
