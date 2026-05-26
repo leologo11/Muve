@@ -63,7 +63,19 @@ export default function SectorMap() {
   const [panel, setPanel]           = useState(null);
   const [editPrice, setEditPrice]   = useState('');
   const [editName, setEditName]     = useState('');
+  const [editTiers, setEditTiers]   = useState([
+    { minQty: 1, price: '' },
+    { minQty: 4, price: '' },
+    { minQty: 8, price: '' },
+  ]);
   const [savingZone, setSavingZone] = useState(false);
+
+  // Auto vs manual tier pricing mode inside the panel
+  const [tierInputMode, setTierInputMode]   = useState('auto');  // 'auto' | 'manual'
+  const [autoDiscMode, setAutoDiscMode]     = useState('flat');  // 'flat' | 'pct'
+  const [autoD2, setAutoD2]                 = useState('');
+  const [autoD3, setAutoD3]                 = useState('');
+  const [panelTemplates, setPanelTemplates] = useState([]);
 
   const [newModal, setNewModal]   = useState(null);
   const [newName, setNewName]     = useState('');
@@ -90,6 +102,11 @@ export default function SectorMap() {
 
   useEffect(() => { dmRef.current = drawMode; }, [drawMode]);
   useEffect(() => { rmRef.current = reshapeMode; }, [reshapeMode]);
+
+  useEffect(() => {
+    if (!panel || panelTemplates.length > 0) return;
+    api.getTierTemplates().then(setPanelTemplates).catch(() => {});
+  }, [panel]);
 
   const communeCount = zones.filter(z => z.source === 'commune').length;
   const customCount  = zones.filter(z => z.source === 'custom').length;
@@ -184,12 +201,17 @@ export default function SectorMap() {
         dashArray:   isCommune ? null : '9,6'
       });
 
-      const priceStr = `$${Number(z.price).toLocaleString('es-CL')}`;
+      const hasTiers = z.tiers?.length === 3;
+      const priceHtml = hasTiers
+        ? z.tiers.map((t, i) =>
+            `<span style="font-size:11px;display:block">${i === 0 ? '1 pkg' : `≥${t.minQty} pkgs`}: <b style="color:${isCommune ? tierColor(t.price) : z.color || '#5c35cc'}">$${Number(t.price).toLocaleString('es-CL')}</b></span>`
+          ).join('')
+        : `<span style="font-weight:800;color:${isCommune ? tierColor(z.price) : z.color || '#5c35cc'}">$${Number(z.price).toLocaleString('es-CL')}</span>`;
       poly.bindTooltip(
-        `<div style="font-family:'Inter',sans-serif;font-size:13px;line-height:1.5">
+        `<div style="font-family:'Inter',sans-serif;font-size:13px;line-height:1.6">
           ${isCommune ? '' : '<b style="font-size:10px;color:#5c35cc">ZONA CUSTOM · </b>'}
           <b>${z.name}</b><br>
-          <span style="font-weight:800;color:${isCommune ? tierColor(z.price) : z.color || '#5c35cc'}">${priceStr}</span>
+          ${priceHtml}
         </div>`,
         { sticky: true }
       );
@@ -206,6 +228,7 @@ export default function SectorMap() {
         setPanel({ zone: z });
         setEditName(z.name);
         setEditPrice(String(z.price));
+        initEditTiers(z);
       });
       poly.on('dblclick', e => {
         if (dmRef.current) { L.DomEvent.stop(e); finalizeRef.current?.(); }
@@ -347,14 +370,53 @@ export default function SectorMap() {
     finally { setSeeding(false); setSeedStep(''); }
   };
 
+  const initEditTiers = (z) => {
+    const base = z.price || 0;
+    const defaults = [
+      { minQty: 1, price: base },
+      { minQty: 4, price: base },
+      { minQty: 8, price: base },
+    ];
+    const tiers = z.tiers?.length === 3
+      ? z.tiers.map(t => ({ minQty: t.minQty, price: t.price }))
+      : defaults;
+    setEditTiers(tiers);
+    // Use 'manual' if zone already has distinct tier prices, else 'auto'
+    const hasDistinct = z.tiers?.length === 3 &&
+      (z.tiers[1].price !== z.tiers[0].price || z.tiers[2].price !== z.tiers[0].price);
+    setTierInputMode(hasDistinct ? 'manual' : 'auto');
+    setAutoD2('');
+    setAutoD3('');
+  };
+
+  const calcAuto = (base, d, mode) =>
+    Math.max(0, mode === 'flat' ? base - d : Math.round(base * (1 - d / 100)));
+
   // ── Save zone price ───────────────────────────────────────────────────────────
   const saveZonePrice = async () => {
     if (!panel) return;
-    const price = Number(editPrice);
-    if (!price || isNaN(price)) return toast('⚠ Precio inválido');
+    let tiers;
+    if (tierInputMode === 'auto') {
+      const base = Number(editTiers[0]?.price) || 0;
+      const d2   = Number(autoD2) || 0;
+      const d3   = Number(autoD3) || 0;
+      if (!base) return toast('⚠ El precio base es obligatorio');
+      tiers = [
+        { minQty: 1,                           price: base },
+        { minQty: Number(editTiers[1]?.minQty), price: calcAuto(base, d2, autoDiscMode) },
+        { minQty: Number(editTiers[2]?.minQty), price: calcAuto(base, d3, autoDiscMode) },
+      ];
+    } else {
+      tiers = editTiers.map(t => ({ minQty: Number(t.minQty), price: Number(t.price) }));
+    }
+    if (tiers.some(t => !t.price || isNaN(t.price) || t.price <= 0))
+      return toast('⚠ Todos los precios deben ser válidos');
+    if (tiers[1].minQty <= 1 || tiers[2].minQty <= tiers[1].minQty)
+      return toast('⚠ Los tramos deben tener cantidades crecientes');
+    const price = tiers[0].price;
     setSavingZone(true);
     try {
-      const updated = await api.updateZone(panel.zone._id, { name: editName, price });
+      const updated = await api.updateZone(panel.zone._id, { name: editName, price, tiers });
       setZones(prev => prev.map(z => z._id === updated._id ? { ...z, ...updated } : z));
       if (panel.zone.source === 'commune')
         await api.upsertPrice({ commune: editName, price }).catch(() => {});
@@ -610,7 +672,7 @@ export default function SectorMap() {
                       <span
                         style={{ flex: 1, fontSize: 11, fontWeight: 600, color: 'var(--text)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                         title={z.name}
-                        onClick={() => { setPanel({ zone: z }); setEditName(z.name); setEditPrice(String(z.price)); }}
+                        onClick={() => { setPanel({ zone: z }); setEditName(z.name); setEditPrice(String(z.price)); initEditTiers(z); }}
                       >
                         {z.name}
                       </span>
@@ -688,8 +750,118 @@ export default function SectorMap() {
           )}
 
           <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 5, letterSpacing: 1 }}>PRECIO CLP</div>
-            <input type="number" value={editPrice} onChange={e => setEditPrice(e.target.value)} style={INP} />
+            {/* Header + mode toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: 1 }}>TRAMOS POR VOLUMEN</span>
+              <div style={{ display: 'flex', borderRadius: 7, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                {[['auto', '% Auto'], ['manual', 'Manual']].map(([m, label]) => (
+                  <button key={m} onClick={() => setTierInputMode(m)} style={{
+                    padding: '4px 11px', border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                    background: tierInputMode === m ? 'var(--accent)' : '#fff',
+                    color: tierInputMode === m ? '#fff' : 'var(--muted)',
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
+
+            {tierInputMode === 'auto' ? (
+              <>
+                {/* Base price */}
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: 0.5, marginBottom: 4 }}>PRECIO BASE · T1 (1 pkg)</div>
+                  <input type="number" value={editTiers[0]?.price} placeholder="0"
+                    onChange={e => { setEditPrice(e.target.value); setEditTiers(prev => prev.map((t,i) => i===0 ? {...t, price: e.target.value} : t)); }}
+                    style={{ ...INP, borderColor: 'var(--accent)', fontWeight: 700 }} />
+                </div>
+
+                {/* Discount mode + preset loader */}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
+                    {[['flat','$ CLP'],['pct','%']].map(([m, label]) => (
+                      <button key={m} onClick={() => setAutoDiscMode(m)} style={{
+                        padding: '4px 9px', border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                        background: autoDiscMode === m ? '#5c35cc' : '#fff',
+                        color: autoDiscMode === m ? '#fff' : 'var(--muted)',
+                      }}>{label}</button>
+                    ))}
+                  </div>
+                  {panelTemplates.length > 0 && (
+                    <select defaultValue="" onChange={e => {
+                      const t = panelTemplates.find(x => x._id === e.target.value);
+                      if (!t) return;
+                      setAutoDiscMode(t.mode); setAutoD2(String(t.discount2)); setAutoD3(String(t.discount3));
+                      setEditTiers(prev => prev.map((x,i) => i===1 ? {...x, minQty: t.qty2} : i===2 ? {...x, minQty: t.qty3} : x));
+                      e.target.value = '';
+                    }} style={{ flex: 1, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 11, outline: 'none', background: '#f4f7ff', color: 'var(--accent)', cursor: 'pointer' }}>
+                      <option value="" disabled>📂 Cargar preset…</option>
+                      {panelTemplates.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
+                    </select>
+                  )}
+                </div>
+
+                {/* T2 row */}
+                {[1, 2].map(idx => {
+                  const isT2 = idx === 1;
+                  const d = isT2 ? autoD2 : autoD3;
+                  const setD = isT2 ? setAutoD2 : setAutoD3;
+                  const base = Number(editTiers[0]?.price) || 0;
+                  const calc = d ? calcAuto(base, Number(d), autoDiscMode) : null;
+                  const color = isT2 ? 'var(--accent)' : '#7b1fa2';
+                  const bg    = isT2 ? '#f4f7ff' : '#fdf4ff';
+                  const border = isT2 ? '#0052FF30' : '#7b1fa230';
+                  return (
+                    <div key={idx} style={{ marginBottom: 8 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '28px 60px 1fr', gap: 6, alignItems: 'center' }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color }}>T{idx+1}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <span style={{ fontSize: 11, color: 'var(--muted)' }}>≥</span>
+                          <input type="number" value={editTiers[idx]?.minQty} min={2}
+                            onChange={e => setEditTiers(prev => prev.map((t,i) => i===idx ? {...t, minQty: e.target.value} : t))}
+                            style={{ width: '100%', padding: '5px 4px', borderRadius: 6, border: `1px solid ${border}`, fontSize: 11, outline: 'none', textAlign: 'center', background: bg }} />
+                        </div>
+                        <input type="number" value={d} onChange={e => setD(e.target.value)}
+                          placeholder={autoDiscMode === 'flat' ? 'descuento $' : 'descuento %'}
+                          style={{ padding: '5px 8px', borderRadius: 6, border: `1px solid ${border}`, fontSize: 12, outline: 'none', background: bg, textAlign: 'right', width: '100%', boxSizing: 'border-box' }} />
+                      </div>
+                      {calc !== null && (
+                        <div style={{ fontSize: 10, color, fontWeight: 700, textAlign: 'right', marginTop: 2 }}>
+                          = ${calc.toLocaleString('es-CL')} por pkg
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            ) : (
+              /* Manual mode */
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '4px 8px', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: 0.5 }}>CANTIDAD</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: 0.5 }}>PRECIO PKG (CLP)</span>
+                </div>
+                {editTiers.map((tier, i) => (
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '4px 8px', alignItems: 'center', marginBottom: 8 }}>
+                    {i === 0 ? (
+                      <div style={{ padding: '9px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 13, background: 'var(--card2)', color: 'var(--muted)', fontWeight: 600 }}>1 pkg</div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ fontSize: 13, color: 'var(--muted)', flexShrink: 0 }}>≥</span>
+                        <input type="number" value={tier.minQty} min={2}
+                          onChange={e => setEditTiers(prev => prev.map((t, idx) => idx === i ? { ...t, minQty: e.target.value } : t))}
+                          style={{ ...INP, paddingRight: 4 }} />
+                      </div>
+                    )}
+                    <input type="number" value={tier.price} placeholder="0"
+                      onChange={e => {
+                        const val = e.target.value;
+                        setEditTiers(prev => prev.map((t, idx) => idx === i ? { ...t, price: val } : t));
+                        if (i === 0) setEditPrice(val);
+                      }}
+                      style={{ ...INP, background: i===0 ? '#fff' : '#f8f9ff', borderColor: i===0 ? 'var(--accent)' : 'var(--border)', fontWeight: i===0 ? 700 : 400 }} />
+                  </div>
+                ))}
+              </>
+            )}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: panel.zone.source === 'custom' ? '1fr 1fr' : '1fr', gap: 10 }}>
@@ -698,7 +870,7 @@ export default function SectorMap() {
               background: savingZone ? 'var(--border)' : 'var(--accent)', color: '#fff',
               fontSize: 14, fontWeight: 700, cursor: savingZone ? 'not-allowed' : 'pointer'
             }}>
-              {savingZone ? '⏳…' : `✅ Guardar $${Number(editPrice || 0).toLocaleString('es-CL')}`}
+              {savingZone ? '⏳…' : `✅ Guardar $${Number(editTiers[0]?.price || 0).toLocaleString('es-CL')}${tierInputMode === 'auto' ? ' · auto' : ''}`}
             </button>
             {panel.zone.source === 'custom' && (
               <button onClick={() => deleteZone(panel.zone)} style={{

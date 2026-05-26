@@ -21,6 +21,7 @@ import vehicleConfigRoutes from './routes/vehicleConfigRoutes.js';
 import inventoryConfigRoutes from './routes/inventoryConfigRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import presupuestosRoutes from './routes/presupuestosRoutes.js';
+import tierTemplateRoutes from './routes/tierTemplateRoutes.js';
 import { securityHeaders } from './middleware/security.js';
 import { runCleanup } from './utils/cleanup.js';
 import { isSupabaseEnabled } from './utils/supabase.js';
@@ -84,6 +85,7 @@ app.use('/api/vehicle-configs', vehicleConfigRoutes);
 app.use('/api/inventory-configs', inventoryConfigRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/presupuestos', presupuestosRoutes);
+app.use('/api/tier-templates', tierTemplateRoutes);
 
 app.get('/api/health', (_, res) => res.json({ ok: true, ts: Date.now() }));
 

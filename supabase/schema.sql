@@ -193,9 +193,22 @@ create table if not exists zones (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   price numeric not null default 0,
+  tiers jsonb not null default '[]'::jsonb,
   color text not null default '#5c35cc',
   source text not null default 'custom' check (source in ('commune', 'custom')),
   polygon jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists tier_templates (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  qty2 integer not null default 4,
+  qty3 integer not null default 8,
+  mode text not null default 'flat' check (mode in ('flat', 'pct')),
+  discount2 numeric not null default 0,
+  discount3 numeric not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

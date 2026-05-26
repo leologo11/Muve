@@ -120,6 +120,21 @@ export const api = {
   deleteZone: (id) => request('DELETE', `/zones/${id}`),
   seedCommunes: (features) => request('POST', '/zones/seed-communes', features ? { features } : undefined),
   deleteAllCommunes: () => request('DELETE', '/zones/communes/all'),
+  parsePricesAI: (source) => {
+    if (source instanceof File) {
+      const fd = new FormData();
+      fd.append('file', source);
+      return request('POST', '/zones/parse-prices-ai', fd, true);
+    }
+    return request('POST', '/zones/parse-prices-ai', { text: source });
+  },
+  bulkZoneTiers: (items) => request('POST', '/zones/bulk-tiers', items),
+
+  // Tier templates (saved generalizer presets)
+  getTierTemplates: () => request('GET', '/tier-templates'),
+  createTierTemplate: (data) => request('POST', '/tier-templates', data),
+  updateTierTemplate: (id, data) => request('PATCH', `/tier-templates/${id}`, data),
+  deleteTierTemplate: (id) => request('DELETE', `/tier-templates/${id}`),
 
   // Quotes
   createPublicQuote: (data) => request('POST', '/public/quotes', data),
