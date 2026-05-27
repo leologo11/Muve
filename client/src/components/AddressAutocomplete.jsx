@@ -117,6 +117,7 @@ export default function AddressAutocomplete({
   value, onChange, onSelect,
   placeholder = 'Buscar dirección…',
   style = {},
+  compact = false,
   dropdownFixed: _,
 }) {
   const [query, setQuery]             = useState(value || '');
@@ -235,12 +236,15 @@ export default function AddressAutocomplete({
           onChange={e => handleChange(e.target.value)}
           placeholder={placeholder}
           autoComplete="off"
-          style={{ ...INP, borderColor: open ? 'var(--accent)' : 'var(--border)' }}
+          style={compact
+            ? { ...INP, height: 30, minHeight: 30, fontSize: 11, padding: '4px 26px 4px 7px', borderRadius: 5, borderColor: open ? 'var(--accent)' : 'var(--border)' }
+            : { ...INP, borderColor: open ? 'var(--accent)' : 'var(--border)' }
+          }
           onFocus={() => { if (suggestions.length) { calcDropPos(); setOpen(true); } }}
         />
         <span
           onClick={query ? handleClear : undefined}
-          style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 15, color: 'var(--muted)', cursor: query ? 'pointer' : 'default', userSelect: 'none' }}
+          style={{ position: 'absolute', right: compact ? 6 : 10, top: '50%', transform: 'translateY(-50%)', fontSize: compact ? 12 : 15, color: 'var(--muted)', cursor: query ? 'pointer' : 'default', userSelect: 'none' }}
         >
           {loading ? '⏳' : query ? '×' : '🔍'}
         </span>

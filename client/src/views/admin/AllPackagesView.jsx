@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
+import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
+
+// Sectors that aren't official communes — map to real commune for geocoding/prices
+const SECTOR_TO_COMMUNE = {
+  'chicureo': 'Colina', 'hacienda chicureo': 'Colina', 'piedra roja': 'Colina',
+  'los trapenses': 'Colina', 'batuco': 'Lampa', 'valle grande': 'Lampa',
+  'la dehesa': 'Lo Barnechea', 'el arrayán': 'Lo Barnechea', 'el arrayn': 'Lo Barnechea',
+  'san carlos de apoquindo': 'Lo Barnechea', 'los domínicos': 'Las Condes',
+  'los dominicos': 'Las Condes', 'el principal': 'Pirque',
+};
 
 const STATUS_COLOR = {
   pendiente:      '#888',
@@ -388,6 +398,14 @@ function BulkImportModal({ companies, onClose, onDone }) {
       return { ...p, [field]: val, _flags: (p._flags || []).filter(f => f !== field) };
     }));
 
+  /* ── Update multiple fields at once (e.g. address autocomplete fills commune too) ── */
+  const setFields = (idx, updates) =>
+    setPreview(prev => prev.map((p, i) => {
+      if (i !== idx) return p;
+      const clearedFlags = (p._flags || []).filter(f => !(f in updates));
+      return { ...p, ...updates, _flags: clearedFlags };
+    }));
+
   /* ── Remove package from preview ── */
   const remove = (idx) => setPreview(prev => prev.filter((_, i) => i !== idx));
 
@@ -556,8 +574,22 @@ function BulkImportModal({ companies, onClose, onDone }) {
                         <td style={{ padding: '3px 4px', background: noPhone ? '#fef3c7' : 'transparent' }}>
                           <input value={pkg.customerPhone || ''} onChange={e => setField(idx, 'customerPhone', e.target.value)} placeholder="+56912345678" style={previewInput(noPhone || flags.includes('customerPhone'))} />
                         </td>
-                        <td style={{ padding: '3px 4px', background: noAddrNum ? '#fee2e2' : flags.includes('address') ? '#fef3c7' : 'transparent', minWidth: 160 }}>
-                          <input value={pkg.address || ''} onChange={e => setField(idx, 'address', e.target.value)} placeholder="Dirección y número" style={previewInput(flags.includes('address'), noAddrNum)} />
+                        <td style={{ padding: '3px 4px', background: noAddrNum ? '#fee2e2' : flags.includes('address') ? '#fef3c7' : 'transparent', minWidth: 200 }}>
+                          <AddressAutocomplete
+                            compact
+                            value={pkg.address || ''}
+                            placeholder="Dirección y número"
+                            style={{ border: 'none' }}
+                            onChange={val => setField(idx, 'address', val)}
+                            onSelect={({ address, commune, lat, lng }) => {
+                              const normalized = SECTOR_TO_COMMUNE[(commune || '').toLowerCase().trim()] || commune;
+                              setFields(idx, {
+                                address,
+                                ...(normalized ? { commune: normalized } : {}),
+                                ...(lat != null ? { lat, lng } : {}),
+                              });
+                            }}
+                          />
                         </td>
                         <td style={{ padding: '3px 4px', background: noCommune ? '#fee2e2' : flags.includes('commune') ? '#fef3c7' : 'transparent', minWidth: 110 }}>
                           <select value={pkg.commune || ''} onChange={e => setField(idx, 'commune', e.target.value)} style={{ ...previewInput(flags.includes('commune'), noCommune), WebkitAppearance: 'none' }}>
@@ -677,7 +709,16 @@ function SinglePackageModal({ companies, onClose, onDone }) {
         </div>
         <div>
           <FormLabel required>Dirección</FormLabel>
-          <FormInput value={form.address} onChange={v => set('address', v)} placeholder="Av. Providencia 1234" required />
+          <AddressAutocomplete
+            value={form.address}
+            placeholder="Av. Providencia 1234"
+            onChange={v => set('address', v)}
+            onSelect={({ address, commune }) => {
+              const normalized = SECTOR_TO_COMMUNE[(commune || '').toLowerCase().trim()] || commune;
+              set('address', address);
+              if (normalized) set('commune', normalized);
+            }}
+          />
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <div style={{ flex: 1 }}>
@@ -1145,7 +1186,16 @@ function EditPackageModal({ pkg, companies, onClose, onSave }) {
 
         <div>
           <FormLabel required>Dirección</FormLabel>
-          <FormInput value={form.address} onChange={v => set('address', v)} placeholder="Av. Providencia 1234" required />
+          <AddressAutocomplete
+            value={form.address}
+            placeholder="Av. Providencia 1234"
+            onChange={v => set('address', v)}
+            onSelect={({ address, commune, lat, lng }) => {
+              const normalized = SECTOR_TO_COMMUNE[(commune || '').toLowerCase().trim()] || commune;
+              set('address', address);
+              if (normalized) set('commune', normalized);
+            }}
+          />
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>
