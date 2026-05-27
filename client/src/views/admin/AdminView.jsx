@@ -1376,8 +1376,24 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
               <input value={form.invoice.notes} onChange={e => setInvoice('notes', e.target.value)} placeholder="Notas de pago" style={inp} />
             </>)}
 
-            <div style={{ margin: '14px 0 4px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: 1 }}>📍 PUNTO DE INICIO</div>
-            <Label>Dirección bodega / bodega de retiro</Label>
+            <div style={{ margin: '14px 0 8px', padding: '12px 14px', background: '#0052FF08', border: '1px solid #0052FF25', borderRadius: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: 1, marginBottom: 6 }}>📍 PUNTO DE INICIO / DIRECCIÓN DE RETIRO</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>Desde aquí parte el repartidor. Será el punto nº1 y el origen para la optimización de ruta.</div>
+              <AddressAutocomplete
+                value={form.startPoint.address}
+                onChange={v => setStart('address', v)}
+                onSelect={({ address, lat, lng }) => setForm(f => ({ ...f, startPoint: { address, lat, lng } }))}
+                placeholder="Ej: Av. Vitacura 2939, Vitacura…"
+                dropdownFixed
+              />
+              {form.startPoint.lat && form.startPoint.lng
+                ? <div style={{ fontSize: 11, color: '#16a34a', marginTop: 6, fontWeight: 600 }}>✓ Coordenadas listas — se usará como origen en la optimización</div>
+                : form.startPoint.address
+                  ? <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 6 }}>⚠ Selecciona una sugerencia del listado para obtener coordenadas exactas</div>
+                  : null
+              }
+            </div>
+
             <div style={{ margin: '14px 0 4px', fontSize: 11, fontWeight: 700, color: '#0077aa', letterSpacing: 1 }}>PAGO DRIVER</div>
             <Label>Monto base pactado</Label>
             <input type="number" value={form.driverPayout} onChange={e => set('driverPayout', e.target.value)} placeholder="Ej: 60000" style={inp} />
@@ -1389,17 +1405,6 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
             </select>
             <Label>Ajuste manual (+/-)</Label>
             <input type="number" value={form.driverSettlement.adjustment} onChange={e => setSettlement('adjustment', e.target.value)} placeholder="0" style={inp} />
-
-            <AddressAutocomplete
-              value={form.startPoint.address}
-              onChange={v => setStart('address', v)}
-              onSelect={({ address, lat, lng }) => setForm(f => ({ ...f, startPoint: { address, lat, lng } }))}
-              placeholder="Av. Vitacura 2939, Vitacura…"
-              dropdownFixed
-            />
-            {form.startPoint.lat && form.startPoint.lng && (
-              <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 4 }}>✓ Coordenadas listas — aparecerá en el mapa como punto #1</div>
-            )}
 
             <button onClick={saveRoute} disabled={saving} style={{ width: '100%', padding: 12, borderRadius: 10, border: 'none', marginTop: 14, background: saving ? 'var(--border)' : 'var(--accent)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
               {saving ? 'Guardando…' : '✓ Guardar cambios'}
