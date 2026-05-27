@@ -50,6 +50,10 @@ export default function AllPackagesView() {
   const [moveTarget, setMoveTarget] = useState(null);
   const [showImport, setShowImport] = useState(false);
   const [showSingle, setShowSingle] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [editTarget, setEditTarget] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const LIMIT = 50;
 
@@ -100,6 +104,59 @@ export default function AllPackagesView() {
       await api.updatePackage(pkg._id, { status: newStatus });
       setPackages(prev => prev.map(p => p._id === pkg._id ? { ...p, status: newStatus } : p));
       toast(newStatus === 'entregado' ? '✅ Entregado' : '↩ Actualizado');
+    } catch (err) {
+      toast('❌ ' + err.message);
+    }
+  };
+
+  const toggleSelect = (id) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  const allSelected = packages.length > 0 && packages.every(p => selectedIds.has(p._id));
+
+  const handleDelete = async () => {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    try {
+      await api.deletePackage(confirmDelete._id);
+      setPackages(prev => prev.filter(p => p._id !== confirmDelete._id));
+      setTotal(t => t - 1);
+      setSelectedIds(prev => { const n = new Set(prev); n.delete(confirmDelete._id); return n; });
+      toast('🗑 Paquete eliminado');
+      setConfirmDelete(null);
+    } catch (err) {
+      toast('❌ ' + err.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setDeleting(true);
+    try {
+      await api.bulkDeletePackages([...selectedIds]);
+      const count = selectedIds.size;
+      setPackages(prev => prev.filter(p => !selectedIds.has(p._id)));
+      setTotal(t => t - count);
+      toast(`🗑 ${count} paquete${count !== 1 ? 's' : ''} eliminado${count !== 1 ? 's' : ''}`);
+      setSelectedIds(new Set());
+    } catch (err) {
+      toast('❌ ' + err.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleEditSave = async (id, updates) => {
+    try {
+      const updated = await api.updatePackage(id, updates);
+      setPackages(prev => prev.map(p => p._id === id ? updated : p));
+      toast('✅ Paquete actualizado');
+      setEditTarget(null);
     } catch (err) {
       toast('❌ ' + err.message);
     }
@@ -162,8 +219,28 @@ export default function AllPackagesView() {
           </select>
         </div>
 
-        <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginTop: 6, letterSpacing: .5 }}>
-          {loading ? 'Cargando…' : `${total} paquete${total !== 1 ? 's' : ''} encontrado${total !== 1 ? 's' : ''}`}
+        <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginTop: 6, letterSpacing: .5, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span>{loading ? 'Cargando…' : `${total} paquete${total !== 1 ? 's' : ''} encontrado${total !== 1 ? 's' : ''}`}</span>
+          {!loading && packages.length > 0 && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', userSelect: 'none' }}>
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={() => allSelected ? setSelectedIds(new Set()) : setSelectedIds(new Set(packages.map(p => p._id)))}
+                style={{ width: 13, height: 13, cursor: 'pointer', accentColor: 'var(--accent)' }}
+              />
+              <span style={{ color: allSelected ? 'var(--accent)' : 'var(--muted)' }}>Seleccionar todos</span>
+            </label>
+          )}
+          {selectedIds.size > 0 && (
+            <button
+              onClick={handleBulkDelete}
+              disabled={deleting}
+              style={{ padding: '3px 10px', borderRadius: 20, border: '1px solid #e5534b', background: '#e5534b12', color: '#e5534b', fontSize: 10, fontWeight: 700, cursor: deleting ? 'not-allowed' : 'pointer' }}
+            >
+              {deleting ? '⏳ Eliminando…' : `🗑 Eliminar ${selectedIds.size} seleccionado${selectedIds.size !== 1 ? 's' : ''}`}
+            </button>
+          )}
         </div>
       </div>
 
@@ -184,6 +261,10 @@ export default function AllPackagesView() {
               routes={routes}
               onMove={() => setMoveTarget({ pkg, targetRouteId: '' })}
               onStatusChange={handleStatusChange}
+              onDelete={() => setConfirmDelete(pkg)}
+              onEdit={() => setEditTarget(pkg)}
+              selected={selectedIds.has(pkg._id)}
+              onToggleSelect={() => toggleSelect(pkg._id)}
             />
           ))
         )}
@@ -221,6 +302,24 @@ export default function AllPackagesView() {
           companies={companies}
           onClose={() => setShowImport(false)}
           onDone={() => { setShowImport(false); load(1); }}
+        />
+      )}
+
+      {editTarget && (
+        <EditPackageModal
+          pkg={editTarget}
+          companies={companies}
+          onClose={() => setEditTarget(null)}
+          onSave={handleEditSave}
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmDeleteSheet
+          pkg={confirmDelete}
+          loading={deleting}
+          onConfirm={handleDelete}
+          onClose={() => setConfirmDelete(null)}
         />
       )}
     </div>
@@ -601,7 +700,7 @@ function SinglePackageModal({ companies, onClose, onDone }) {
 }
 
 /* ─── Package row ─────────────────────────────────────────────────── */
-function PkgRow({ pkg, routes, onMove, onStatusChange }) {
+function PkgRow({ pkg, routes, onMove, onStatusChange, onDelete, onEdit, selected, onToggleSelect }) {
   const [expanded, setExpanded] = useState(false);
   const sc = STATUS_COLOR[pkg.status] || '#888';
   const route = pkg.routeId;
@@ -609,54 +708,63 @@ function PkgRow({ pkg, routes, onMove, onStatusChange }) {
   const company = pkg.companyId;
 
   return (
-    <div style={{ margin: '0 8px 6px', borderRadius: 12, border: '1px solid var(--border)', background: '#fff', overflow: 'hidden', position: 'relative' }}>
+    <div style={{ margin: '0 8px 6px', borderRadius: 12, border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`, background: selected ? '#0052FF05' : '#fff', overflow: 'hidden', position: 'relative' }}>
       <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 3, background: sc, opacity: 0.8 }} />
 
-      <div onClick={() => setExpanded(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 10px 10px 13px', cursor: 'pointer' }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.2 }}>
-            {pkg.customerName} {pkg.customerLastName}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {pkg.address}{pkg.commune ? `, ${pkg.commune}` : ''}
-          </div>
-          <div style={{ display: 'flex', gap: 5, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: `${sc}12`, color: sc, border: `1px solid ${sc}28` }}>
-              {pkg.status.replace('-', ' ').toUpperCase()}
-            </span>
-            {company?.name && (
-              <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: '#7c3aed12', color: '#7c3aed', border: '1px solid #7c3aed28' }}>
-                🏢 {company.name}
-              </span>
-            )}
-            {route ? (
-              <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--muted)', padding: '2px 7px', borderRadius: 20, background: 'var(--card2)', border: '1px solid var(--border)' }}>
-                {route.routeCode}
-              </span>
-            ) : (
-              <span style={{ fontSize: 9, fontWeight: 600, color: '#888', padding: '2px 7px', borderRadius: 20, background: '#f1f5f9', border: '1px solid #cbd5e1' }}>
-                📭 sin ruta
-              </span>
-            )}
-            {driver && (
-              <span style={{ fontSize: 9, fontWeight: 600, color: '#0077aa', padding: '2px 7px', borderRadius: 20, background: '#0077aa10', border: '1px solid #0077aa20' }}>
-                🚗 {driver.name}
-              </span>
-            )}
-            {pkg.aiFlags?.length > 0 && (
-              <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: '#f59e0b12', color: '#b45309', border: '1px solid #f59e0b40' }}>
-                ⚠ Revisar: {pkg.aiFlags.join(', ')}
-              </span>
-            )}
-          </div>
-        </div>
-        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          {pkg.createdAt && (
-            <div style={{ fontSize: 9, color: 'var(--muted)', marginBottom: 4, whiteSpace: 'nowrap' }}>
-              {fmtDate(pkg.createdAt)}
+      <div style={{ display: 'flex', alignItems: 'center', padding: '8px 10px 8px 13px', gap: 8 }}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggleSelect}
+          onClick={e => e.stopPropagation()}
+          style={{ width: 15, height: 15, cursor: 'pointer', flexShrink: 0, accentColor: 'var(--accent)' }}
+        />
+        <div onClick={() => setExpanded(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, cursor: 'pointer', minWidth: 0 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.2 }}>
+              {pkg.customerName} {pkg.customerLastName}
             </div>
-          )}
-          <div style={{ fontSize: 16, color: 'var(--muted)', transition: 'transform .15s', transform: expanded ? 'rotate(180deg)' : 'none' }}>▾</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {pkg.address}{pkg.commune ? `, ${pkg.commune}` : ''}
+            </div>
+            <div style={{ display: 'flex', gap: 5, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: `${sc}12`, color: sc, border: `1px solid ${sc}28` }}>
+                {pkg.status.replace('-', ' ').toUpperCase()}
+              </span>
+              {company?.name && (
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: '#7c3aed12', color: '#7c3aed', border: '1px solid #7c3aed28' }}>
+                  🏢 {company.name}
+                </span>
+              )}
+              {route ? (
+                <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--muted)', padding: '2px 7px', borderRadius: 20, background: 'var(--card2)', border: '1px solid var(--border)' }}>
+                  {route.routeCode}
+                </span>
+              ) : (
+                <span style={{ fontSize: 9, fontWeight: 600, color: '#888', padding: '2px 7px', borderRadius: 20, background: '#f1f5f9', border: '1px solid #cbd5e1' }}>
+                  📭 sin ruta
+                </span>
+              )}
+              {driver && (
+                <span style={{ fontSize: 9, fontWeight: 600, color: '#0077aa', padding: '2px 7px', borderRadius: 20, background: '#0077aa10', border: '1px solid #0077aa20' }}>
+                  🚗 {driver.name}
+                </span>
+              )}
+              {pkg.aiFlags?.length > 0 && (
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: '#f59e0b12', color: '#b45309', border: '1px solid #f59e0b40' }}>
+                  ⚠ Revisar: {pkg.aiFlags.join(', ')}
+                </span>
+              )}
+            </div>
+          </div>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            {pkg.createdAt && (
+              <div style={{ fontSize: 9, color: 'var(--muted)', marginBottom: 4, whiteSpace: 'nowrap' }}>
+                {fmtDate(pkg.createdAt)}
+              </div>
+            )}
+            <div style={{ fontSize: 16, color: 'var(--muted)', transition: 'transform .15s', transform: expanded ? 'rotate(180deg)' : 'none' }}>▾</div>
+          </div>
         </div>
       </div>
 
@@ -680,6 +788,8 @@ function PkgRow({ pkg, routes, onMove, onStatusChange }) {
             {pkg.status !== 'entregado' && <ActionBtn color="#0052FF" onClick={() => onStatusChange(pkg, 'entregado')}>✅ Entregado</ActionBtn>}
             {pkg.status !== 'pendiente' && <ActionBtn color="#888" onClick={() => onStatusChange(pkg, 'pendiente')}>↩ Pendiente</ActionBtn>}
             <ActionBtn color="#0077aa" onClick={onMove}>🔀 Mover de ruta</ActionBtn>
+            <ActionBtn color="#7c3aed" onClick={onEdit}>✏️ Editar</ActionBtn>
+            <ActionBtn color="#e5534b" onClick={onDelete}>🗑 Eliminar</ActionBtn>
           </div>
 
           {pkg.history?.length > 0 && (
@@ -748,6 +858,165 @@ function MoveModal({ pkg, routes, targetRouteId, onSelect, onConfirm, onClose })
             🔀 Confirmar traslado
           </button>
           <button onClick={onClose} style={{ padding: '13px 18px', borderRadius: 11, border: '1px solid var(--border)', background: 'transparent', fontSize: 13, color: 'var(--muted)', fontWeight: 600, cursor: 'pointer' }}>
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Edit package modal ──────────────────────────────────────────── */
+function EditPackageModal({ pkg, companies, onClose, onSave }) {
+  const [form, setForm] = useState({
+    customerName:     pkg.customerName     || '',
+    customerLastName: pkg.customerLastName || '',
+    customerPhone:    pkg.customerPhone    || '',
+    address:          pkg.address          || '',
+    commune:          pkg.commune          || '',
+    aptFloor:         pkg.aptFloor         || '',
+    price:            pkg.price            || '',
+    note:             pkg.note             || '',
+    status:           pkg.status           || 'pendiente',
+    companyId:        pkg.companyId?._id   || pkg.companyId || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.customerName || !form.address) return toast('❌ Nombre y dirección son requeridos');
+    setSaving(true);
+    try {
+      await onSave(pkg._id, {
+        customerName:     form.customerName,
+        customerLastName: form.customerLastName || null,
+        customerPhone:    form.customerPhone    || null,
+        address:          form.address,
+        commune:          form.commune          || null,
+        aptFloor:         form.aptFloor         || null,
+        price:            Number(form.price)    || 0,
+        note:             form.note             || null,
+        status:           form.status,
+        companyId:        form.companyId        || null,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <BottomSheet title="✏️ Editar paquete" onClose={onClose} tall>
+      <form onSubmit={handleSubmit} style={{ overflowY: 'auto', flex: 1, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, letterSpacing: .5 }}>
+          🔖 {pkg.trackingId}
+        </div>
+
+        <div>
+          <FormLabel required>🏢 Empresa</FormLabel>
+          <select value={form.companyId} onChange={e => set('companyId', e.target.value)}
+            style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 10, padding: '9px 10px', fontSize: 13, outline: 'none', background: 'var(--card2)', WebkitAppearance: 'none', boxSizing: 'border-box' }}>
+            <option value="">— Sin empresa —</option>
+            {companies.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ flex: 1 }}>
+            <FormLabel required>Nombre</FormLabel>
+            <FormInput value={form.customerName} onChange={v => set('customerName', v)} placeholder="María" required />
+          </div>
+          <div style={{ flex: 1 }}>
+            <FormLabel>Apellido</FormLabel>
+            <FormInput value={form.customerLastName} onChange={v => set('customerLastName', v)} placeholder="González" />
+          </div>
+        </div>
+
+        <div>
+          <FormLabel>Teléfono</FormLabel>
+          <FormInput value={form.customerPhone} onChange={v => set('customerPhone', v)} placeholder="+56912345678" type="tel" />
+        </div>
+
+        <div>
+          <FormLabel required>Dirección</FormLabel>
+          <FormInput value={form.address} onChange={v => set('address', v)} placeholder="Av. Providencia 1234" required />
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ flex: 1 }}>
+            <FormLabel>Comuna</FormLabel>
+            <select value={form.commune} onChange={e => set('commune', e.target.value)}
+              style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 10, padding: '9px 10px', fontSize: 13, outline: 'none', background: 'var(--card2)', WebkitAppearance: 'none', boxSizing: 'border-box' }}>
+              <option value="">— Sin comuna —</option>
+              {COMMUNES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <FormLabel>Depto / Casa</FormLabel>
+            <FormInput value={form.aptFloor} onChange={v => set('aptFloor', v)} placeholder="Dpto 3B" />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ flex: 1 }}>
+            <FormLabel>Precio</FormLabel>
+            <FormInput value={form.price} onChange={v => set('price', v)} placeholder="0" type="number" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <FormLabel>Estado</FormLabel>
+            <select value={form.status} onChange={e => set('status', e.target.value)}
+              style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 10, padding: '9px 10px', fontSize: 13, outline: 'none', background: 'var(--card2)', WebkitAppearance: 'none', boxSizing: 'border-box' }}>
+              <option value="pendiente">⏳ Pendiente</option>
+              <option value="entregado">✅ Entregado</option>
+              <option value="no-entregado">❌ No entregado</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <FormLabel>Nota interna</FormLabel>
+          <FormInput value={form.note} onChange={v => set('note', v)} placeholder="Dejar en conserjería…" />
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <button type="submit" disabled={saving}
+            style={{ flex: 1, padding: 13, borderRadius: 11, border: 'none', background: saving ? 'var(--card2)' : 'var(--accent)', color: saving ? 'var(--muted)' : '#fff', fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
+            {saving ? 'Guardando…' : '✅ Guardar cambios'}
+          </button>
+          <button type="button" onClick={onClose}
+            style={{ padding: '13px 18px', borderRadius: 11, border: '1px solid var(--border)', background: 'transparent', fontSize: 13, color: 'var(--muted)', fontWeight: 600, cursor: 'pointer' }}>
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </BottomSheet>
+  );
+}
+
+/* ─── Confirm delete sheet ────────────────────────────────────────── */
+function ConfirmDeleteSheet({ pkg, loading, onConfirm, onClose }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: '#0007', zIndex: 900, display: 'flex', alignItems: 'flex-end' }}>
+      <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', boxShadow: '0 -4px 30px #00000022', padding: '20px 16px calc(24px + env(safe-area-inset-bottom))' }}>
+        <div style={{ width: 36, height: 4, background: 'var(--border)', borderRadius: 2, margin: '0 auto 16px' }} />
+        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>🗑 Eliminar paquete</div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4 }}>
+          <b style={{ color: 'var(--text)' }}>{pkg.customerName} {pkg.customerLastName}</b>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>{pkg.address}{pkg.commune ? `, ${pkg.commune}` : ''}</div>
+        <div style={{ fontSize: 12, color: '#e5534b', background: '#e5534b0c', border: '1px solid #e5534b28', borderRadius: 8, padding: '8px 12px', marginBottom: 16 }}>
+          El paquete quedará marcado como eliminado. Esta acción se puede revertir desde el filtro "Eliminados".
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            style={{ flex: 1, padding: 13, borderRadius: 11, border: 'none', background: loading ? 'var(--card2)' : '#e5534b', color: loading ? 'var(--muted)' : '#fff', fontSize: 13, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer' }}
+          >
+            {loading ? '⏳ Eliminando…' : '🗑 Confirmar eliminación'}
+          </button>
+          <button onClick={onClose} disabled={loading}
+            style={{ padding: '13px 18px', borderRadius: 11, border: '1px solid var(--border)', background: 'transparent', fontSize: 13, color: 'var(--muted)', fontWeight: 600, cursor: 'pointer' }}>
             Cancelar
           </button>
         </div>

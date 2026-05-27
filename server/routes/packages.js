@@ -279,6 +279,22 @@ router.post('/bulk', requireRole('admin'), async (req, res) => {
   }
 });
 
+// POST /api/packages/bulk-delete — soft-delete multiple packages by id
+router.post('/bulk-delete', requireRole('admin'), async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids requeridos' });
+  try {
+    await Promise.all(ids.map(id =>
+      supabaseRequest(`/packages${qs({ id: `eq.${id}` })}`, {
+        method: 'PATCH', body: JSON.stringify({ status: 'eliminado', updated_at: new Date().toISOString() }),
+      })
+    ));
+    return res.json({ ok: true, count: ids.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // PATCH /api/packages/:id
 router.patch('/:id', async (req, res) => {
   try {
