@@ -20,6 +20,19 @@ export default function PackageTable({ packages, onUpdate, onDelete, onMoveRoute
   const [locked, setLocked] = useState(false);
   const addrPickedRef = useRef(false);
 
+  const handleMarkReviewed = async (pkg) => {
+    setSaving(pkg._id);
+    try {
+      const updated = await api.updatePackage(pkg._id, { aiFlags: [] });
+      onUpdate(updated);
+      toast('✅ Advertencias marcadas como revisadas');
+    } catch (err) {
+      toast('❌ ' + err.message);
+    } finally {
+      setSaving(null);
+    }
+  };
+
   const active = packages.filter(p => p.status !== 'eliminado');
 
   const startEdit = (pkg, field) => {
@@ -315,6 +328,18 @@ export default function PackageTable({ packages, onUpdate, onDelete, onMoveRoute
                       onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#e5534b'; }}
                     >
                       🗑
+                    </button>
+                  )}
+                  {flags.length > 0 && (
+                    <button
+                      onClick={() => handleMarkReviewed(pkg)}
+                      disabled={isSaving}
+                      title="Marcar advertencias como revisadas"
+                      style={{ marginTop: 4, display: 'block', background: 'none', border: '1px solid #16a34a', borderRadius: 6, color: '#16a34a', cursor: 'pointer', fontSize: 10, fontWeight: 700, padding: '3px 7px', lineHeight: 1, opacity: isSaving ? 0.4 : 1, transition: 'background .15s, color .15s', whiteSpace: 'nowrap' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#16a34a'; e.currentTarget.style.color = '#fff'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#16a34a'; }}
+                    >
+                      ✓ Revisado
                     </button>
                   )}
                 </td>

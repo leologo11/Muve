@@ -348,6 +348,7 @@ router.patch('/:id', async (req, res) => {
       if (rest.failReason !== undefined) update.fail_reason = rest.failReason;
       if (rest.deliveryMeta !== undefined) update.delivery_meta = rest.deliveryMeta || {};
       if (rest.routeId !== undefined) update.route_id = rest.routeId;
+      if (rest.aiFlags !== undefined) update.ai_flags = rest.aiFlags;
       if (rest.status !== undefined) {
         update.status = rest.status;
         if (rest.status === 'entregado' && !pkg.delivered_at) {

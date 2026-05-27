@@ -162,6 +162,16 @@ export default function AllPackagesView() {
     }
   };
 
+  const handleMarkReviewed = async (pkg) => {
+    try {
+      const updated = await api.updatePackage(pkg._id, { aiFlags: [] });
+      setPackages(prev => prev.map(p => p._id === pkg._id ? updated : p));
+      toast('✅ Advertencias marcadas como revisadas');
+    } catch (err) {
+      toast('❌ ' + err.message);
+    }
+  };
+
   const pages = Math.ceil(total / LIMIT);
 
   return (
@@ -263,6 +273,7 @@ export default function AllPackagesView() {
               onStatusChange={handleStatusChange}
               onDelete={() => setConfirmDelete(pkg)}
               onEdit={() => setEditTarget(pkg)}
+              onMarkReviewed={() => handleMarkReviewed(pkg)}
               selected={selectedIds.has(pkg._id)}
               onToggleSelect={() => toggleSelect(pkg._id)}
             />
@@ -349,9 +360,12 @@ function BulkImportModal({ companies, onClose, onDone }) {
     }
   };
 
-  /* ── Edit individual field ── */
+  /* ── Edit individual field — editing a flagged cell removes its flag ── */
   const setField = (idx, field, val) =>
-    setPreview(prev => prev.map((p, i) => i === idx ? { ...p, [field]: val } : p));
+    setPreview(prev => prev.map((p, i) => {
+      if (i !== idx) return p;
+      return { ...p, [field]: val, _flags: (p._flags || []).filter(f => f !== field) };
+    }));
 
   /* ── Remove package from preview ── */
   const remove = (idx) => setPreview(prev => prev.filter((_, i) => i !== idx));
@@ -472,97 +486,58 @@ function BulkImportModal({ companies, onClose, onDone }) {
               </button>
             </div>
 
-            {/* Editable package cards */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px 4px' }}>
-              {preview.map((pkg, idx) => {
-                const flags = pkg._flags || [];
-                const hasFlags = flags.length > 0;
-                return (
-                  <div key={pkg._id} style={{
-                    border: `1px solid ${hasFlags ? '#f59e0b' : 'var(--border)'}`,
-                    borderRadius: 12, padding: '10px 12px', marginBottom: 8,
-                    background: hasFlags ? '#fff7ed' : '#fff',
-                  }}>
-                    {/* Card header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', background: 'var(--card2)', borderRadius: 20, padding: '2px 8px' }}>
-                          #{idx + 1}
-                        </span>
-                        {hasFlags && (
-                          <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b' }}>
-                            ⚠ Revisar: {flags.join(', ')}
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => remove(idx)}
-                        style={{ background: 'none', border: 'none', color: '#cc2244', fontSize: 16, cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}
-                        title="Eliminar este paquete"
-                      >
-                        ✕
-                      </button>
-                    </div>
-
-                    {/* Editable fields grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                      <EditField
-                        label="Nombre"
-                        value={pkg.customerName || ''}
-                        onChange={v => setField(idx, 'customerName', v)}
-                        flagged={flags.includes('customerName')}
-                      />
-                      <EditField
-                        label="Apellido"
-                        value={pkg.customerLastName || ''}
-                        onChange={v => setField(idx, 'customerLastName', v)}
-                        flagged={flags.includes('customerLastName')}
-                      />
-                      <div style={{ gridColumn: '1/-1' }}>
-                        <EditField
-                          label="Dirección"
-                          value={pkg.address || ''}
-                          onChange={v => setField(idx, 'address', v)}
-                          flagged={flags.includes('address')}
-                          required
-                        />
-                      </div>
-                      <EditField
-                        label="Teléfono"
-                        value={pkg.customerPhone || ''}
-                        onChange={v => setField(idx, 'customerPhone', v)}
-                        flagged={flags.includes('customerPhone')}
-                        placeholder="+56912345678"
-                      />
-                      <div>
-                        <div style={fieldLblStyle(flags.includes('commune'))}>
-                          Comuna{flags.includes('commune') ? ' ⚠' : ''}
-                        </div>
-                        <select
-                          value={pkg.commune || ''}
-                          onChange={e => setField(idx, 'commune', e.target.value)}
-                          style={{
-                            width: '100%', borderRadius: 8, padding: '6px 8px', fontSize: 12, outline: 'none',
-                            border: `1px solid ${flags.includes('commune') ? '#f59e0b' : 'var(--border)'}`,
-                            background: flags.includes('commune') ? '#fff7ed' : 'var(--card2)',
-                            WebkitAppearance: 'none',
-                          }}
-                        >
-                          <option value="">— Sin comuna —</option>
-                          {COMMUNES.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      </div>
-                      <EditField
-                        label="Depto / Casa / Piso"
-                        value={pkg.aptFloor || ''}
-                        onChange={v => setField(idx, 'aptFloor', v)}
-                        flagged={flags.includes('aptFloor')}
-                        placeholder="Dpto 3B"
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+            {/* Editable table */}
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 700 }}>
+                <thead>
+                  <tr style={{ background: 'var(--card2)', position: 'sticky', top: 0, zIndex: 1, boxShadow: '0 1px 0 var(--border)' }}>
+                    {['#', 'Nombre', 'Apellido', 'Teléfono', 'Dirección', 'Comuna', 'Depto', ''].map(h => (
+                      <th key={h} style={{ padding: '7px 8px', textAlign: 'left', fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: 'var(--muted)', whiteSpace: 'nowrap', borderBottom: '2px solid var(--border)', textTransform: 'uppercase' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.map((pkg, idx) => {
+                    const flags = pkg._flags || [];
+                    const hasFlags = flags.length > 0;
+                    return (
+                      <tr key={pkg._id} style={{
+                        background: hasFlags ? '#fffbeb' : idx % 2 === 0 ? '#fff' : 'var(--card2)',
+                        borderBottom: '1px solid var(--border)',
+                        borderLeft: `3px solid ${hasFlags ? '#f59e0b' : 'transparent'}`,
+                      }}>
+                        <td style={{ padding: '5px 8px', color: hasFlags ? '#b45309' : 'var(--muted)', fontWeight: 700, fontSize: 10, whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
+                          {idx + 1}{hasFlags && <span title={`IA marcó: ${flags.join(', ')}`} style={{ marginLeft: 3 }}>⚠</span>}
+                        </td>
+                        <td style={{ padding: '3px 4px', background: flags.includes('customerName') ? '#fef3c7' : 'transparent' }}>
+                          <input value={pkg.customerName || ''} onChange={e => setField(idx, 'customerName', e.target.value)} placeholder="Nombre" style={previewInput(flags.includes('customerName'))} />
+                        </td>
+                        <td style={{ padding: '3px 4px', background: flags.includes('customerLastName') ? '#fef3c7' : 'transparent' }}>
+                          <input value={pkg.customerLastName || ''} onChange={e => setField(idx, 'customerLastName', e.target.value)} placeholder="Apellido" style={previewInput(flags.includes('customerLastName'))} />
+                        </td>
+                        <td style={{ padding: '3px 4px', background: flags.includes('customerPhone') ? '#fef3c7' : 'transparent' }}>
+                          <input value={pkg.customerPhone || ''} onChange={e => setField(idx, 'customerPhone', e.target.value)} placeholder="+56912345678" style={previewInput(flags.includes('customerPhone'))} />
+                        </td>
+                        <td style={{ padding: '3px 4px', background: flags.includes('address') ? '#fef3c7' : 'transparent', minWidth: 160 }}>
+                          <input value={pkg.address || ''} onChange={e => setField(idx, 'address', e.target.value)} placeholder="Dirección y número" style={previewInput(flags.includes('address'))} />
+                        </td>
+                        <td style={{ padding: '3px 4px', background: flags.includes('commune') ? '#fef3c7' : 'transparent', minWidth: 110 }}>
+                          <select value={pkg.commune || ''} onChange={e => setField(idx, 'commune', e.target.value)} style={{ ...previewInput(flags.includes('commune')), WebkitAppearance: 'none' }}>
+                            <option value="">—</option>
+                            {COMMUNES.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        </td>
+                        <td style={{ padding: '3px 4px', background: flags.includes('aptFloor') ? '#fef3c7' : 'transparent' }}>
+                          <input value={pkg.aptFloor || ''} onChange={e => setField(idx, 'aptFloor', e.target.value)} placeholder="Dpto" style={previewInput(flags.includes('aptFloor'))} />
+                        </td>
+                        <td style={{ padding: '3px 8px', verticalAlign: 'middle' }}>
+                          <button onClick={() => remove(idx)} style={{ background: 'none', border: 'none', color: '#cc2244', fontSize: 15, cursor: 'pointer', lineHeight: 1, padding: '2px 4px' }} title="Eliminar fila">✕</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
 
             {/* Confirm footer */}
@@ -700,7 +675,7 @@ function SinglePackageModal({ companies, onClose, onDone }) {
 }
 
 /* ─── Package row ─────────────────────────────────────────────────── */
-function PkgRow({ pkg, routes, onMove, onStatusChange, onDelete, onEdit, selected, onToggleSelect }) {
+function PkgRow({ pkg, routes, onMove, onStatusChange, onDelete, onEdit, onMarkReviewed, selected, onToggleSelect }) {
   const [expanded, setExpanded] = useState(false);
   const sc = STATUS_COLOR[pkg.status] || '#888';
   const route = pkg.routeId;
@@ -790,6 +765,9 @@ function PkgRow({ pkg, routes, onMove, onStatusChange, onDelete, onEdit, selecte
             <ActionBtn color="#0077aa" onClick={onMove}>🔀 Mover de ruta</ActionBtn>
             <ActionBtn color="#7c3aed" onClick={onEdit}>✏️ Editar</ActionBtn>
             <ActionBtn color="#e5534b" onClick={onDelete}>🗑 Eliminar</ActionBtn>
+            {pkg.aiFlags?.length > 0 && (
+              <ActionBtn color="#16a34a" onClick={onMarkReviewed}>✓ Marcar revisado</ActionBtn>
+            )}
           </div>
 
           {pkg.history?.length > 0 && (
@@ -1104,4 +1082,8 @@ function selStyle(hasValue) {
 
 function actionBtn(color) {
   return { flexShrink: 0, width: 36, height: 36, borderRadius: 10, border: `1px solid ${color}30`, background: `${color}12`, color, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit' };
+}
+
+function previewInput(flagged) {
+  return { width: '100%', border: `1px solid ${flagged ? '#f59e0b' : '#e2e8f0'}`, borderRadius: 5, padding: '5px 7px', fontSize: 11, outline: 'none', background: flagged ? '#fff7ed' : '#fff', boxSizing: 'border-box', minWidth: 72 };
 }
