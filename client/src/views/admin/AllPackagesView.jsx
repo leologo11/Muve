@@ -54,6 +54,7 @@ export default function AllPackagesView() {
   const [editTarget, setEditTarget] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [viewMode, setViewMode] = useState('cards'); // 'cards' | 'table'
 
   const LIMIT = 50;
 
@@ -191,6 +192,11 @@ export default function AllPackagesView() {
           <button onClick={() => setShowSingle(true)} style={actionBtn('#0052FF')} title="Agregar 1 paquete">➕</button>
           <button onClick={() => setShowImport(true)} style={actionBtn('#7c3aed')} title="Importar lote con IA">🤖</button>
           <button onClick={() => load(page)} style={actionBtn('#0284c7')} title="Actualizar lista">🔄</button>
+          <button
+            onClick={() => setViewMode(v => v === 'cards' ? 'table' : 'cards')}
+            style={{ ...actionBtn(viewMode === 'table' ? '#0052FF' : '#64748b'), fontSize: 14 }}
+            title={viewMode === 'table' ? 'Ver como tarjetas' : 'Ver como tabla'}
+          >{viewMode === 'table' ? '🃏' : '📊'}</button>
         </div>
 
         {/* Status chips */}
@@ -263,6 +269,21 @@ export default function AllPackagesView() {
             <div style={{ fontSize: 32, marginBottom: 8 }}>📦</div>
             Sin resultados
           </div>
+        ) : viewMode === 'table' ? (
+          <AllPkgTable
+            packages={packages}
+            companies={companies}
+            routes={routes}
+            onMove={pkg => setMoveTarget({ pkg, targetRouteId: '' })}
+            onStatusChange={handleStatusChange}
+            onDelete={pkg => setConfirmDelete(pkg)}
+            onEdit={pkg => setEditTarget(pkg)}
+            onMarkReviewed={handleMarkReviewed}
+            selected={selectedIds}
+            onToggleSelect={toggleSelect}
+            allSelected={allSelected}
+            onToggleAll={() => allSelected ? setSelectedIds(new Set()) : setSelectedIds(new Set(packages.map(p => p._id)))}
+          />
         ) : (
           packages.map(pkg => (
             <PkgRow
@@ -842,6 +863,166 @@ function PkgRow({ pkg, routes, onMove, onStatusChange, onDelete, onEdit, onMarkR
       )}
     </div>
   );
+}
+
+/* ─── All packages table (excel-style) ──────────────────────────── */
+const STATUS_COLOR_MAP = { pendiente: '#888', entregado: '#0052FF', 'no-entregado': '#cc2244', eliminado: '#c04a1a' };
+
+function AllPkgTable({ packages, companies, routes, onMove, onStatusChange, onDelete, onEdit, onMarkReviewed, selected, onToggleSelect, allSelected, onToggleAll }) {
+  const companyMap = Object.fromEntries(companies.map(c => [c._id, c.name]));
+  const routeMap   = Object.fromEntries(routes.map(r => [r._id, r.routeCode]));
+
+  return (
+    <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 860 }}>
+        <thead>
+          <tr style={{ background: 'var(--card2)', position: 'sticky', top: 0, zIndex: 2, boxShadow: '0 1px 0 var(--border)' }}>
+            <th style={th()}>
+              <input type="checkbox" checked={allSelected} onChange={onToggleAll}
+                style={{ width: 13, height: 13, cursor: 'pointer', accentColor: 'var(--accent)' }} />
+            </th>
+            {['#', 'Cliente', 'Dirección / Comuna', 'Teléfono', 'Empresa', 'Ruta', 'Estado', 'Precio', ''].map(h => (
+              <th key={h} style={th()}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {packages.map((pkg, i) => {
+            const noCommune = !pkg.commune;
+            const noAddrNum = pkg.address && !/\d/.test(pkg.address.trim());
+            const noPhone   = !pkg.customerPhone;
+            const hasGeoErr = noCommune || !!noAddrNum;
+            const hasFlags  = pkg.aiFlags?.length > 0;
+            const isSel     = selected.has(pkg._id);
+            const sc        = STATUS_COLOR_MAP[pkg.status] || '#888';
+
+            const rowBg = isSel ? '#0052FF08' : hasGeoErr ? '#fef2f2' : hasFlags ? '#fffbeb' : i % 2 === 0 ? '#fff' : 'var(--card2)';
+            const leftBorder = isSel ? 'var(--accent)' : hasGeoErr ? '#ef4444' : hasFlags ? '#f59e0b' : 'transparent';
+
+            return (
+              <tr key={pkg._id} style={{ background: rowBg, borderBottom: '1px solid var(--border)', borderLeft: `3px solid ${leftBorder}` }}>
+
+                {/* checkbox */}
+                <td style={td()}>
+                  <input type="checkbox" checked={isSel} onChange={() => onToggleSelect(pkg._id)}
+                    style={{ width: 13, height: 13, cursor: 'pointer', accentColor: 'var(--accent)' }} />
+                </td>
+
+                {/* # */}
+                <td style={{ ...td(), color: hasGeoErr ? '#b91c1c' : 'var(--muted)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                  {i + 1}
+                  {hasGeoErr && <span style={{ marginLeft: 2 }} title="Sin datos para geocodificar">⛔</span>}
+                  {!hasGeoErr && hasFlags && <span style={{ marginLeft: 2 }} title={`IA marcó: ${pkg.aiFlags.join(', ')}`}>⚠</span>}
+                </td>
+
+                {/* Cliente */}
+                <td style={{ ...td(), minWidth: 110 }}>
+                  <div style={{ fontWeight: 600, lineHeight: 1.2 }}>
+                    {pkg.customerName}{pkg.customerLastName ? ` ${pkg.customerLastName}` : ''}
+                  </div>
+                  {hasFlags && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginTop: 2 }}>
+                      {pkg.aiFlags.map(f => (
+                        <span key={f} style={{ fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 20, background: '#f59e0b12', color: '#b45309', border: '1px solid #f59e0b30' }}>
+                          ⚠ {f}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </td>
+
+                {/* Dirección / Comuna */}
+                <td style={{ ...td(), minWidth: 150 }}>
+                  <div style={{ color: noAddrNum ? '#b91c1c' : 'inherit', fontWeight: noAddrNum ? 600 : 'normal', lineHeight: 1.3 }}>
+                    {pkg.address || <span style={{ color: 'var(--muted)' }}>—</span>}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginTop: 2 }}>
+                    {pkg.commune
+                      ? <span style={{ fontSize: 9, color: 'var(--muted)' }}>{pkg.commune}</span>
+                      : <span style={{ fontSize: 9, fontWeight: 700, color: '#b91c1c', background: '#ef444412', border: '1px solid #ef444430', borderRadius: 20, padding: '1px 5px' }}>⛔ Sin comuna</span>
+                    }
+                    {noAddrNum && <span style={{ fontSize: 9, fontWeight: 700, color: '#b91c1c', background: '#ef444412', border: '1px solid #ef444430', borderRadius: 20, padding: '1px 5px' }}>⛔ Sin nº</span>}
+                    {pkg.aptFloor && <span style={{ fontSize: 9, color: 'var(--muted)' }}>{pkg.aptFloor}</span>}
+                  </div>
+                </td>
+
+                {/* Teléfono */}
+                <td style={{ ...td(), minWidth: 100 }}>
+                  {pkg.customerPhone
+                    ? <a href={`tel:${pkg.customerPhone}`} style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 700, textDecoration: 'none' }}>{pkg.customerPhone}</a>
+                    : <span style={{ fontSize: 9, fontWeight: 700, color: '#92400e', background: '#f59e0b10', border: '1px solid #f59e0b28', borderRadius: 20, padding: '1px 5px' }}>📞 Sin tel.</span>
+                  }
+                </td>
+
+                {/* Empresa */}
+                <td style={{ ...td(), minWidth: 80 }}>
+                  <span style={{ fontSize: 10, color: '#7c3aed' }}>
+                    {companyMap[pkg.companyId] || companyMap[pkg.companyId?._id] || '—'}
+                  </span>
+                </td>
+
+                {/* Ruta */}
+                <td style={{ ...td(), minWidth: 70 }}>
+                  <span style={{ fontSize: 10, color: 'var(--muted)' }}>
+                    {routeMap[pkg.routeId] || routeMap[pkg.routeId?._id] || <span style={{ color: '#cbd5e1' }}>sin ruta</span>}
+                  </span>
+                </td>
+
+                {/* Estado */}
+                <td style={{ ...td(), minWidth: 90 }}>
+                  <select
+                    value={pkg.status}
+                    onChange={e => onStatusChange(pkg, e.target.value)}
+                    style={{ fontSize: 10, padding: '3px 5px', borderRadius: 7, border: '1px solid var(--border)', background: '#fff', color: sc, fontWeight: 700, cursor: 'pointer', WebkitAppearance: 'none', width: '100%' }}
+                  >
+                    <option value="pendiente">⏳ Pendiente</option>
+                    <option value="entregado">✅ Entregado</option>
+                    <option value="no-entregado">❌ No entregado</option>
+                  </select>
+                </td>
+
+                {/* Precio */}
+                <td style={{ ...td(), minWidth: 65, fontWeight: 700, color: '#0052FF' }}>
+                  {pkg.price > 0 ? `$${Number(pkg.price).toLocaleString('es-CL')}` : <span style={{ color: 'var(--muted)', fontWeight: 400 }}>—</span>}
+                </td>
+
+                {/* Acciones */}
+                <td style={{ ...td(), whiteSpace: 'nowrap' }}>
+                  <div style={{ display: 'flex', gap: 3, flexWrap: 'nowrap' }}>
+                    <TblBtn color="#7c3aed" onClick={() => onEdit(pkg)} title="Editar">✏️</TblBtn>
+                    <TblBtn color="#0077aa" onClick={() => onMove(pkg)} title="Mover de ruta">🔀</TblBtn>
+                    <TblBtn color="#e5534b" onClick={() => onDelete(pkg)} title="Eliminar">🗑</TblBtn>
+                    {hasFlags && (
+                      <TblBtn color="#16a34a" onClick={() => onMarkReviewed(pkg)} title="Marcar advertencias como revisadas">✓</TblBtn>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function TblBtn({ color, onClick, title, children }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{ background: `${color}12`, border: `1px solid ${color}30`, borderRadius: 6, color, cursor: 'pointer', fontSize: 12, padding: '3px 6px', lineHeight: 1 }}
+      onMouseEnter={e => { e.currentTarget.style.background = color; e.currentTarget.style.color = '#fff'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = `${color}12`; e.currentTarget.style.color = color; }}
+    >{children}</button>
+  );
+}
+
+function th() {
+  return { padding: '7px 8px', textAlign: 'left', fontSize: 9, fontWeight: 700, letterSpacing: 1, color: 'var(--muted)', whiteSpace: 'nowrap', borderBottom: '2px solid var(--border)', textTransform: 'uppercase' };
+}
+function td() {
+  return { padding: '5px 8px', verticalAlign: 'top' };
 }
 
 /* ─── Move modal ──────────────────────────────────────────────────── */

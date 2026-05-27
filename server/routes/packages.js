@@ -39,6 +39,8 @@ function normalizePackage(p) {
     photoUploadedAt: p.photo_uploaded_at, photo2UploadedAt: p.photo2_uploaded_at,
     deliveredAt: p.delivered_at,
     deliveryMeta: p.delivery_meta || {},
+    aiFlags: p.ai_flags || [],
+    history: p.history || [],
     createdAt: p.created_at, updatedAt: p.updated_at,
   };
 }
