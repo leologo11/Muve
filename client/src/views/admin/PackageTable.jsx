@@ -121,10 +121,12 @@ export default function PackageTable({ packages, onUpdate, onDelete, onMoveRoute
   };
 
   const addressCell = (pkg) => {
-    const isEditing = editing?.id === pkg._id && editing?.field === 'address';
-    const noCoords  = !pkg.lat || !pkg.lng;
-    const noNumber  = pkg.address && !hasNumber(pkg.address);
-    const aiFlag    = pkg.aiFlags?.includes('address');
+    const isEditing  = editing?.id === pkg._id && editing?.field === 'address';
+    const noCoords   = !pkg.lat || !pkg.lng;
+    const noNumber   = pkg.address && !hasNumber(pkg.address);
+    const noCommune  = !pkg.commune;
+    const noPhone    = !pkg.customerPhone;
+    const aiFlag     = pkg.aiFlags?.includes('address');
 
     if (isEditing) {
       return (
@@ -151,6 +153,15 @@ export default function PackageTable({ packages, onUpdate, onDelete, onMoveRoute
     );
     if (noNumber) badges.push(
       <span key="num" style={badge('#b34a00', false)}>⚠ Falta número</span>
+    );
+    if (noCommune) badges.push(
+      <span key="commune"
+        onClick={() => saving !== pkg._id && startEdit(pkg, 'commune')}
+        style={badge('#b91c1c', true)}
+      >⛔ Sin comuna · clic para corregir</span>
+    );
+    if (noPhone) badges.push(
+      <span key="phone" style={badge('#92400e', false)}>📞 Sin teléfono</span>
     );
     if (aiFlag) badges.push(
       <span key="ai" style={badge('#7b1fa2', false)}>🤖 IA incierta</span>
@@ -199,23 +210,27 @@ export default function PackageTable({ packages, onUpdate, onDelete, onMoveRoute
         </thead>
         <tbody>
           {active.map((pkg, i) => {
-            const isSaving  = saving === pkg._id;
-            const st        = STATUS_OPTS.find(o => o.value === pkg.status);
-            const needsWork = (!pkg.lat || !pkg.lng) && pkg.status === 'pendiente';
-            const flags     = pkg.aiFlags || [];
-            const hasFlags  = flags.length > 0;
+            const isSaving   = saving === pkg._id;
+            const st         = STATUS_OPTS.find(o => o.value === pkg.status);
+            const noCommune  = !pkg.commune;
+            const hasGeoErr  = (noCommune || (pkg.address && !hasNumber(pkg.address))) && pkg.status === 'pendiente';
+            const needsWork  = (!pkg.lat || !pkg.lng) && pkg.status === 'pendiente';
+            const flags      = pkg.aiFlags || [];
+            const hasFlags   = flags.length > 0;
+            const rowBg      = isSaving ? '#f0f9f0' : hasGeoErr ? '#fef2f2' : hasFlags ? '#fffbeb' : needsWork ? '#fffaf3' : i % 2 === 0 ? '#fff' : 'var(--card2)';
+            const leftBorder = hasGeoErr ? '#ef4444' : needsWork ? '#d4650a' : hasFlags ? '#f59e0b' : 'transparent';
             return (
               <tr
                 key={pkg._id}
                 style={{
-                  background: isSaving ? '#f0f9f0' : hasFlags ? '#fffbeb' : needsWork ? '#fffaf3' : i % 2 === 0 ? '#fff' : 'var(--card2)',
-                  borderBottom: `1px solid ${needsWork ? '#d4650a22' : hasFlags ? '#f59e0b22' : 'var(--border)'}`,
-                  borderLeft: `3px solid ${needsWork ? '#d4650a' : hasFlags ? '#f59e0b' : 'transparent'}`,
+                  background: rowBg,
+                  borderBottom: `1px solid ${leftBorder}22`,
+                  borderLeft: `3px solid ${leftBorder}`,
                   opacity: isSaving ? 0.7 : 1,
                   transition: 'background .2s'
                 }}
               >
-                <td style={{ padding: '6px 8px', color: needsWork ? '#d4650a' : 'var(--muted)', fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap', verticalAlign: 'top' }}>{i + 1}</td>
+                <td style={{ padding: '6px 8px', color: hasGeoErr ? '#b91c1c' : needsWork ? '#d4650a' : 'var(--muted)', fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap', verticalAlign: 'top' }}>{i + 1}</td>
 
                 <td style={{ padding: '4px 6px', minWidth: 120, verticalAlign: 'top' }}>
                   <div style={{ fontWeight: 600 }}>{cell(pkg, 'customerName')}</div>

@@ -386,7 +386,9 @@ function BulkImportModal({ companies, onClose, onDone }) {
     }
   };
 
-  const flagCount = preview.filter(p => p._flags?.length > 0).length;
+  const flagCount      = preview.filter(p => p._flags?.length > 0).length;
+  const geoErrorCount  = preview.filter(p => !p.commune || !p.address || !/\d/.test((p.address || '').trim())).length;
+  const phoneWarnCount = preview.filter(p => !p.customerPhone).length;
 
   if (companies.length === 0) {
     return (
@@ -469,18 +471,28 @@ function BulkImportModal({ companies, onClose, onDone }) {
         {stage === 'preview' && (
           <>
             {/* Summary bar */}
-            <div style={{ padding: '8px 16px 6px', flexShrink: 0, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)', flex: 1 }}>
+            <div style={{ padding: '8px 16px 6px', flexShrink: 0, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)', flex: 1, minWidth: 80 }}>
                 {preview.length} paquete{preview.length !== 1 ? 's' : ''} detectado{preview.length !== 1 ? 's' : ''}
               </div>
+              {geoErrorCount > 0 && (
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#b91c1c', background: '#ef444412', border: '1px solid #ef444430', borderRadius: 20, padding: '2px 10px', whiteSpace: 'nowrap' }}>
+                  ⛔ {geoErrorCount} sin datos para geocodificar
+                </div>
+              )}
               {flagCount > 0 && (
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b', background: '#f59e0b12', border: '1px solid #f59e0b30', borderRadius: 20, padding: '2px 10px' }}>
-                  ⚠ {flagCount} con datos dudosos — revisa antes de confirmar
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#b45309', background: '#f59e0b12', border: '1px solid #f59e0b30', borderRadius: 20, padding: '2px 10px', whiteSpace: 'nowrap' }}>
+                  ⚠ {flagCount} con datos dudosos
+                </div>
+              )}
+              {phoneWarnCount > 0 && (
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#92400e', background: '#f59e0b10', border: '1px solid #f59e0b28', borderRadius: 20, padding: '2px 10px', whiteSpace: 'nowrap' }}>
+                  📞 {phoneWarnCount} sin teléfono
                 </div>
               )}
               <button
                 onClick={() => { setStage('upload'); setPreview([]); }}
-                style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}
               >
                 ← Cambiar archivo
               </button>
@@ -498,16 +510,21 @@ function BulkImportModal({ companies, onClose, onDone }) {
                 </thead>
                 <tbody>
                   {preview.map((pkg, idx) => {
-                    const flags = pkg._flags || [];
-                    const hasFlags = flags.length > 0;
+                    const flags        = pkg._flags || [];
+                    const hasFlags     = flags.length > 0;
+                    const noCommune    = !pkg.commune;
+                    const noAddrNum    = !pkg.address || !/\d/.test(pkg.address.trim());
+                    const noPhone      = !pkg.customerPhone;
+                    const hasGeoError  = noCommune || noAddrNum;
+                    const rowBg = hasGeoError ? '#fef2f2' : hasFlags ? '#fffbeb' : idx % 2 === 0 ? '#fff' : 'var(--card2)';
+                    const rowBorder = hasGeoError ? '#ef4444' : hasFlags ? '#f59e0b' : 'transparent';
                     return (
-                      <tr key={pkg._id} style={{
-                        background: hasFlags ? '#fffbeb' : idx % 2 === 0 ? '#fff' : 'var(--card2)',
-                        borderBottom: '1px solid var(--border)',
-                        borderLeft: `3px solid ${hasFlags ? '#f59e0b' : 'transparent'}`,
-                      }}>
-                        <td style={{ padding: '5px 8px', color: hasFlags ? '#b45309' : 'var(--muted)', fontWeight: 700, fontSize: 10, whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
-                          {idx + 1}{hasFlags && <span title={`IA marcó: ${flags.join(', ')}`} style={{ marginLeft: 3 }}>⚠</span>}
+                      <tr key={pkg._id} style={{ background: rowBg, borderBottom: '1px solid var(--border)', borderLeft: `3px solid ${rowBorder}` }}>
+                        <td style={{ padding: '5px 8px', fontWeight: 700, fontSize: 10, whiteSpace: 'nowrap', verticalAlign: 'middle', color: hasGeoError ? '#b91c1c' : hasFlags ? '#b45309' : 'var(--muted)' }}>
+                          {idx + 1}
+                          {hasGeoError && <span title={`Sin datos para geocodificar${noCommune ? ': falta comuna' : ''}${noAddrNum ? ', falta número en dirección' : ''}`} style={{ marginLeft: 2 }}>⛔</span>}
+                          {!hasGeoError && hasFlags && <span title={`IA marcó: ${flags.join(', ')}`} style={{ marginLeft: 2 }}>⚠</span>}
+                          {noPhone && <span title="Sin teléfono" style={{ marginLeft: 2 }}>📞</span>}
                         </td>
                         <td style={{ padding: '3px 4px', background: flags.includes('customerName') ? '#fef3c7' : 'transparent' }}>
                           <input value={pkg.customerName || ''} onChange={e => setField(idx, 'customerName', e.target.value)} placeholder="Nombre" style={previewInput(flags.includes('customerName'))} />
@@ -515,15 +532,15 @@ function BulkImportModal({ companies, onClose, onDone }) {
                         <td style={{ padding: '3px 4px', background: flags.includes('customerLastName') ? '#fef3c7' : 'transparent' }}>
                           <input value={pkg.customerLastName || ''} onChange={e => setField(idx, 'customerLastName', e.target.value)} placeholder="Apellido" style={previewInput(flags.includes('customerLastName'))} />
                         </td>
-                        <td style={{ padding: '3px 4px', background: flags.includes('customerPhone') ? '#fef3c7' : 'transparent' }}>
-                          <input value={pkg.customerPhone || ''} onChange={e => setField(idx, 'customerPhone', e.target.value)} placeholder="+56912345678" style={previewInput(flags.includes('customerPhone'))} />
+                        <td style={{ padding: '3px 4px', background: noPhone ? '#fef3c7' : 'transparent' }}>
+                          <input value={pkg.customerPhone || ''} onChange={e => setField(idx, 'customerPhone', e.target.value)} placeholder="+56912345678" style={previewInput(noPhone || flags.includes('customerPhone'))} />
                         </td>
-                        <td style={{ padding: '3px 4px', background: flags.includes('address') ? '#fef3c7' : 'transparent', minWidth: 160 }}>
-                          <input value={pkg.address || ''} onChange={e => setField(idx, 'address', e.target.value)} placeholder="Dirección y número" style={previewInput(flags.includes('address'))} />
+                        <td style={{ padding: '3px 4px', background: noAddrNum ? '#fee2e2' : flags.includes('address') ? '#fef3c7' : 'transparent', minWidth: 160 }}>
+                          <input value={pkg.address || ''} onChange={e => setField(idx, 'address', e.target.value)} placeholder="Dirección y número" style={previewInput(flags.includes('address'), noAddrNum)} />
                         </td>
-                        <td style={{ padding: '3px 4px', background: flags.includes('commune') ? '#fef3c7' : 'transparent', minWidth: 110 }}>
-                          <select value={pkg.commune || ''} onChange={e => setField(idx, 'commune', e.target.value)} style={{ ...previewInput(flags.includes('commune')), WebkitAppearance: 'none' }}>
-                            <option value="">—</option>
+                        <td style={{ padding: '3px 4px', background: noCommune ? '#fee2e2' : flags.includes('commune') ? '#fef3c7' : 'transparent', minWidth: 110 }}>
+                          <select value={pkg.commune || ''} onChange={e => setField(idx, 'commune', e.target.value)} style={{ ...previewInput(flags.includes('commune'), noCommune), WebkitAppearance: 'none' }}>
+                            <option value="">— Sin comuna —</option>
                             {COMMUNES.map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
                         </td>
@@ -677,13 +694,17 @@ function SinglePackageModal({ companies, onClose, onDone }) {
 /* ─── Package row ─────────────────────────────────────────────────── */
 function PkgRow({ pkg, routes, onMove, onStatusChange, onDelete, onEdit, onMarkReviewed, selected, onToggleSelect }) {
   const [expanded, setExpanded] = useState(false);
-  const sc = STATUS_COLOR[pkg.status] || '#888';
-  const route = pkg.routeId;
-  const driver = route?.driverId;
-  const company = pkg.companyId;
+  const sc         = STATUS_COLOR[pkg.status] || '#888';
+  const route      = pkg.routeId;
+  const driver     = route?.driverId;
+  const company    = pkg.companyId;
+  const noCommune  = !pkg.commune;
+  const noAddrNum  = pkg.address && !/\d/.test(pkg.address.trim());
+  const noPhone    = !pkg.customerPhone;
+  const hasGeoErr  = noCommune || !!noAddrNum;
 
   return (
-    <div style={{ margin: '0 8px 6px', borderRadius: 12, border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`, background: selected ? '#0052FF05' : '#fff', overflow: 'hidden', position: 'relative' }}>
+    <div style={{ margin: '0 8px 6px', borderRadius: 12, border: `1px solid ${selected ? 'var(--accent)' : hasGeoErr ? '#ef444430' : 'var(--border)'}`, background: selected ? '#0052FF05' : hasGeoErr ? '#fef2f2' : '#fff', overflow: 'hidden', position: 'relative' }}>
       <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 3, background: sc, opacity: 0.8 }} />
 
       <div style={{ display: 'flex', alignItems: 'center', padding: '8px 10px 8px 13px', gap: 8 }}>
@@ -730,6 +751,21 @@ function PkgRow({ pkg, routes, onMove, onStatusChange, onDelete, onEdit, onMarkR
                   ⚠ Revisar: {pkg.aiFlags.join(', ')}
                 </span>
               )}
+              {noCommune && (
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: '#ef444412', color: '#b91c1c', border: '1px solid #ef444430' }}>
+                  ⛔ Sin comuna
+                </span>
+              )}
+              {noAddrNum && (
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: '#ef444412', color: '#b91c1c', border: '1px solid #ef444430' }}>
+                  ⛔ Sin número en dirección
+                </span>
+              )}
+              {noPhone && (
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: '#f59e0b10', color: '#92400e', border: '1px solid #f59e0b28' }}>
+                  📞 Sin teléfono — difícil corregir
+                </span>
+              )}
             </div>
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -745,6 +781,17 @@ function PkgRow({ pkg, routes, onMove, onStatusChange, onDelete, onEdit, onMarkR
 
       {expanded && (
         <div style={{ borderTop: '1px solid var(--border)', padding: '9px 10px 10px 13px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {hasGeoErr && (
+            <div style={{ fontSize: 11, color: '#b91c1c', background: '#fef2f2', border: '1px solid #ef444430', borderRadius: 6, padding: '5px 8px', lineHeight: 1.5 }}>
+              <b>⛔ No geocodificable</b> — corrige antes de asignar a ruta:{' '}
+              {[noCommune && 'falta comuna', noAddrNum && 'falta número en dirección'].filter(Boolean).join(' · ')}
+            </div>
+          )}
+          {noPhone && (
+            <div style={{ fontSize: 11, color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b30', borderRadius: 6, padding: '4px 8px' }}>
+              📞 Sin teléfono — no podrás contactar al cliente para corregir la dirección
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 10, color: 'var(--muted)' }}>🔖 {pkg.trackingId}</span>
             {pkg.customerPhone && <a href={`tel:${pkg.customerPhone}`} style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 700, textDecoration: 'none' }}>📞 {pkg.customerPhone}</a>}
@@ -1084,6 +1131,8 @@ function actionBtn(color) {
   return { flexShrink: 0, width: 36, height: 36, borderRadius: 10, border: `1px solid ${color}30`, background: `${color}12`, color, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit' };
 }
 
-function previewInput(flagged) {
-  return { width: '100%', border: `1px solid ${flagged ? '#f59e0b' : '#e2e8f0'}`, borderRadius: 5, padding: '5px 7px', fontSize: 11, outline: 'none', background: flagged ? '#fff7ed' : '#fff', boxSizing: 'border-box', minWidth: 72 };
+function previewInput(flagged, errored = false) {
+  const color = errored ? '#ef4444' : flagged ? '#f59e0b' : '#e2e8f0';
+  const bg    = errored ? '#fef2f2' : flagged ? '#fff7ed' : '#fff';
+  return { width: '100%', border: `1px solid ${color}`, borderRadius: 5, padding: '5px 7px', fontSize: 11, outline: 'none', background: bg, boxSizing: 'border-box', minWidth: 72 };
 }
