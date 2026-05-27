@@ -2,6 +2,26 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import L from 'leaflet';
 import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
+import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
+
+const SECTOR_TO_COMMUNE = {
+  'chicureo': 'Colina', 'hacienda chicureo': 'Colina', 'piedra roja': 'Colina',
+  'los trapenses': 'Colina', 'batuco': 'Lampa', 'valle grande': 'Lampa',
+  'la dehesa': 'Lo Barnechea', 'el arrayán': 'Lo Barnechea', 'el arrayn': 'Lo Barnechea',
+  'san carlos de apoquindo': 'Lo Barnechea', 'los domínicos': 'Las Condes',
+  'los dominicos': 'Las Condes', 'el principal': 'Pirque',
+};
+
+const COMMUNES = [
+  'Alhué','Buin','Calera de Tango','Cerrillos','Cerro Navia','Colina','Conchalí','Curacaví',
+  'El Bosque','El Monte','Estación Central','Huechuraba','Independencia','Isla de Maipo',
+  'La Cisterna','La Florida','La Granja','La Pintana','La Reina','Lampa','Las Condes',
+  'Lo Barnechea','Lo Espejo','Lo Prado','Macul','Maipú','María Pinto','Melipilla','Ñuñoa',
+  'Padre Hurtado','Paine','Peñaflor','Peñalolén','Pirque','Providencia','Pudahuel',
+  'Puente Alto','Quilicura','Quinta Normal','Recoleta','Renca','San Bernardo','San Joaquín',
+  'San José de Maipo','San Miguel','San Pedro','San Ramón','Santiago','Talagante','Tiltil',
+  'Vitacura',
+];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -115,6 +135,8 @@ export default function GeneralMapView() {
   const [assigning,      setAssigning]      = useState(false);
   const [drivers,        setDrivers]        = useState([]);
   const [showNoGeoPanel, setShowNoGeoPanel] = useState(false);
+  const [editingNoGeo,   setEditingNoGeo]   = useState(null);  // { id, address, commune }
+  const [savingNoGeo,    setSavingNoGeo]    = useState(false);
 
   // Create route inline form
   const [showCreateForm,    setShowCreateForm]    = useState(false);
@@ -607,65 +629,146 @@ export default function GeneralMapView() {
             position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 1001,
             background: '#fff', borderTop: '2px solid #ef4444',
             boxShadow: '0 -6px 24px #ef444420',
-            display: 'flex', flexDirection: 'column', maxHeight: '55%',
+            display: 'flex', flexDirection: 'column', maxHeight: '60%',
           }}>
+            {/* Header */}
             <div style={{ padding: '10px 16px 8px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               <span style={{ fontSize: 16 }}>⛔</span>
               <span style={{ fontWeight: 800, fontSize: 13, color: '#0f172a' }}>
                 {noGeoPackages.length} paquete{noGeoPackages.length !== 1 ? 's' : ''} sin geolocalizar
               </span>
-              <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>
-                — no aparecen en el mapa
-              </span>
-              <button onClick={() => setShowNoGeoPanel(false)}
+              <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>— no aparecen en el mapa · edita dirección y comuna para corregir</span>
+              <button onClick={() => { setShowNoGeoPanel(false); setEditingNoGeo(null); }}
                 style={{ background: 'none', border: 'none', fontSize: 18, color: 'var(--muted)', cursor: 'pointer', lineHeight: 1, padding: '2px 6px' }}>✕</button>
             </div>
+
+            {/* List */}
             <div style={{ overflowY: 'auto', flex: 1 }}>
               {noGeoPackages.length === 0
                 ? <div style={{ textAlign: 'center', padding: '24px 16px', color: 'var(--muted)', fontSize: 13 }}>✅ Todos los paquetes están geolocalizados</div>
                 : noGeoPackages.map((pkg, i) => {
-                    const noCommune  = !pkg.commune;
-                    const noAddrNum  = pkg.address && !/\d/.test(pkg.address.trim());
-                    const noAddress  = !pkg.address;
-                    const noPhone    = !pkg.customerPhone;
+                    const id        = pkgId(pkg);
+                    const isEditing = editingNoGeo?.id === id;
+                    const noCommune = !pkg.commune;
+                    const noAddrNum = pkg.address && !/\d/.test(pkg.address.trim());
+                    const noAddress = !pkg.address;
+                    const noPhone   = !pkg.customerPhone;
+
                     return (
-                      <div key={pkgId(pkg)} style={{
-                        padding: '9px 16px', borderBottom: '1px solid var(--border)',
-                        background: i % 2 === 0 ? '#fff' : '#fafafa',
-                        display: 'flex', alignItems: 'flex-start', gap: 10,
+                      <div key={id} style={{
+                        borderBottom: '1px solid var(--border)',
+                        background: isEditing ? '#f0f7ff' : i % 2 === 0 ? '#fff' : '#fafafa',
+                        borderLeft: isEditing ? '3px solid #0052FF' : '3px solid transparent',
                       }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                            <span style={{ fontWeight: 700, fontSize: 12, color: '#0f172a' }}>
-                              {pkg.customerName}{pkg.customerLastName ? ` ${pkg.customerLastName}` : ''}
-                            </span>
-                            <span style={{ fontSize: 10, color: 'var(--muted)', fontFamily: 'monospace' }}>{pkg.trackingId}</span>
+                        {/* Info row */}
+                        <div style={{ padding: '9px 16px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 700, fontSize: 12, color: '#0f172a' }}>
+                                {pkg.customerName}{pkg.customerLastName ? ` ${pkg.customerLastName}` : ''}
+                              </span>
+                              <span style={{ fontSize: 10, color: 'var(--muted)', fontFamily: 'monospace' }}>{pkg.trackingId}</span>
+                            </div>
+                            <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
+                              {noAddress
+                                ? <span style={{ color: '#b91c1c', fontWeight: 600 }}>⛔ Sin dirección</span>
+                                : <span style={{ color: noAddrNum ? '#b91c1c' : 'inherit', fontWeight: noAddrNum ? 600 : 'normal' }}>{pkg.address}</span>
+                              }
+                              {pkg.commune
+                                ? <span style={{ color: 'var(--muted)' }}>, {pkg.commune}</span>
+                                : <span style={{ color: '#b91c1c', fontWeight: 600 }}> ⛔ sin comuna</span>
+                              }
+                            </div>
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 3 }}>
+                              {noAddress  && <GeoErrBadge>⛔ Sin dirección</GeoErrBadge>}
+                              {noAddrNum  && <GeoErrBadge>⛔ Sin número</GeoErrBadge>}
+                              {noCommune  && <GeoErrBadge>⛔ Sin comuna</GeoErrBadge>}
+                              {noPhone    && <WarnBadge>📞 Sin teléfono</WarnBadge>}
+                              {pkg.aiFlags?.length > 0 && <WarnBadge>⚠ IA: {pkg.aiFlags.join(', ')}</WarnBadge>}
+                            </div>
                           </div>
-                          <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
-                            {noAddress
-                              ? <span style={{ color: '#b91c1c', fontWeight: 600 }}>⛔ Sin dirección</span>
-                              : <span style={{ color: noAddrNum ? '#b91c1c' : 'inherit', fontWeight: noAddrNum ? 600 : 'normal' }}>{pkg.address}</span>
-                            }
-                            {pkg.commune
-                              ? <span style={{ color: 'var(--muted)' }}>, {pkg.commune}</span>
-                              : <span style={{ color: '#b91c1c', fontWeight: 600 }}> ⛔ sin comuna</span>
-                            }
-                          </div>
-                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
-                            {noAddress  && <GeoErrBadge>⛔ Sin dirección</GeoErrBadge>}
-                            {noAddrNum  && <GeoErrBadge>⛔ Sin número en dirección</GeoErrBadge>}
-                            {noCommune  && <GeoErrBadge>⛔ Sin comuna</GeoErrBadge>}
-                            {noPhone    && <WarnBadge>📞 Sin teléfono</WarnBadge>}
-                            {pkg.aiFlags?.length > 0 && <WarnBadge>⚠ IA: {pkg.aiFlags.join(', ')}</WarnBadge>}
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                            <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'right' }}>
+                              {pkg.companyName && <div style={{ color: '#7c3aed', fontWeight: 600 }}>{pkg.companyName}</div>}
+                              {pkg.routeCode   && <div>{pkg.routeCode}</div>}
+                            </div>
+                            <button
+                              onClick={() => setEditingNoGeo(isEditing ? null : { id, address: pkg.address || '', commune: pkg.commune || '' })}
+                              style={{
+                                padding: '4px 10px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                border: isEditing ? '1.5px solid #0052FF' : '1px solid var(--border)',
+                                background: isEditing ? '#0052FF' : '#fff',
+                                color: isEditing ? '#fff' : '#0052FF',
+                              }}
+                            >
+                              {isEditing ? '▲ Cerrar' : '✏️ Editar'}
+                            </button>
                           </div>
                         </div>
-                        <div style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap', flexShrink: 0, textAlign: 'right' }}>
-                          {pkg.companyName && <div style={{ color: '#7c3aed', fontWeight: 600 }}>{pkg.companyName}</div>}
-                          {pkg.routeCode   && <div>{pkg.routeCode}</div>}
-                          <div style={{ marginTop: 2, fontWeight: 600, color: pkg.status === 'pendiente' ? '#94a3b8' : '#0052FF' }}>
-                            {pkg.status}
+
+                        {/* Inline edit form */}
+                        {isEditing && (
+                          <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 3, letterSpacing: .5 }}>DIRECCIÓN</div>
+                              <AddressAutocomplete
+                                compact
+                                value={editingNoGeo.address}
+                                placeholder="Ej: Av. Principal 123"
+                                onChange={v => setEditingNoGeo(e => ({ ...e, address: v }))}
+                                onSelect={({ address, commune }) => {
+                                  const normalized = SECTOR_TO_COMMUNE[(commune || '').toLowerCase().trim()] || commune;
+                                  setEditingNoGeo(e => ({ ...e, address, ...(normalized ? { commune: normalized } : {}) }));
+                                }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 3, letterSpacing: .5 }}>COMUNA</div>
+                                <select
+                                  value={editingNoGeo.commune}
+                                  onChange={e => setEditingNoGeo(ed => ({ ...ed, commune: e.target.value }))}
+                                  style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 7, padding: '5px 8px', fontSize: 12, outline: 'none', background: '#fff', boxSizing: 'border-box' }}
+                                >
+                                  <option value="">— Sin comuna —</option>
+                                  {COMMUNES.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                              </div>
+                              <button
+                                disabled={savingNoGeo || (!editingNoGeo.address && !editingNoGeo.commune)}
+                                onClick={async () => {
+                                  setSavingNoGeo(true);
+                                  try {
+                                    await api.updatePackage(id, {
+                                      address: editingNoGeo.address || undefined,
+                                      commune: editingNoGeo.commune || undefined,
+                                    });
+                                    toast('✅ Guardado — se geocodificará al procesar');
+                                    const fresh = await api.getMapPackages({ from: dateFrom, to: dateTo });
+                                    setPackages(fresh);
+                                    setEditingNoGeo(null);
+                                  } catch (err) {
+                                    toast('❌ ' + err.message);
+                                  } finally {
+                                    setSavingNoGeo(false);
+                                  }
+                                }}
+                                style={{
+                                  padding: '6px 16px', borderRadius: 7, fontSize: 12, fontWeight: 800,
+                                  border: 'none', cursor: savingNoGeo ? 'not-allowed' : 'pointer',
+                                  background: savingNoGeo ? '#e2e8f0' : '#0052FF',
+                                  color: savingNoGeo ? '#94a3b8' : '#fff', whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {savingNoGeo ? 'Guardando…' : '💾 Guardar'}
+                              </button>
+                            </div>
+                            <div style={{ fontSize: 10, color: 'var(--muted)' }}>
+                              💡 El sistema geocodificará la dirección automáticamente al guardar el paquete.
+                              Si tienes Chicureo, escríbelo y la comuna se completará como Colina.
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     );
                   })

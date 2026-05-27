@@ -358,6 +358,15 @@ router.patch('/:id', async (req, res) => {
           update.delivered_by = req.user._id || req.user.id;
         }
       }
+      // Auto-geocode if address/commune changed and package has no coordinates yet
+      const addressChanged = rest.address !== undefined || rest.commune !== undefined;
+      const newAddress = rest.address ?? pkg.address;
+      const newCommune = rest.commune ?? pkg.commune;
+      if (addressChanged && newAddress && !pkg.lat && !pkg.lng) {
+        const geo = await geocodeAddress(newAddress, newCommune).catch(() => null);
+        if (geo) { update.lat = geo.lat; update.lng = geo.lng; }
+      }
+
       update.updated_at = new Date().toISOString();
       const rows = await patchPackageWithSchemaFallback(req.params.id, update);
       const oldRouteId = pkg.route_id || null;
