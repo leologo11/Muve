@@ -279,16 +279,22 @@ router.post('/bulk', requireRole('admin'), async (req, res) => {
   }
 });
 
-// POST /api/packages/bulk-delete — soft-delete multiple packages by id
+// POST /api/packages/bulk-delete
+// If already eliminado → hard delete. Otherwise → soft delete (status=eliminado).
 router.post('/bulk-delete', requireRole('admin'), async (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids requeridos' });
   try {
-    await Promise.all(ids.map(id =>
-      supabaseRequest(`/packages${qs({ id: `eq.${id}` })}`, {
+    const pkgs = await supabaseRequest(`/packages${qs({ id: `in.(${ids.join(',')})`, select: 'id,status' })}`);
+    const statusMap = Object.fromEntries((pkgs || []).map(p => [String(p.id), p.status]));
+    await Promise.all(ids.map(id => {
+      if (statusMap[String(id)] === 'eliminado') {
+        return supabaseRequest(`/packages${qs({ id: `eq.${id}` })}`, { method: 'DELETE' });
+      }
+      return supabaseRequest(`/packages${qs({ id: `eq.${id}` })}`, {
         method: 'PATCH', body: JSON.stringify({ status: 'eliminado', updated_at: new Date().toISOString() }),
-      })
-    ));
+      });
+    }));
     return res.json({ ok: true, count: ids.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -402,15 +408,20 @@ router.post('/:id/photo', upload.single('photo'), async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// DELETE /api/packages/:id — soft-delete
+// DELETE /api/packages/:id — soft-delete first; hard-delete if already eliminado
 router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {
-    const pkgs = await supabaseRequest(`/packages${qs({ id: `eq.${req.params.id}`, select: 'id,route_id' })}`);
+    const pkgs = await supabaseRequest(`/packages${qs({ id: `eq.${req.params.id}`, select: 'id,route_id,status' })}`);
     if (!pkgs?.[0]) return res.status(404).json({ error: 'Paquete no encontrado' });
-    await supabaseRequest(`/packages${qs({ id: `eq.${req.params.id}` })}`, {
-      method: 'PATCH', body: JSON.stringify({ status: 'eliminado', updated_at: new Date().toISOString() }),
-    });
-    await syncRouteStats(pkgs[0].route_id);
+    const pkg = pkgs[0];
+    if (pkg.status === 'eliminado') {
+      await supabaseRequest(`/packages${qs({ id: `eq.${req.params.id}` })}`, { method: 'DELETE' });
+    } else {
+      await supabaseRequest(`/packages${qs({ id: `eq.${req.params.id}` })}`, {
+        method: 'PATCH', body: JSON.stringify({ status: 'eliminado', updated_at: new Date().toISOString() }),
+      });
+    }
+    await syncRouteStats(pkg.route_id);
     return res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

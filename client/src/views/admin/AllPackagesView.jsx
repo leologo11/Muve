@@ -995,17 +995,22 @@ function EditPackageModal({ pkg, companies, onClose, onSave }) {
 
 /* ─── Confirm delete sheet ────────────────────────────────────────── */
 function ConfirmDeleteSheet({ pkg, loading, onConfirm, onClose }) {
+  const isPermanent = pkg.status === 'eliminado';
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#0007', zIndex: 900, display: 'flex', alignItems: 'flex-end' }}>
       <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', boxShadow: '0 -4px 30px #00000022', padding: '20px 16px calc(24px + env(safe-area-inset-bottom))' }}>
         <div style={{ width: 36, height: 4, background: 'var(--border)', borderRadius: 2, margin: '0 auto 16px' }} />
-        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>🗑 Eliminar paquete</div>
+        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>
+          {isPermanent ? '⚠️ Eliminar permanentemente' : '🗑 Eliminar paquete'}
+        </div>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4 }}>
           <b style={{ color: 'var(--text)' }}>{pkg.customerName} {pkg.customerLastName}</b>
         </div>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>{pkg.address}{pkg.commune ? `, ${pkg.commune}` : ''}</div>
         <div style={{ fontSize: 12, color: '#e5534b', background: '#e5534b0c', border: '1px solid #e5534b28', borderRadius: 8, padding: '8px 12px', marginBottom: 16 }}>
-          El paquete quedará marcado como eliminado. Esta acción se puede revertir desde el filtro "Eliminados".
+          {isPermanent
+            ? 'Este paquete ya está eliminado. Confirmar lo borrará permanentemente de la base de datos. Esta acción NO se puede revertir.'
+            : 'El paquete quedará marcado como eliminado. Puedes revertirlo desde el filtro "Eliminados".'}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
@@ -1013,7 +1018,7 @@ function ConfirmDeleteSheet({ pkg, loading, onConfirm, onClose }) {
             disabled={loading}
             style={{ flex: 1, padding: 13, borderRadius: 11, border: 'none', background: loading ? 'var(--card2)' : '#e5534b', color: loading ? 'var(--muted)' : '#fff', fontSize: 13, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer' }}
           >
-            {loading ? '⏳ Eliminando…' : '🗑 Confirmar eliminación'}
+            {loading ? '⏳ Eliminando…' : isPermanent ? '⚠️ Borrar permanentemente' : '🗑 Confirmar eliminación'}
           </button>
           <button onClick={onClose} disabled={loading}
             style={{ padding: '13px 18px', borderRadius: 11, border: '1px solid var(--border)', background: 'transparent', fontSize: 13, color: 'var(--muted)', fontWeight: 600, cursor: 'pointer' }}>
