@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import Anthropic from '@anthropic-ai/sdk';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { syncRouteStats } from './deliveryRoutes.js';
-import { suggestPrice, roundPrice } from '../utils/priceByCommune.js';
+import { suggestPrice, roundPrice, SECTOR_TO_COMMUNE } from '../utils/priceByCommune.js';
 import { getDbPricesMap } from './priceRoutes.js';
 import { geocodeAddress, sleep } from '../utils/geocode.js';
 import { pointInPolygon } from '../utils/zones.js';
@@ -56,7 +56,9 @@ function normalize(str) {
 
 function applyPrices(packages, dbPricesMap = {}, zones = []) {
   return packages.map((p, i) => {
-    const key = normalize(p.commune);
+    const sectorKey = normalize(p.commune);
+    const officialCommune = SECTOR_TO_COMMUNE[sectorKey] || p.commune;
+    const key = normalize(officialCommune);
     const dbPrice = dbPricesMap[key];
 
     let price = p.price ? roundPrice(p.price) : null;

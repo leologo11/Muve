@@ -1,8 +1,16 @@
+import { SECTOR_TO_COMMUNE } from './priceByCommune.js';
+
+function normalizeKey(str) {
+  return (str || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
 // Photon (komoot) — fast, handles misspellings, OSM data, no rate limit
 // Nominatim — fallback, strict rate limit (1 req/s)
 export async function geocodeAddress(address, commune) {
   if (!address) return null;
-  const query = [address, commune].filter(Boolean).join(', ');
+  // Map sector → official commune so geocoders can resolve it (e.g. Chicureo → Colina)
+  const resolvedCommune = SECTOR_TO_COMMUNE[normalizeKey(commune)] || commune;
+  const query = [address, resolvedCommune].filter(Boolean).join(', ');
 
   // Try Photon first — biased toward Santiago, better for Spanish/Chilean addresses
   try {
@@ -24,7 +32,7 @@ export async function geocodeAddress(address, commune) {
 
   // Nominatim fallback
   try {
-    const fullQuery = [address, commune, 'Chile'].filter(Boolean).join(', ');
+    const fullQuery = [address, resolvedCommune, 'Chile'].filter(Boolean).join(', ');
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fullQuery)}&format=json&limit=1&countrycodes=cl`;
     const res = await fetch(url, {
       headers: { 'User-Agent': 'MUVE/1.0 (delivery management)' },

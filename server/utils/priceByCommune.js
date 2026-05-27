@@ -1,3 +1,29 @@
+// Sectores / localidades que NO son comunas oficiales → su comuna real
+// Usado para geocodificar correctamente y para lookup de precios
+export const SECTOR_TO_COMMUNE = {
+  // Colina
+  'chicureo':             'Colina',
+  'hacienda chicureo':    'Colina',
+  'piedra roja':          'Colina',
+  'los trapenses':        'Colina',
+  'valle norte':          'Colina',
+  // Lampa
+  'batuco':               'Lampa',
+  'valle grande':         'Lampa',
+  // Lo Barnechea
+  'san carlos de apoquindo': 'Lo Barnechea',
+  'la dehesa':            'Lo Barnechea',
+  'el arrayán':           'Lo Barnechea',
+  'el arrayn':            'Lo Barnechea',
+  // Las Condes
+  'los domínicos':        'Las Condes',
+  'los dominicos':        'Las Condes',
+  // Pirque
+  'el principal':         'Pirque',
+  // Padre Hurtado
+  'villa el principal':   'Padre Hurtado',
+};
+
 // Precios de entrega por comuna RM (CLP) — tarifa oficial por zona
 const PRICES = {
   'alhue': 30000, 'alhué': 30000,
@@ -65,6 +91,8 @@ function normalize(str) {
 
 export function suggestPrice(commune) {
   const key = normalize(commune);
+  const official = SECTOR_TO_COMMUNE[key];
+  if (official) return PRICES[normalize(official)] || PRICES['_default'];
   return PRICES[key] || PRICES['_default'];
 }
 
