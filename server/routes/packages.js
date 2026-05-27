@@ -76,8 +76,6 @@ router.get('/map', requireRole('admin'), async (req, res) => {
     const { from, to } = req.query;
     const params = {
       select: '*',
-      lat: 'not.is.null',
-      lng: 'not.is.null',
       status: 'neq.eliminado',
       order: 'created_at.desc',
       limit: 10000,

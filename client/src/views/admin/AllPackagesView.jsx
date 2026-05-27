@@ -65,6 +65,16 @@ export default function AllPackagesView() {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [viewMode, setViewMode] = useState('cards'); // 'cards' | 'table'
+  // Bulk route assignment
+  const [showRoutePanel, setShowRoutePanel] = useState(false);
+  const [bulkRouteId, setBulkRouteId]       = useState('');
+  const [bulkAssigning, setBulkAssigning]   = useState(false);
+  // Bulk create route
+  const [showCreateRoute, setShowCreateRoute] = useState(false);
+  const [newRouteName, setNewRouteName]       = useState('');
+  const [newRouteDate, setNewRouteDate]       = useState(new Date().toISOString().slice(0, 10));
+  const [newRouteDriverId, setNewRouteDriverId] = useState('');
+  const [creatingRoute, setCreatingRoute]     = useState(false);
 
   const LIMIT = 50;
 
@@ -97,6 +107,11 @@ export default function AllPackagesView() {
   }, []);
 
   useEffect(() => { load(1); }, [load]);
+
+  // Close route panel when selection is cleared
+  useEffect(() => {
+    if (selectedIds.size === 0) { setShowRoutePanel(false); setShowCreateRoute(false); setBulkRouteId(''); }
+  }, [selectedIds.size]);
 
   const handleMoveConfirm = async () => {
     if (!moveTarget?.pkg || !moveTarget?.targetRouteId) return;
@@ -183,6 +198,43 @@ export default function AllPackagesView() {
     }
   };
 
+  const closeBulkPanel = () => {
+    setShowRoutePanel(false); setShowCreateRoute(false);
+    setBulkRouteId(''); setNewRouteName(''); setNewRouteDriverId('');
+  };
+
+  const handleBulkAssign = async () => {
+    if (!bulkRouteId || selectedIds.size === 0) return;
+    setBulkAssigning(true);
+    try {
+      await Promise.all([...selectedIds].map(id => api.updatePackage(id, { routeId: bulkRouteId })));
+      toast(`✅ ${selectedIds.size} paquete${selectedIds.size !== 1 ? 's' : ''} asignados a la ruta`);
+      setSelectedIds(new Set());
+      closeBulkPanel();
+      load(page);
+    } catch (err) { toast('❌ ' + err.message); }
+    finally { setBulkAssigning(false); }
+  };
+
+  const handleBulkCreateRoute = async () => {
+    if (selectedIds.size === 0) return;
+    setCreatingRoute(true);
+    try {
+      const route = await api.createRoute({
+        name:     newRouteName.trim() || undefined,
+        date:     newRouteDate,
+        driverId: newRouteDriverId || undefined,
+        status:   'draft',
+      });
+      await Promise.all([...selectedIds].map(id => api.updatePackage(id, { routeId: route._id || route.id })));
+      toast(`✅ Ruta ${route.routeCode} creada con ${selectedIds.size} paquete${selectedIds.size !== 1 ? 's' : ''}`);
+      setSelectedIds(new Set());
+      closeBulkPanel();
+      load(page);
+    } catch (err) { toast('❌ ' + err.message); }
+    finally { setCreatingRoute(false); }
+  };
+
   const pages = Math.ceil(total / LIMIT);
 
   return (
@@ -259,15 +311,90 @@ export default function AllPackagesView() {
             </label>
           )}
           {selectedIds.size > 0 && (
-            <button
-              onClick={handleBulkDelete}
-              disabled={deleting}
-              style={{ padding: '3px 10px', borderRadius: 20, border: '1px solid #e5534b', background: '#e5534b12', color: '#e5534b', fontSize: 10, fontWeight: 700, cursor: deleting ? 'not-allowed' : 'pointer' }}
-            >
-              {deleting ? '⏳ Eliminando…' : `🗑 Eliminar ${selectedIds.size} seleccionado${selectedIds.size !== 1 ? 's' : ''}`}
-            </button>
+            <>
+              <button
+                onClick={() => { setShowRoutePanel(v => !v); setShowCreateRoute(false); }}
+                style={{ padding: '3px 10px', borderRadius: 20, border: `1px solid ${showRoutePanel ? '#0052FF' : '#0052FF80'}`, background: showRoutePanel ? '#0052FF' : '#0052FF12', color: showRoutePanel ? '#fff' : '#0052FF', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
+              >
+                📦 Asignar ruta ({selectedIds.size})
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={deleting}
+                style={{ padding: '3px 10px', borderRadius: 20, border: '1px solid #e5534b', background: '#e5534b12', color: '#e5534b', fontSize: 10, fontWeight: 700, cursor: deleting ? 'not-allowed' : 'pointer' }}
+              >
+                {deleting ? '⏳ Eliminando…' : `🗑 Eliminar ${selectedIds.size}`}
+              </button>
+            </>
           )}
         </div>
+
+        {/* Bulk route panel */}
+        {showRoutePanel && selectedIds.size > 0 && (
+          <div style={{ background: '#f0f7ff', border: '1px solid #0052FF30', borderRadius: 10, padding: '10px 12px', marginTop: 6, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* Assign to existing route */}
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <select
+                value={bulkRouteId}
+                onChange={e => { setBulkRouteId(e.target.value); setShowCreateRoute(false); }}
+                style={{ flex: 1, minWidth: 160, padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12, outline: 'none', background: '#fff' }}
+              >
+                <option value="">— Ruta existente —</option>
+                {routes.filter(r => ['draft','active'].includes(r.status)).map(r => (
+                  <option key={r._id} value={r._id}>
+                    {r.routeCode}{r.name ? ` · ${r.name}` : ''} {r.status === 'active' ? '●' : '○'}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleBulkAssign}
+                disabled={!bulkRouteId || bulkAssigning}
+                style={{ padding: '6px 14px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 800, background: bulkRouteId && !bulkAssigning ? '#0052FF' : '#e2e8f0', color: bulkRouteId && !bulkAssigning ? '#fff' : '#94a3b8', cursor: bulkRouteId && !bulkAssigning ? 'pointer' : 'not-allowed' }}
+              >
+                {bulkAssigning ? 'Asignando…' : '✓ Asignar'}
+              </button>
+              <span style={{ fontSize: 10, color: 'var(--muted)' }}>o</span>
+              <button
+                onClick={() => { setShowCreateRoute(v => !v); setBulkRouteId(''); }}
+                style={{ padding: '6px 12px', borderRadius: 8, border: `1.5px solid #16a34a`, fontSize: 12, fontWeight: 700, background: showCreateRoute ? '#dcfce7' : '#f0fdf4', color: '#16a34a', cursor: 'pointer' }}
+              >
+                {showCreateRoute ? '▲ Cancelar' : '➕ Nueva ruta'}
+              </button>
+              <button onClick={closeBulkPanel} style={{ background: 'none', border: 'none', fontSize: 16, color: 'var(--muted)', cursor: 'pointer', padding: '2px 4px' }}>✕</button>
+            </div>
+
+            {/* Create new route form */}
+            {showCreateRoute && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', borderTop: '1px solid #bbf7d0', paddingTop: 8 }}>
+                <div style={{ flex: 2, minWidth: 140 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#16a34a', letterSpacing: .5, marginBottom: 3 }}>NOMBRE (OPCIONAL)</div>
+                  <input value={newRouteName} onChange={e => setNewRouteName(e.target.value)} placeholder="Ej: Zona Norte"
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', borderRadius: 7, border: '1px solid #bbf7d0', fontSize: 12, outline: 'none' }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 120 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#16a34a', letterSpacing: .5, marginBottom: 3 }}>FECHA</div>
+                  <input type="date" value={newRouteDate} onChange={e => setNewRouteDate(e.target.value)}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', borderRadius: 7, border: '1px solid #bbf7d0', fontSize: 12, outline: 'none' }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 130 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#16a34a', letterSpacing: .5, marginBottom: 3 }}>DRIVER</div>
+                  <select value={newRouteDriverId} onChange={e => setNewRouteDriverId(e.target.value)}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', borderRadius: 7, border: '1px solid #bbf7d0', fontSize: 12, outline: 'none', background: '#fff' }}>
+                    <option value="">Sin asignar</option>
+                    {users.filter(u => u.role === 'driver').map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
+                  </select>
+                </div>
+                <button
+                  onClick={handleBulkCreateRoute}
+                  disabled={creatingRoute}
+                  style={{ padding: '7px 16px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 800, background: creatingRoute ? '#e2e8f0' : '#16a34a', color: creatingRoute ? '#94a3b8' : '#fff', cursor: creatingRoute ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  {creatingRoute ? 'Creando…' : `Crear y asignar (${selectedIds.size})`}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* List */}
