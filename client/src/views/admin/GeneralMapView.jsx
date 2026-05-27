@@ -114,6 +114,7 @@ export default function GeneralMapView() {
   const [targetRouteId,  setTargetRouteId]  = useState('');
   const [assigning,      setAssigning]      = useState(false);
   const [drivers,        setDrivers]        = useState([]);
+  const [showNoGeoPanel, setShowNoGeoPanel] = useState(false);
 
   // Create route inline form
   const [showCreateForm,    setShowCreateForm]    = useState(false);
@@ -182,6 +183,10 @@ export default function GeneralMapView() {
     unassigned: packages.filter(p => !hasAssignedRoute(p)).length,
     assigned:   packages.filter(p => hasAssignedRoute(p)).length,
   }), [packages]);
+
+  const noGeoPackages = useMemo(() =>
+    packages.filter(p => (!p.lat || !p.lng) && p.status !== 'eliminado'),
+  [packages]);
 
   const hasActiveFilters = statusFilter !== 'todos' || companyFilter || driverFilter || dateFrom || dateTo || search;
 
@@ -596,6 +601,79 @@ export default function GeneralMapView() {
           ))}
         </div>
 
+        {/* No-geo panel — slides up from bottom of map */}
+        {showNoGeoPanel && (
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 1001,
+            background: '#fff', borderTop: '2px solid #ef4444',
+            boxShadow: '0 -6px 24px #ef444420',
+            display: 'flex', flexDirection: 'column', maxHeight: '55%',
+          }}>
+            <div style={{ padding: '10px 16px 8px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <span style={{ fontSize: 16 }}>⛔</span>
+              <span style={{ fontWeight: 800, fontSize: 13, color: '#0f172a' }}>
+                {noGeoPackages.length} paquete{noGeoPackages.length !== 1 ? 's' : ''} sin geolocalizar
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>
+                — no aparecen en el mapa
+              </span>
+              <button onClick={() => setShowNoGeoPanel(false)}
+                style={{ background: 'none', border: 'none', fontSize: 18, color: 'var(--muted)', cursor: 'pointer', lineHeight: 1, padding: '2px 6px' }}>✕</button>
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {noGeoPackages.length === 0
+                ? <div style={{ textAlign: 'center', padding: '24px 16px', color: 'var(--muted)', fontSize: 13 }}>✅ Todos los paquetes están geolocalizados</div>
+                : noGeoPackages.map((pkg, i) => {
+                    const noCommune  = !pkg.commune;
+                    const noAddrNum  = pkg.address && !/\d/.test(pkg.address.trim());
+                    const noAddress  = !pkg.address;
+                    const noPhone    = !pkg.customerPhone;
+                    return (
+                      <div key={pkgId(pkg)} style={{
+                        padding: '9px 16px', borderBottom: '1px solid var(--border)',
+                        background: i % 2 === 0 ? '#fff' : '#fafafa',
+                        display: 'flex', alignItems: 'flex-start', gap: 10,
+                      }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 700, fontSize: 12, color: '#0f172a' }}>
+                              {pkg.customerName}{pkg.customerLastName ? ` ${pkg.customerLastName}` : ''}
+                            </span>
+                            <span style={{ fontSize: 10, color: 'var(--muted)', fontFamily: 'monospace' }}>{pkg.trackingId}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
+                            {noAddress
+                              ? <span style={{ color: '#b91c1c', fontWeight: 600 }}>⛔ Sin dirección</span>
+                              : <span style={{ color: noAddrNum ? '#b91c1c' : 'inherit', fontWeight: noAddrNum ? 600 : 'normal' }}>{pkg.address}</span>
+                            }
+                            {pkg.commune
+                              ? <span style={{ color: 'var(--muted)' }}>, {pkg.commune}</span>
+                              : <span style={{ color: '#b91c1c', fontWeight: 600 }}> ⛔ sin comuna</span>
+                            }
+                          </div>
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                            {noAddress  && <GeoErrBadge>⛔ Sin dirección</GeoErrBadge>}
+                            {noAddrNum  && <GeoErrBadge>⛔ Sin número en dirección</GeoErrBadge>}
+                            {noCommune  && <GeoErrBadge>⛔ Sin comuna</GeoErrBadge>}
+                            {noPhone    && <WarnBadge>📞 Sin teléfono</WarnBadge>}
+                            {pkg.aiFlags?.length > 0 && <WarnBadge>⚠ IA: {pkg.aiFlags.join(', ')}</WarnBadge>}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap', flexShrink: 0, textAlign: 'right' }}>
+                          {pkg.companyName && <div style={{ color: '#7c3aed', fontWeight: 600 }}>{pkg.companyName}</div>}
+                          {pkg.routeCode   && <div>{pkg.routeCode}</div>}
+                          <div style={{ marginTop: 2, fontWeight: 600, color: pkg.status === 'pendiente' ? '#94a3b8' : '#0052FF' }}>
+                            {pkg.status}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+              }
+            </div>
+          </div>
+        )}
+
         {/* Assign panel — slides up from bottom of map */}
         {showAssignPanel && selectedIds.size > 0 && (
           <div style={{
@@ -758,6 +836,18 @@ export default function GeneralMapView() {
         <div style={{ width: 1, height: 14, background: 'var(--border)' }} />
         <StatPill label="Sin asignar" count={stats.unassigned}  color="#6366f1" onClick={() => setStatusFilter('sin-ruta')} />
         <StatPill label="Asignados"   count={stats.assigned}    color="#0891b2" onClick={() => setStatusFilter('con-ruta')} />
+        {noGeoPackages.length > 0 && (
+          <>
+            <div style={{ width: 1, height: 14, background: 'var(--border)' }} />
+            <StatPill
+              label="Sin ubicar"
+              count={noGeoPackages.length}
+              color="#ef4444"
+              onClick={() => setShowNoGeoPanel(v => !v)}
+              active={showNoGeoPanel}
+            />
+          </>
+        )}
         {filtered.length !== packages.length && (
           <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)' }}>
             Mostrando {filtered.length}
@@ -770,17 +860,36 @@ export default function GeneralMapView() {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function StatPill({ label, count, color, onClick }) {
+function StatPill({ label, count, color, onClick, active }) {
   return (
     <button onClick={onClick} style={{
       display: 'flex', alignItems: 'center', gap: 6,
-      background: 'none', border: 'none', padding: 0,
+      background: active ? `${color}15` : 'none',
+      border: active ? `1.5px solid ${color}` : '1.5px solid transparent',
+      borderRadius: 20, padding: active ? '3px 8px' : '3px 0',
       cursor: onClick ? 'pointer' : 'default',
+      transition: 'all .15s',
     }}>
       <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
       <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{count}</span>
       <span style={{ fontSize: 11, color: 'var(--muted)' }}>{label}</span>
     </button>
+  );
+}
+
+function GeoErrBadge({ children }) {
+  return (
+    <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 20, background: '#ef444415', color: '#b91c1c', border: '1px solid #ef444430' }}>
+      {children}
+    </span>
+  );
+}
+
+function WarnBadge({ children }) {
+  return (
+    <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 20, background: '#f59e0b10', color: '#92400e', border: '1px solid #f59e0b30' }}>
+      {children}
+    </span>
   );
 }
 
