@@ -262,7 +262,7 @@ function BulkImportModal({ companies, onClose, onDone }) {
     if (!preview.length || !companyId) return;
     setSaving(true);
     try {
-      const clean = preview.map(({ _id, _flags, _suggestedPrice, ...rest }) => rest);
+      const clean = preview.map(({ _id, _suggestedPrice, ...rest }) => rest); // _flags se mantiene → servidor guarda en ai_flags
       const res = await api.importPoolConfirm(clean, companyId);
       toast(`✅ ${res.count} paquete${res.count !== 1 ? 's' : ''} ingresado${res.count !== 1 ? 's' : ''}`);
       onDone();
@@ -643,6 +643,11 @@ function PkgRow({ pkg, routes, onMove, onStatusChange }) {
                 🚗 {driver.name}
               </span>
             )}
+            {pkg.aiFlags?.length > 0 && (
+              <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: '#f59e0b12', color: '#b45309', border: '1px solid #f59e0b40' }}>
+                ⚠ Revisar: {pkg.aiFlags.join(', ')}
+              </span>
+            )}
           </div>
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -663,6 +668,11 @@ function PkgRow({ pkg, routes, onMove, onStatusChange }) {
             {pkg.aptFloor && <span style={{ fontSize: 10, color: 'var(--warn)', fontWeight: 600 }}>🏢 {pkg.aptFloor}</span>}
             {pkg.price > 0 && <span style={{ fontSize: 10, color: '#0052FF', fontWeight: 700 }}>${Number(pkg.price).toLocaleString('es-CL')}</span>}
           </div>
+          {pkg.aiFlags?.length > 0 && (
+            <div style={{ fontSize: 11, color: '#b45309', background: '#fef3c7', border: '1px solid #f59e0b40', borderRadius: 6, padding: '4px 8px' }}>
+              ⚠ IA marcó estos campos como dudosos: <strong>{pkg.aiFlags.join(', ')}</strong> — edítalos en la vista de ruta
+            </div>
+          )}
           {pkg.note && <div style={{ fontSize: 11, color: '#3366cc', background: '#3b82f608', borderRadius: 6, padding: '4px 8px' }}>📝 {pkg.note}</div>}
           {pkg.failReason && <div style={{ fontSize: 11, color: 'var(--danger)' }}>↳ {pkg.failReason}</div>}
 

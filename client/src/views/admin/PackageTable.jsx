@@ -189,13 +189,15 @@ export default function PackageTable({ packages, onUpdate, onDelete, onMoveRoute
             const isSaving  = saving === pkg._id;
             const st        = STATUS_OPTS.find(o => o.value === pkg.status);
             const needsWork = (!pkg.lat || !pkg.lng) && pkg.status === 'pendiente';
+            const flags     = pkg.aiFlags || [];
+            const hasFlags  = flags.length > 0;
             return (
               <tr
                 key={pkg._id}
                 style={{
-                  background: isSaving ? '#f0f9f0' : needsWork ? '#fffaf3' : i % 2 === 0 ? '#fff' : 'var(--card2)',
-                  borderBottom: `1px solid ${needsWork ? '#d4650a22' : 'var(--border)'}`,
-                  borderLeft: `3px solid ${needsWork ? '#d4650a' : 'transparent'}`,
+                  background: isSaving ? '#f0f9f0' : hasFlags ? '#fffbeb' : needsWork ? '#fffaf3' : i % 2 === 0 ? '#fff' : 'var(--card2)',
+                  borderBottom: `1px solid ${needsWork ? '#d4650a22' : hasFlags ? '#f59e0b22' : 'var(--border)'}`,
+                  borderLeft: `3px solid ${needsWork ? '#d4650a' : hasFlags ? '#f59e0b' : 'transparent'}`,
                   opacity: isSaving ? 0.7 : 1,
                   transition: 'background .2s'
                 }}
@@ -205,6 +207,9 @@ export default function PackageTable({ packages, onUpdate, onDelete, onMoveRoute
                 <td style={{ padding: '4px 6px', minWidth: 120, verticalAlign: 'top' }}>
                   <div style={{ fontWeight: 600 }}>{cell(pkg, 'customerName')}</div>
                   <div style={{ color: 'var(--muted)' }}>{cell(pkg, 'customerLastName')}</div>
+                  {(flags.includes('customerName') || flags.includes('customerLastName')) && (
+                    <span style={flagBadge}>🤖 IA incierta</span>
+                  )}
                   {(pkg.companyName || pkg.companyId?.name) && (
                     <div style={{ color: '#0077aa', fontSize: 10, fontWeight: 800, marginTop: 3 }}>
                       {pkg.companyName || pkg.companyId?.name}
@@ -214,12 +219,16 @@ export default function PackageTable({ packages, onUpdate, onDelete, onMoveRoute
 
                 <td style={{ padding: '4px 6px', minWidth: 170, verticalAlign: 'top' }}>
                   {addressCell(pkg)}
-                  <div style={{ color: 'var(--muted)' }}>{cell(pkg, 'commune')}</div>
+                  <div style={{ color: flags.includes('commune') ? '#b45309' : 'var(--muted)' }}>
+                    {cell(pkg, 'commune')}
+                    {flags.includes('commune') && <span style={{ ...flagBadge, marginLeft: 4 }}>🤖 IA incierta</span>}
+                  </div>
                   {pkg.aptFloor && <div style={{ color: 'var(--muted)', fontSize: 11 }}>{cell(pkg, 'aptFloor')}</div>}
                 </td>
 
                 <td style={{ padding: '4px 6px', minWidth: 105, verticalAlign: 'top' }}>
                   {cell(pkg, 'customerPhone')}
+                  {flags.includes('customerPhone') && <span style={flagBadge}>🤖 IA incierta</span>}
                 </td>
 
                 <td style={{ padding: '4px 6px', minWidth: 80, verticalAlign: 'top' }}>
@@ -328,3 +337,10 @@ function badge(color, clickable) {
     cursor: clickable ? 'pointer' : 'default',
   };
 }
+
+const flagBadge = {
+  display: 'inline-flex', alignItems: 'center',
+  fontSize: 9, fontWeight: 700,
+  color: '#b45309', background: '#fef3c7', border: '1px solid #f59e0b40',
+  borderRadius: 20, padding: '1px 6px', whiteSpace: 'nowrap',
+};

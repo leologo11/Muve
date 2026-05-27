@@ -144,6 +144,9 @@ async function handleConfirm(req, res) {
     if (!packages?.length) return res.status(400).json({ error: 'No hay paquetes para guardar' });
     if (!companyId) return res.status(400).json({ error: 'companyId es requerido' });
 
+    // Cargar zonas una vez para aplicar precios tras geocodificar
+    const zones = await supabaseRequest(`/zones${qs({ select: 'name,price,polygon' })}`).catch(() => []);
+
     let existing = 0;
     if (routeId) {
       const existingRows = await supabaseRequest(`/packages${qs({ route_id: `eq.${routeId}`, select: 'id' })}`);
@@ -151,11 +154,23 @@ async function handleConfirm(req, res) {
     }
     const docs = [];
     for (let i = 0; i < packages.length; i++) {
-      const { _preview, _suggestedPrice, _flags, ...p } = packages[i];
+      const { _preview, _suggestedPrice: isSuggested, _flags, ...p } = packages[i];
       const doc = { ...p };
       if ((!doc.lat || !doc.lng) && doc.address) {
         const geo = await geocodeAddress(doc.address, doc.commune);
-        if (geo) { doc.lat = geo.lat; doc.lng = geo.lng; }
+        if (geo) {
+          doc.lat = geo.lat;
+          doc.lng = geo.lng;
+          // Re-aplicar precio de zona ahora que tenemos coordenadas reales.
+          // Solo si el precio fue sugerido automáticamente (no puesto por el usuario).
+          if (isSuggested && zones.length) {
+            const matched = zones.find(z => {
+              const ring = z.polygon?.coordinates?.[0] || z.polygon?.geometry?.coordinates?.[0];
+              return ring && pointInPolygon([doc.lng, doc.lat], ring);
+            });
+            if (matched?.price) doc.price = matched.price;
+          }
+        }
         await sleep(1100);
       }
       docs.push({
