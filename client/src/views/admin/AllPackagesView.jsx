@@ -74,6 +74,7 @@ export default function AllPackagesView() {
   const [newRouteName, setNewRouteName]       = useState('');
   const [newRouteDate, setNewRouteDate]       = useState(new Date().toISOString().slice(0, 10));
   const [newRouteDriverId, setNewRouteDriverId] = useState('');
+  const [newRouteStart, setNewRouteStart]     = useState({ address: '', lat: null, lng: null });
   const [creatingRoute, setCreatingRoute]     = useState(false);
 
   const LIMIT = 50;
@@ -201,6 +202,7 @@ export default function AllPackagesView() {
   const closeBulkPanel = () => {
     setShowRoutePanel(false); setShowCreateRoute(false);
     setBulkRouteId(''); setNewRouteName(''); setNewRouteDriverId('');
+    setNewRouteStart({ address: '', lat: null, lng: null });
   };
 
   const handleBulkAssign = async () => {
@@ -225,6 +227,7 @@ export default function AllPackagesView() {
         date:     newRouteDate,
         driverId: newRouteDriverId || undefined,
         status:   'draft',
+        startPoint: newRouteStart.lat ? newRouteStart : undefined,
       });
       await Promise.all([...selectedIds].map(id => api.updatePackage(id, { routeId: route._id || route.id })));
       toast(`✅ Ruta ${route.routeCode} creada con ${selectedIds.size} paquete${selectedIds.size !== 1 ? 's' : ''}`);
@@ -365,29 +368,50 @@ export default function AllPackagesView() {
 
             {/* Create new route form */}
             {showCreateRoute && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', borderTop: '1px solid #bbf7d0', paddingTop: 8 }}>
-                <div style={{ flex: 2, minWidth: 140 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: '#16a34a', letterSpacing: .5, marginBottom: 3 }}>NOMBRE (OPCIONAL)</div>
-                  <input value={newRouteName} onChange={e => setNewRouteName(e.target.value)} placeholder="Ej: Zona Norte"
-                    style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', borderRadius: 7, border: '1px solid #bbf7d0', fontSize: 12, outline: 'none' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid #bbf7d0', paddingTop: 8 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div style={{ flex: 2, minWidth: 140 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: '#16a34a', letterSpacing: .5, marginBottom: 3 }}>NOMBRE (OPCIONAL)</div>
+                    <input value={newRouteName} onChange={e => setNewRouteName(e.target.value)} placeholder="Ej: Zona Norte"
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', borderRadius: 7, border: '1px solid #bbf7d0', fontSize: 12, outline: 'none' }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 120 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: '#16a34a', letterSpacing: .5, marginBottom: 3 }}>FECHA</div>
+                    <input type="date" value={newRouteDate} onChange={e => setNewRouteDate(e.target.value)}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', borderRadius: 7, border: '1px solid #bbf7d0', fontSize: 12, outline: 'none' }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 130 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: '#16a34a', letterSpacing: .5, marginBottom: 3 }}>DRIVER</div>
+                    <select value={newRouteDriverId} onChange={e => setNewRouteDriverId(e.target.value)}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', borderRadius: 7, border: '1px solid #bbf7d0', fontSize: 12, outline: 'none', background: '#fff' }}>
+                      <option value="">Sin asignar</option>
+                      {users.filter(u => u.role === 'driver').map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
+                    </select>
+                  </div>
                 </div>
-                <div style={{ flex: 1, minWidth: 120 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: '#16a34a', letterSpacing: .5, marginBottom: 3 }}>FECHA</div>
-                  <input type="date" value={newRouteDate} onChange={e => setNewRouteDate(e.target.value)}
-                    style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', borderRadius: 7, border: '1px solid #bbf7d0', fontSize: 12, outline: 'none' }} />
-                </div>
-                <div style={{ flex: 1, minWidth: 130 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: '#16a34a', letterSpacing: .5, marginBottom: 3 }}>DRIVER</div>
-                  <select value={newRouteDriverId} onChange={e => setNewRouteDriverId(e.target.value)}
-                    style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', borderRadius: 7, border: '1px solid #bbf7d0', fontSize: 12, outline: 'none', background: '#fff' }}>
-                    <option value="">Sin asignar</option>
-                    {users.filter(u => u.role === 'driver').map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
-                  </select>
+                {/* Pickup address — used as stop #1 and optimization origin */}
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#16a34a', letterSpacing: .5, marginBottom: 3 }}>
+                    📍 DIRECCIÓN DE RETIRO (punto nº1 — origen de optimización)
+                  </div>
+                  <AddressAutocomplete
+                    compact
+                    value={newRouteStart.address}
+                    placeholder="Bodega o dirección de recogida…"
+                    onChange={v => setNewRouteStart(s => ({ ...s, address: v, lat: null, lng: null }))}
+                    onSelect={({ address, lat, lng }) => setNewRouteStart({ address, lat, lng })}
+                  />
+                  {newRouteStart.lat
+                    ? <div style={{ fontSize: 10, color: '#16a34a', marginTop: 3, fontWeight: 600 }}>✓ Coordenadas listas</div>
+                    : newRouteStart.address
+                      ? <div style={{ fontSize: 10, color: '#f59e0b', marginTop: 3 }}>⚠ Selecciona una sugerencia para coordenadas exactas</div>
+                      : null
+                  }
                 </div>
                 <button
                   onClick={handleBulkCreateRoute}
                   disabled={creatingRoute}
-                  style={{ padding: '7px 16px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 800, background: creatingRoute ? '#e2e8f0' : '#16a34a', color: creatingRoute ? '#94a3b8' : '#fff', cursor: creatingRoute ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}
+                  style={{ alignSelf: 'flex-end', padding: '7px 16px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 800, background: creatingRoute ? '#e2e8f0' : '#16a34a', color: creatingRoute ? '#94a3b8' : '#fff', cursor: creatingRoute ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}
                 >
                   {creatingRoute ? 'Creando…' : `Crear y asignar (${selectedIds.size})`}
                 </button>

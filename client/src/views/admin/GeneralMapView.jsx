@@ -144,6 +144,7 @@ export default function GeneralMapView() {
   const [newRouteDate,      setNewRouteDate]      = useState(new Date().toISOString().slice(0, 10));
   const [newRouteDriverId,  setNewRouteDriverId]  = useState('');
   const [newRouteStatus,    setNewRouteStatus]    = useState('active');
+  const [newRouteStart,     setNewRouteStart]     = useState({ address: '', lat: null, lng: null });
   const [creating,          setCreating]          = useState(false);
 
   // ── Load data ─────────────────────────────────────────────────────────────
@@ -362,6 +363,7 @@ export default function GeneralMapView() {
     setNewRouteDriverId('');
     setNewRouteStatus('active');
     setNewRouteDate(new Date().toISOString().slice(0, 10));
+    setNewRouteStart({ address: '', lat: null, lng: null });
     setLassoMode(false);
     const map = mapInst.current;
     if (map && lassoLayerRef.current) { map.removeLayer(lassoLayerRef.current); lassoLayerRef.current = null; }
@@ -427,10 +429,11 @@ export default function GeneralMapView() {
     setCreating(true);
     try {
       const route = await api.createRoute({
-        name:     newRouteName.trim() || undefined,
-        date:     newRouteDate,
-        status:   newRouteStatus,
-        driverId: newRouteDriverId || undefined,
+        name:       newRouteName.trim() || undefined,
+        date:       newRouteDate,
+        status:     newRouteStatus,
+        driverId:   newRouteDriverId || undefined,
+        startPoint: newRouteStart.lat ? newRouteStart : undefined,
       });
       await Promise.all(selectedPackageIds.map(id => api.updatePackage(id, { routeId: route._id || route.id })));
       toast(`✅ Ruta ${route.routeCode} creada con ${selectedPackageIds.length} paquete${selectedPackageIds.length !== 1 ? 's' : ''}`);
@@ -879,42 +882,56 @@ export default function GeneralMapView() {
             {showCreateForm && (
               <div style={{
                 borderTop: '1px solid #dcfce7', background: '#f0fdf4',
-                padding: '12px 16px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end',
+                padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10,
               }}>
-                <div style={{ flex: 2, minWidth: 160 }}>
-                  <div style={labelStyle}>Nombre de la ruta</div>
-                  <input
-                    value={newRouteName}
-                    onChange={e => setNewRouteName(e.target.value)}
-                    placeholder="Ej: Zona Norte — Lunes"
-                    style={miniInp}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div style={{ flex: 2, minWidth: 160 }}>
+                    <div style={labelStyle}>Nombre de la ruta</div>
+                    <input value={newRouteName} onChange={e => setNewRouteName(e.target.value)} placeholder="Ej: Zona Norte — Lunes" style={miniInp} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 130 }}>
+                    <div style={labelStyle}>Fecha</div>
+                    <input type="date" value={newRouteDate} onChange={e => setNewRouteDate(e.target.value)} style={miniInp} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <div style={labelStyle}>Driver</div>
+                    <select value={newRouteDriverId} onChange={e => setNewRouteDriverId(e.target.value)} style={miniInp}>
+                      <option value="">Sin asignar</option>
+                      {drivers.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 120 }}>
+                    <div style={labelStyle}>Estado</div>
+                    <select value={newRouteStatus} onChange={e => setNewRouteStatus(e.target.value)} style={miniInp}>
+                      <option value="active">Activa</option>
+                      <option value="draft">Borrador</option>
+                    </select>
+                  </div>
+                </div>
+                {/* Pickup / start point */}
+                <div>
+                  <div style={{ ...labelStyle, color: '#15803d' }}>📍 DIRECCIÓN DE RETIRO (punto nº1 — origen optimización)</div>
+                  <AddressAutocomplete
+                    compact
+                    value={newRouteStart.address}
+                    placeholder="Bodega o dirección de recogida…"
+                    onChange={v => setNewRouteStart(s => ({ ...s, address: v, lat: null, lng: null }))}
+                    onSelect={({ address, lat, lng }) => setNewRouteStart({ address, lat, lng })}
                   />
-                </div>
-                <div style={{ flex: 1, minWidth: 130 }}>
-                  <div style={labelStyle}>Fecha</div>
-                  <input type="date" value={newRouteDate} onChange={e => setNewRouteDate(e.target.value)} style={miniInp} />
-                </div>
-                <div style={{ flex: 1, minWidth: 140 }}>
-                  <div style={labelStyle}>Driver</div>
-                  <select value={newRouteDriverId} onChange={e => setNewRouteDriverId(e.target.value)} style={miniInp}>
-                    <option value="">Sin asignar</option>
-                    {drivers.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
-                  </select>
-                </div>
-                <div style={{ flex: 1, minWidth: 120 }}>
-                  <div style={labelStyle}>Estado</div>
-                  <select value={newRouteStatus} onChange={e => setNewRouteStatus(e.target.value)} style={miniInp}>
-                    <option value="active">Activa</option>
-                    <option value="draft">Borrador</option>
-                  </select>
+                  {newRouteStart.lat
+                    ? <div style={{ fontSize: 10, color: '#16a34a', marginTop: 3, fontWeight: 600 }}>✓ Coordenadas listas — se usará como punto de partida para optimizar</div>
+                    : newRouteStart.address
+                      ? <div style={{ fontSize: 10, color: '#f59e0b', marginTop: 3 }}>⚠ Selecciona una sugerencia para coordenadas exactas</div>
+                      : null
+                  }
                 </div>
                 <button
                   onClick={handleCreateAndAssign}
                   disabled={creating}
                   style={{
-                    padding: '9px 18px', borderRadius: 9, fontSize: 12, fontWeight: 800, cursor: creating ? 'not-allowed' : 'pointer',
+                    alignSelf: 'flex-end', padding: '9px 18px', borderRadius: 9, fontSize: 12, fontWeight: 800, cursor: creating ? 'not-allowed' : 'pointer',
                     border: 'none', background: creating ? '#e2e8f0' : '#16a34a',
-                    color: creating ? '#94a3b8' : '#fff', whiteSpace: 'nowrap', alignSelf: 'flex-end',
+                    color: creating ? '#94a3b8' : '#fff', whiteSpace: 'nowrap',
                   }}
                 >
                   {creating ? 'Creando...' : `Crear y mover (${selectedIds.size})`}
