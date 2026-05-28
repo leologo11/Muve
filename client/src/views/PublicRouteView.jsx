@@ -225,71 +225,60 @@ ${hasPrice ? `
   <div class="br total"><span>NETO (sin IVA)</span><span>$${fmt(netoTotal)}</span></div>
 </div></div>` : ''}
 
-${volumeTiers.length > 0 ? `
-<div class="vol-box">
-  <h3>📦 Escala de precios por volumen <span class="vol-tag">${totalCount} paquete${totalCount !== 1 ? 's' : ''} en esta ruta</span></h3>
-  <div style="font-size:11px;color:#475569;margin-bottom:10px">
-    El precio por entrega varía según la cantidad total de paquetes en la ruta. A mayor volumen, menor precio unitario.
-    ${appliedTier ? `<br><strong>Esta ruta aplica el tramo de ${appliedTier.minQty === 1 ? '1 paquete' : `≥${appliedTier.minQty} paquetes`}: $${fmt(appliedTier.price)} por entrega.</strong>` : ''}
+<div class="tramos-section">
+  <h3>📋 Precio por comuna en esta ruta${route.tariffName ? ` <span style="font-size:10px;color:#94a3b8;font-weight:400">(tarifa: ${route.tariffName})</span>` : ''}</h3>
+
+  ${volumeTiers.length > 0 ? `
+  <!-- Volume tier scale -->
+  <div style="font-size:11px;color:#475569;margin-bottom:8px">
+    El precio unitario depende del total de paquetes en la ruta. Esta ruta tiene <strong>${totalCount} paquete${totalCount !== 1 ? 's' : ''}</strong>${appliedTier ? `, por lo que aplica el tramo de <strong>${appliedTier.minQty === 1 ? '1 paquete' : `≥${appliedTier.minQty} paquetes`}</strong> → <strong style="color:#0052FF">$${fmt(appliedTier.price)}</strong> por entrega.` : '.'}
   </div>
-  <table style="border-collapse:collapse;width:100%">
-    <thead><tr style="background:#0052FF">
-      <th style="padding:7px 10px;color:#fff;font-size:10px;font-weight:700;text-align:left">Cantidad de paquetes en ruta</th>
-      <th style="padding:7px 10px;color:#fff;font-size:10px;font-weight:700;text-align:right">Precio por entrega</th>
-      <th style="padding:7px 10px;width:130px"></th>
+  <table style="margin-bottom:16px">
+    <thead><tr>
+      <th style="width:220px">Cantidad de paquetes en ruta</th>
+      <th style="text-align:right">Precio por entrega</th>
+      <th style="width:140px;text-align:center">Estado</th>
     </tr></thead>
     <tbody>${volTierRows}</tbody>
-  </table>
-  <div style="font-size:10px;color:#94a3b8;margin-top:6px">
-    * El tramo se determina por el total de paquetes en la ruta (entregados + no entregados + pendientes).
-    Los paquetes no entregados se cobran igual porque el repartidor se presentó en la dirección.
-  </div>
-</div>` : ''}
+  </table>` : ''}
 
-${hasPrice && tramos.length > 0 ? `
-<div class="tramos-section">
-  <h3>📊 Detalle de precios por tramo / comuna</h3>
+  ${priceTiers.length > 0 ? `
+  <!-- Communes table -->
+  <div style="font-size:10px;color:#94a3b8;margin-bottom:6px${volumeTiers.length > 0 ? ';border-top:1px solid #e2e8f0;padding-top:12px;margin-top:4px' : ''}">
+    ${volumeTiers.length > 0 ? 'Precio base por comuna (antes del ajuste por volumen):' : 'Comunas de entrega en esta ruta y su precio acordado. Futuros envíos a las mismas comunas tendrán el mismo valor.'}
+  </div>
   <table>
-    <thead>
-      <tr>
+    <thead><tr style="background:#f1f5f9">
+      <th style="color:#475569">Comuna / Sector</th>
+      <th style="color:#475569;text-align:right">Precio por entrega</th>
+    </tr></thead>
+    <tbody>${tierRows}</tbody>
+  </table>` : ''}
+
+  ${hasPrice && tramos.length > 0 ? `
+  <div style="border-top:1px solid #e2e8f0;margin-top:14px;padding-top:12px">
+    <div style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin-bottom:7px">Resumen por comuna cobrado en esta ruta</div>
+    <table>
+      <thead><tr>
         <th>Tramo / Comuna</th>
         <th style="text-align:center">Precio unitario</th>
         <th style="text-align:center">Paquetes cobrados</th>
         <th style="text-align:center">Pendientes</th>
         <th style="text-align:right">Subtotal cobrado</th>
-      </tr>
-    </thead>
-    <tbody>${tramosRows}</tbody>
-    <tfoot>
-      <tr style="background:#0052FF08;border-top:2px solid #0052FF30">
+      </tr></thead>
+      <tbody>${tramosRows}</tbody>
+      <tfoot><tr style="background:#0052FF08;border-top:2px solid #0052FF30">
         <td colspan="4" style="font-weight:800;color:#0052FF;padding:9px">NETO TOTAL (sin IVA)</td>
         <td style="text-align:right;font-weight:900;color:#0052FF;font-size:14px;padding:9px">$${fmt(netoTotal)}</td>
-      </tr>
-    </tfoot>
-  </table>
-  <div class="tramos-note">
-    ℹ️ Los precios unitarios se determinan según la tabla de tarifas y precios por comuna configurada en MUVE para este cliente.<br>
-    Los paquetes marcados como "No entregado" se cobran al mismo valor unitario ya que el repartidor se presentó en la dirección de destino.<br>
-    Los paquetes "Pendientes" se muestran como referencia y no forman parte del cobro actual.
-  </div>
-</div>` : ''}
+      </tr></tfoot>
+    </table>
+  </div>` : ''}
 
-${priceTiers.length > 0 ? `
-<div class="tramos-section" style="margin-top:22px">
-  <h3 style="color:#64748b">📋 Precio por comuna en esta ruta${route.tariffName ? ` <span style="font-size:10px;color:#94a3b8;font-weight:400">(tarifa: ${route.tariffName})</span>` : ''}</h3>
-  <div style="font-size:10px;color:#94a3b8;margin-bottom:8px">
-    Comunas de entrega en esta ruta y su precio acordado. Futuros envíos a las mismas comunas tendrán el mismo valor.
+  <div class="tramos-note" style="margin-top:10px">
+    * Los paquetes "No entregado" se cobran al mismo valor ya que el repartidor se presentó en el domicilio.<br>
+    * Los tramos de volumen se calculan sobre el total de paquetes en la ruta (entregados + no entregados + pendientes).
   </div>
-  <table>
-    <thead>
-      <tr style="background:#f1f5f9">
-        <th style="color:#475569">Comuna / Sector</th>
-        <th style="color:#475569;text-align:right">Precio por entrega</th>
-      </tr>
-    </thead>
-    <tbody>${tierRows}</tbody>
-  </table>
-</div>` : ''}
+</div>
 
 <div class="footer">Generado por MUVE · ${new Date().toLocaleString('es-CL')}</div>
 <script>window.onload = () => { window.print(); }</script>
