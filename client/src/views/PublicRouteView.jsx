@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import L from 'leaflet';
 import { api } from '../api/index.js';
 
@@ -437,6 +437,9 @@ function PkgCard({ pkg, expanded, onToggle }) {
 // ── Main view ──────────────────────────────────────────────────────────────────
 export default function PublicRouteView() {
   const { shareToken } = useParams();
+  const [searchParams] = useSearchParams();
+  const companyIds = searchParams.get('c') ? searchParams.get('c').split(',').filter(Boolean) : null;
+
   const [route, setRoute]       = useState(null);
   const [packages, setPackages] = useState([]);
   const [loading, setLoading]   = useState(true);
@@ -447,11 +450,11 @@ export default function PublicRouteView() {
   const [expandedPkg, setExpandedPkg]   = useState(null);
 
   const load = useCallback(() =>
-    api.getPublicRoute(shareToken)
+    api.getPublicRoute(shareToken, companyIds)
       .then(data => { setRoute(data.route); setPackages(data.packages); })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
-  , [shareToken]);
+  , [shareToken, searchParams.get('c')]);
 
   useEffect(() => { load(); }, [load]);
 

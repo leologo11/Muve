@@ -42,7 +42,10 @@ export const api = {
   geocodeRoute: (id) => request('POST', `/routes/${id}/geocode`),
   generateShareLink: (id) => request('POST', `/routes/${id}/share`),
   revokeShareLink: (id) => request('DELETE', `/routes/${id}/share`),
-  getPublicRoute: (token) => request('GET', `/public/route/${token}`),
+  getPublicRoute: (token, companies = null) => {
+    const suffix = companies?.length ? `?c=${companies.join(',')}` : '';
+    return request('GET', `/public/route/${token}${suffix}`);
+  },
 
   // Packages
   getMapPackages: (params = {}) => {

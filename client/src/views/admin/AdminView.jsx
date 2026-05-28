@@ -1064,9 +1064,11 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
   const [drivers, setDrivers] = React.useState([]);
   const [clientCompanies, setClientCompanies] = React.useState([]);
   const [geocodingStart, setGeocodingStart] = useState(false);
-  const [shareToken, setShareToken] = useState(null);
+  const [shareToken, setShareToken] = useState(route?.shareToken || null);
   const [shareLoading, setShareLoading] = useState(false);
   const [shareRevoked, setShareRevoked] = useState(false);
+  const [showCompanyPicker, setShowCompanyPicker] = useState(false);
+  const [selectedCos, setSelectedCos] = useState(new Set());
 
   const handleShare = async () => {
     setShareLoading(true);
@@ -1175,6 +1177,19 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
   const delivered = active.filter(p => p.status === 'entregado');
   const failed = active.filter(p => p.status === 'no-entregado');
   const pending = active.filter(p => p.status === 'pendiente');
+
+  const routeCompanies = React.useMemo(() => {
+    const map = {};
+    active.forEach(p => {
+      if (!p.companyId) return;
+      if (!map[p.companyId]) {
+        const co = clientCompanies.find(c => c._id === p.companyId);
+        map[p.companyId] = { id: p.companyId, name: co?.name || 'Sin empresa', count: 0 };
+      }
+      map[p.companyId].count++;
+    });
+    return Object.values(map).sort((a, b) => a.name.localeCompare(b.name));
+  }, [active, clientCompanies]);
   const payable = active.filter(isPayableForDriver);
   const total = active.reduce((s, p) => s + (p.price || 0), 0);
   const collected = delivered.reduce((s, p) => s + (p.price || 0), 0);
@@ -1628,19 +1643,92 @@ ${total ? `<div class="note">* Los paquetes "No entregados" se cobran porque el 
         <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: 'var(--muted)', marginBottom: 10 }}>🔗 ENLACE PARA EMPRESA</div>
         {shareUrl ? (
           <div>
+            {/* Global link */}
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, marginBottom: 4 }}>TODA LA RUTA</div>
             <div style={{ background: '#f4f7ff', border: '1px solid #0052FF30', borderRadius: 10, padding: '9px 12px', marginBottom: 8, fontSize: 11, color: '#003BB5', wordBreak: 'break-all', fontFamily: 'monospace' }}>
               {shareUrl}
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={copyShare} style={{ flex: 1, padding: '8px', borderRadius: 9, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>📋 Copiar enlace</button>
+            <div style={{ display: 'flex', gap: 8, marginBottom: routeCompanies.length > 1 ? 14 : 0 }}>
+              <button onClick={copyShare} style={{ flex: 1, padding: '8px', borderRadius: 9, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>📋 Copiar</button>
               <a href={shareUrl} target="_blank" rel="noreferrer" style={{ flex: 1, padding: '8px', borderRadius: 9, border: '1px solid var(--border)', background: 'none', color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', textAlign: 'center' }}>👁 Ver</a>
               <button onClick={handleRevokeShare} style={{ padding: '8px 10px', borderRadius: 9, border: '1px solid #cc224430', background: 'none', color: '#cc2244', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>🗑️</button>
             </div>
+
+            {/* Per-company links — only shown when route has packages from multiple companies */}
+            {routeCompanies.length > 1 && (
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, color: 'var(--muted)', marginBottom: 10 }}>POR EMPRESA</div>
+                {routeCompanies.map(co => {
+                  const url = `${shareUrl}?c=${co.id}`;
+                  return (
+                    <div key={co.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
+                      <div style={{ flex: 1, fontSize: 12, fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {co.name}
+                        <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 400, marginLeft: 4 }}>({co.count} pkgs)</span>
+                      </div>
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(url); toast('📋 Copiado'); }}
+                        style={{ padding: '5px 9px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
+                      >📋</button>
+                      <a href={url} target="_blank" rel="noreferrer"
+                        style={{ padding: '5px 9px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', color: 'var(--text)', fontSize: 11, fontWeight: 700, textDecoration: 'none', flexShrink: 0 }}
+                      >👁</a>
+                    </div>
+                  );
+                })}
+
+                {/* Multi-company selector */}
+                <button
+                  onClick={() => { setShowCompanyPicker(p => !p); setSelectedCos(new Set()); }}
+                  style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', fontWeight: 700 }}
+                >
+                  {showCompanyPicker ? '✕ Cancelar' : '⊕ Combinar empresas'}
+                </button>
+
+                {showCompanyPicker && (
+                  <div style={{ marginTop: 8, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
+                    {routeCompanies.map(co => (
+                      <label key={co.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 12, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedCos.has(co.id)}
+                          onChange={e => setSelectedCos(prev => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(co.id); else next.delete(co.id);
+                            return next;
+                          })}
+                        />
+                        {co.name} <span style={{ color: 'var(--muted)', fontSize: 11 }}>({co.count})</span>
+                      </label>
+                    ))}
+                    {selectedCos.size > 0 && (
+                      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                        <button
+                          onClick={() => {
+                            const url = `${shareUrl}?c=${[...selectedCos].join(',')}`;
+                            navigator.clipboard.writeText(url);
+                            toast('📋 Link combinado copiado');
+                          }}
+                          style={{ flex: 1, padding: '7px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          📋 Copiar ({selectedCos.size} empresas)
+                        </button>
+                        <a
+                          href={`${shareUrl}?c=${[...selectedCos].join(',')}`}
+                          target="_blank" rel="noreferrer"
+                          style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', color: 'var(--text)', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}
+                        >👁</a>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.4 }}>
-              Genera un enlace para que la empresa vea el estado de la ruta en tiempo real sin necesidad de iniciar sesión. Solo verán el progreso total, no los precios por paquete.
+              Genera un enlace para que la empresa vea el estado de la ruta en tiempo real sin necesidad de iniciar sesión.
             </div>
             {shareRevoked && <div style={{ fontSize: 11, color: '#cc2244', marginBottom: 8 }}>✓ Enlace anterior revocado</div>}
             <button

@@ -845,7 +845,7 @@ function mapPublicPackage(p) {
     id: p.id,
     trackingId: p.tracking_id,
     customerName: p.customer_name,
-    customerLastName: p.customer_last_name ? `${p.customer_last_name[0]}.` : '',
+    customerLastName: p.customer_last_name || '',
     address: p.address,
     commune: p.commune,
     aptFloor: p.apt_floor,
@@ -1061,7 +1061,9 @@ router.get('/route/:shareToken', publicReadLimiter, async (req, res) => {
         return { tiers: (configs || []).map(c => ({ commune: c.commune, price: Number(c.price || 0) })), volumeTiers: [], tariffName: '' };
       })(),
     ]);
-    const publicPackages = packages.filter(p => p.status !== 'eliminado').map(mapPublicPackage);
+    const companyIds = req.query.c ? req.query.c.split(',').map(s => s.trim()).filter(Boolean) : null;
+    const filtered = companyIds ? packages.filter(p => companyIds.includes(p.company_id)) : packages;
+    const publicPackages = filtered.filter(p => p.status !== 'eliminado').map(mapPublicPackage);
 
     return res.json({
       route: {
