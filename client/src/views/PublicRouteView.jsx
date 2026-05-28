@@ -84,6 +84,26 @@ function generatePdf(route, packages) {
 
   const priceHeader = hasPrice ? '<th style="text-align:right">Precio</th>' : '';
 
+  // ── Pricing tramos (group by commune + unit price) ──
+  const tramosMap = {};
+  active.forEach(p => {
+    const commune = (p.commune || 'Sin comuna').trim();
+    const price   = Number(p.price || 0);
+    const key     = `${commune.toLowerCase()}::${price}`;
+    if (!tramosMap[key]) tramosMap[key] = { commune, price, billed: 0, pendingCount: 0 };
+    if (p.status === 'entregado' || p.status === 'no-entregado') tramosMap[key].billed++;
+    else if (p.status === 'pendiente') tramosMap[key].pendingCount++;
+  });
+  const tramos = Object.values(tramosMap).sort((a, b) => b.price - a.price || a.commune.localeCompare(b.commune));
+  const tramosRows = tramos.map(t => `
+    <tr>
+      <td style="font-weight:600">${t.commune}</td>
+      <td style="text-align:center;font-weight:800;color:#0052FF">${t.price > 0 ? '$' + fmt(t.price) : '—'}</td>
+      <td style="text-align:center">${t.billed > 0 ? `<span style="background:#dcfce7;color:#16a34a;border-radius:20px;padding:1px 8px;font-weight:700;font-size:10px">${t.billed} cobrado${t.billed > 1 ? 's' : ''}</span>` : '—'}</td>
+      <td style="text-align:center">${t.pendingCount > 0 ? `<span style="background:#fff8e1;color:#f57c00;border-radius:20px;padding:1px 8px;font-weight:700;font-size:10px">${t.pendingCount} pend.</span>` : '—'}</td>
+      <td style="text-align:right;font-weight:700">${t.billed > 0 && t.price > 0 ? '$' + fmt(t.billed * t.price) : '—'}</td>
+    </tr>`).join('');
+
   const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -117,6 +137,11 @@ function generatePdf(route, packages) {
     .br.total{background:#0052FF;color:#fff;font-size:14px;font-weight:900;border-bottom:none}
     .br.ref{color:#94a3b8;font-size:11px}
     .note{font-size:10px;color:#94a3b8;margin-top:5px;text-align:right}
+    .tramos-section{margin-top:28px;padding-top:20px;border-top:2px dashed #e2e8f0}
+    .tramos-section h3{color:#0052FF;border-bottom:none;margin-bottom:10px}
+    .tramos-section table thead tr{background:#0052FF08}
+    .tramos-section table thead th{color:#0052FF;font-size:10px}
+    .tramos-note{font-size:10px;color:#94a3b8;margin-top:8px;line-height:1.5}
     .footer{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;text-align:center}
     @media print{body{padding:16px 20px}}
   </style>
@@ -167,6 +192,34 @@ ${hasPrice ? `
   ${pending.length ? `<div class="br ref"><span>Pendientes sin cobrar (${pending.length})</span><span>$${fmt(subtotalPending)}</span></div>` : ''}
   <div class="br total"><span>NETO (sin IVA)</span><span>$${fmt(netoTotal)}</span></div>
 </div></div>` : ''}
+
+${hasPrice && tramos.length > 0 ? `
+<div class="tramos-section">
+  <h3>📊 Detalle de precios por tramo / comuna</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Tramo / Comuna</th>
+        <th style="text-align:center">Precio unitario</th>
+        <th style="text-align:center">Paquetes cobrados</th>
+        <th style="text-align:center">Pendientes</th>
+        <th style="text-align:right">Subtotal cobrado</th>
+      </tr>
+    </thead>
+    <tbody>${tramosRows}</tbody>
+    <tfoot>
+      <tr style="background:#0052FF08;border-top:2px solid #0052FF30">
+        <td colspan="4" style="font-weight:800;color:#0052FF;padding:9px">NETO TOTAL (sin IVA)</td>
+        <td style="text-align:right;font-weight:900;color:#0052FF;font-size:14px;padding:9px">$${fmt(netoTotal)}</td>
+      </tr>
+    </tfoot>
+  </table>
+  <div class="tramos-note">
+    ℹ️ Los precios unitarios se determinan según la tabla de tarifas y precios por comuna configurada en MUVE para este cliente.<br>
+    Los paquetes marcados como "No entregado" se cobran al mismo valor unitario ya que el repartidor se presentó en la dirección de destino.<br>
+    Los paquetes "Pendientes" se muestran como referencia y no forman parte del cobro actual.
+  </div>
+</div>` : ''}
 
 <div class="footer">Generado por MUVE · ${new Date().toLocaleString('es-CL')}</div>
 <script>window.onload = () => { window.print(); }</script>
