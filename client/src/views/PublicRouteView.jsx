@@ -84,7 +84,7 @@ function generatePdf(route, packages) {
 
   const priceHeader = hasPrice ? '<th style="text-align:right">Precio</th>' : '';
 
-  // ── Pricing tramos (group by commune + unit price) ──
+  // ── Pricing tramos (from actual packages, group by commune + unit price) ──
   const tramosMap = {};
   active.forEach(p => {
     const commune = (p.commune || 'Sin comuna').trim();
@@ -102,6 +102,15 @@ function generatePdf(route, packages) {
       <td style="text-align:center">${t.billed > 0 ? `<span style="background:#dcfce7;color:#16a34a;border-radius:20px;padding:1px 8px;font-weight:700;font-size:10px">${t.billed} cobrado${t.billed > 1 ? 's' : ''}</span>` : '—'}</td>
       <td style="text-align:center">${t.pendingCount > 0 ? `<span style="background:#fff8e1;color:#f57c00;border-radius:20px;padding:1px 8px;font-weight:700;font-size:10px">${t.pendingCount} pend.</span>` : '—'}</td>
       <td style="text-align:right;font-weight:700">${t.billed > 0 && t.price > 0 ? '$' + fmt(t.billed * t.price) : '—'}</td>
+    </tr>`).join('');
+
+  // ── Full price table from tariff/price_configs ──
+  const priceTiers = (route.priceTiers || []).filter(t => t.commune && t.price > 0)
+    .sort((a, b) => b.price - a.price || a.commune.localeCompare(b.commune));
+  const tierRows = priceTiers.map(t => `
+    <tr>
+      <td>${t.commune}${t.zone ? ` <span style="font-size:10px;color:#94a3b8">· ${t.zone}</span>` : ''}</td>
+      <td style="text-align:right;font-weight:700;color:#0052FF">$${fmt(t.price)}</td>
     </tr>`).join('');
 
   const html = `<!DOCTYPE html>
@@ -221,6 +230,23 @@ ${hasPrice && tramos.length > 0 ? `
   </div>
 </div>` : ''}
 
+${priceTiers.length > 0 ? `
+<div class="tramos-section" style="margin-top:22px">
+  <h3 style="color:#64748b">📋 Tabla de precios por comuna (tarifa aplicada)</h3>
+  <div style="font-size:10px;color:#94a3b8;margin-bottom:8px">
+    Estos son los precios acordados para cada commune de entrega. Cualquier envío futuro a estas comunas tendrá el valor indicado.
+  </div>
+  <table>
+    <thead>
+      <tr style="background:#f1f5f9">
+        <th style="color:#475569">Comuna / Sector</th>
+        <th style="color:#475569;text-align:right">Precio por entrega</th>
+      </tr>
+    </thead>
+    <tbody>${tierRows}</tbody>
+  </table>
+</div>` : ''}
+
 <div class="footer">Generado por MUVE · ${new Date().toLocaleString('es-CL')}</div>
 <script>window.onload = () => { window.print(); }</script>
 </body>
@@ -317,6 +343,15 @@ function PkgCard({ pkg, expanded, onToggle }) {
             </div>
           )}
         </div>
+        {pkg.photoUrl && (
+          <a href={pkg.photoUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>
+            <img
+              src={pkg.photoUrl}
+              alt="foto"
+              style={{ width: 52, height: 44, objectFit: 'cover', borderRadius: 8, border: '2px solid #e8e8e8', flexShrink: 0, display: 'block' }}
+            />
+          </a>
+        )}
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: meta.color }}>{meta.label}</div>
           {pkg.deliveredAt && (
@@ -469,11 +504,10 @@ export default function PublicRouteView() {
               { label: '❌', value: failed, color: '#cc2244' },
               { label: '⏳', value: pending, color: '#f57c00' },
               { label: `${progress}%`, value: '', color: '#111', bold: true },
-              ...(totalAmt > 0 ? [{ label: '$' + totalAmt.toLocaleString('es-CL'), value: '', color: '#0052FF', bold: true }] : [])
             ].map(({ label, value, color, bold }) => (
               <div key={label} style={{ flex: 1, textAlign: 'center' }}>
                 <div style={{ fontSize: bold ? 13 : 18, fontWeight: 800, color }}>{bold ? label : value}</div>
-                <div style={{ fontSize: 9, color: '#aaa', fontWeight: 600, marginTop: 1 }}>{bold ? (label.startsWith('$') ? 'total ruta' : 'avance') : label}</div>
+                <div style={{ fontSize: 9, color: '#aaa', fontWeight: 600, marginTop: 1 }}>{bold ? 'avance' : label}</div>
               </div>
             ))}
           </div>

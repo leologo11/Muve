@@ -1045,7 +1045,17 @@ router.get('/route/:shareToken', publicReadLimiter, async (req, res) => {
     const route = routes?.[0];
     if (!route) return res.status(404).json({ error: 'Enlace no valido o expirado' });
 
-    const packages = await supabaseRequest(`/packages${qs({ route_id: `eq.${route.id}`, select: '*', order: 'stop_order.asc' })}`);
+    const [packages, priceTiersRaw] = await Promise.all([
+      supabaseRequest(`/packages${qs({ route_id: `eq.${route.id}`, select: '*', order: 'stop_order.asc' })}`),
+      (async () => {
+        if (route.tariff_id) {
+          const items = await supabaseRequest(`/tariff_items${qs({ tariff_id: `eq.${route.tariff_id}`, select: '*', order: 'commune.asc' })}`).catch(() => []);
+          if (items?.length) return items.map(i => ({ commune: i.commune, price: Number(i.price || 0), zone: i.zone || '' }));
+        }
+        const configs = await supabaseRequest(`/price_configs${qs({ select: '*', order: 'commune.asc' })}`).catch(() => []);
+        return (configs || []).map(c => ({ commune: c.commune, price: Number(c.price || 0) }));
+      })(),
+    ]);
     const publicPackages = packages.filter(p => p.status !== 'eliminado').map(mapPublicPackage);
 
     return res.json({
@@ -1067,7 +1077,8 @@ router.get('/route/:shareToken', publicReadLimiter, async (req, res) => {
         startPoint: route.start_point || {},
         distanceKm: route.distance_km,
         stats: route.stats || {},
-        invoiceAmount: route.invoice?.amount || null
+        invoiceAmount: route.invoice?.amount || null,
+        priceTiers: priceTiersRaw || [],
       },
       packages: publicPackages
     });
