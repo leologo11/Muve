@@ -266,11 +266,6 @@ function PkgCard({ pkg, expanded, onToggle }) {
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: meta.color }}>{meta.label}</div>
-          {Number(pkg.price || 0) > 0 && (
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#1e293b', marginTop: 3 }}>
-              ${Number(pkg.price).toLocaleString('es-CL')}
-            </div>
-          )}
           {pkg.deliveredAt && (
             <div style={{ fontSize: 10, color: '#aaa', marginTop: 2 }}>
               {new Date(pkg.deliveredAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
@@ -325,9 +320,10 @@ export default function PublicRouteView() {
   const [packages, setPackages] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
-  const [tab, setTab]           = useState('list');
-  const [search, setSearch]     = useState('');
-  const [expandedPkg, setExpandedPkg] = useState(null);
+  const [tab, setTab]             = useState('list');
+  const [search, setSearch]       = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [expandedPkg, setExpandedPkg]   = useState(null);
 
   const load = useCallback(() =>
     api.getPublicRoute(shareToken)
@@ -373,9 +369,10 @@ export default function PublicRouteView() {
   const totalAmt  = route.stats?.totalAmount || route.invoiceAmount || 0;
 
   const q = search.toLowerCase().trim();
+  const filtered = statusFilter === 'all' ? active : active.filter(p => p.status === statusFilter);
   const visible = q
-    ? active.filter(p => [p.customerName, p.customerLastName, p.address, p.commune, p.trackingId].filter(Boolean).join(' ').toLowerCase().includes(q))
-    : active;
+    ? filtered.filter(p => [p.customerName, p.customerLastName, p.address, p.commune, p.trackingId].filter(Boolean).join(' ').toLowerCase().includes(q))
+    : filtered;
 
   const driverWaPhone = route.driverPhone?.replace(/[^0-9]/g, '');
 
@@ -489,15 +486,38 @@ export default function PublicRouteView() {
         ))}
       </div>
 
-      {/* ── Search (list only) ── */}
+      {/* ── Search + filters (list only) ── */}
       {tab === 'list' && (
-        <div style={{ flexShrink: 0, padding: '8px 12px', background: '#fff', borderBottom: '1px solid #e8e8e8' }}>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="🔍 Buscar por nombre, dirección, tracking…"
-            style={{ width: '100%', boxSizing: 'border-box', background: '#f5f7fa', border: '1px solid #e8e8e8', borderRadius: 22, padding: '8px 14px', fontSize: 13, outline: 'none' }}
-          />
+        <div style={{ flexShrink: 0, background: '#fff', borderBottom: '1px solid #e8e8e8' }}>
+          <div style={{ padding: '8px 12px 6px' }}>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="🔍 Buscar por nombre, dirección, tracking…"
+              style={{ width: '100%', boxSizing: 'border-box', background: '#f5f7fa', border: '1px solid #e8e8e8', borderRadius: 22, padding: '8px 14px', fontSize: 13, outline: 'none' }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 6, padding: '0 12px 8px', overflowX: 'auto' }}>
+            {[
+              { key: 'all',           label: 'Todos',          count: total,     color: '#64748b', bg: '#f1f5f9' },
+              { key: 'entregado',     label: '✅ Entregados',  count: delivered, color: '#16a34a', bg: '#dcfce7' },
+              { key: 'no-entregado',  label: '❌ Incidencias', count: failed,    color: '#cc2244', bg: '#fff0f2' },
+              { key: 'pendiente',     label: '⏳ Pendientes',  count: pending,   color: '#f57c00', bg: '#fff8e1' },
+            ].map(({ key, label, count, color, bg }) => (
+              <button
+                key={key}
+                onClick={() => setStatusFilter(key)}
+                style={{
+                  flexShrink: 0, padding: '5px 12px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                  background: statusFilter === key ? bg : 'transparent',
+                  color: statusFilter === key ? color : '#94a3b8',
+                  outline: statusFilter === key ? `1.5px solid ${color}40` : 'none',
+                }}
+              >
+                {label} <span style={{ fontWeight: 800 }}>{count}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -514,7 +534,9 @@ export default function PublicRouteView() {
             {visible.length === 0 && (
               <div style={{ textAlign: 'center', padding: '40px 20px', color: '#bbb' }}>
                 <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
-                <div style={{ fontSize: 13 }}>{q ? 'Sin resultados para esa búsqueda' : 'Sin paquetes en esta ruta'}</div>
+                <div style={{ fontSize: 13 }}>
+                  {q ? 'Sin resultados para esa búsqueda' : statusFilter !== 'all' ? 'No hay paquetes en esta categoría' : 'Sin paquetes en esta ruta'}
+                </div>
               </div>
             )}
             {visible.map(pkg => (
