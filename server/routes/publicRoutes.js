@@ -1045,7 +1045,7 @@ router.get('/route/:shareToken', publicReadLimiter, async (req, res) => {
     const route = routes?.[0];
     if (!route) return res.status(404).json({ error: 'Enlace no valido o expirado' });
 
-    const [packages, priceTiersRaw] = await Promise.all([
+    const [packages, priceTiersRaw, zonesRaw] = await Promise.all([
       supabaseRequest(`/packages${qs({ route_id: `eq.${route.id}`, select: '*', order: 'stop_order.asc' })}`),
       (async () => {
         if (route.tariff_id) {
@@ -1060,10 +1060,27 @@ router.get('/route/:shareToken', publicReadLimiter, async (req, res) => {
         const configs = await supabaseRequest(`/price_configs${qs({ select: '*', order: 'commune.asc' })}`).catch(() => []);
         return { tiers: (configs || []).map(c => ({ commune: c.commune, price: Number(c.price || 0) })), volumeTiers: [], tariffName: '' };
       })(),
+      supabaseRequest(`/zones${qs({ source: 'eq.commune', select: 'name,tiers' })}`).catch(() => []),
     ]);
+
+    // Per-commune volume tiers from zones table (name → [{minQty, price}])
+    const zoneTiersMap = {};
+    (zonesRaw || []).forEach(z => {
+      if (z.name && Array.isArray(z.tiers) && z.tiers.length) {
+        zoneTiersMap[z.name.toLowerCase().trim()] = z.tiers;
+      }
+    });
+
     const companyIds = req.query.c ? req.query.c.split(',').map(s => s.trim()).filter(Boolean) : null;
     const filtered = companyIds ? packages.filter(p => companyIds.includes(p.company_id)) : packages;
     const publicPackages = filtered.filter(p => p.status !== 'eliminado').map(mapPublicPackage);
+
+    // Enrich priceTiers with per-commune zone tiers (only communes with packages in route)
+    const usedCommunes = new Set(publicPackages.map(p => (p.commune || '').toLowerCase().trim()).filter(Boolean));
+    const priceTiers = (priceTiersRaw?.tiers || [])
+      .filter(t => t.commune && t.price > 0 && usedCommunes.has(t.commune.toLowerCase().trim()))
+      .map(t => ({ ...t, tiers: zoneTiersMap[t.commune.toLowerCase().trim()] || [] }))
+      .sort((a, b) => b.price - a.price || a.commune.localeCompare(b.commune));
 
     return res.json({
       route: {
@@ -1085,7 +1102,7 @@ router.get('/route/:shareToken', publicReadLimiter, async (req, res) => {
         distanceKm: route.distance_km,
         stats: route.stats || {},
         invoiceAmount: route.invoice?.amount || null,
-        priceTiers: priceTiersRaw?.tiers || [],
+        priceTiers,
         volumeTiers: priceTiersRaw?.volumeTiers || [],
         tariffName: priceTiersRaw?.tariffName || '',
       },

@@ -104,16 +104,29 @@ function generatePdf(route, packages) {
       <td style="text-align:right;font-weight:700">${t.billed > 0 && t.price > 0 ? '$' + fmt(t.billed * t.price) : '—'}</td>
     </tr>`).join('');
 
-  // ── All tariff communes (full price schedule for the client) ──
-  const usedCommunes = new Set(active.map(p => (p.commune || '').toLowerCase().trim()).filter(Boolean));
-  const priceTiers = (route.priceTiers || [])
-    .filter(t => t.commune && t.price > 0)
-    .sort((a, b) => b.price - a.price || a.commune.localeCompare(b.commune));
+  // ── Per-commune tiers (backend already filtered to used communes, enriched with zone tiers) ──
+  const priceTiers = (route.priceTiers || []);
+
+  // Determine all unique tier thresholds across communes for column headers
+  const allMinQtys = [...new Set(
+    priceTiers.flatMap(t => (t.tiers || []).map(x => x.minQty))
+  )].sort((a, b) => a - b);
+  const hasTierCols = allMinQtys.length > 0;
+
+  const tierHeader = hasTierCols
+    ? allMinQtys.map(q => `<th style="text-align:right">${q === 1 ? '1 pkg' : `≥${q} pkgs`}</th>`).join('')
+    : '<th style="text-align:right">Precio por entrega</th>';
+
   const tierRows = priceTiers.map(t => {
-    const inRoute = usedCommunes.has(t.commune.toLowerCase().trim());
-    return `<tr${inRoute ? ' style="background:#f0f4ff"' : ''}>
-      <td>${t.commune}${t.zone ? ` <span style="font-size:10px;color:#94a3b8">· ${t.zone}</span>` : ''}${inRoute ? ' <span style="font-size:9px;background:#0052FF;color:#fff;border-radius:20px;padding:1px 6px;font-weight:700;margin-left:4px">en esta ruta</span>' : ''}</td>
-      <td style="text-align:right;font-weight:700;color:${inRoute ? '#0052FF' : '#475569'}">$${fmt(t.price)}</td>
+    const tierCells = hasTierCols
+      ? allMinQtys.map(q => {
+          const match = (t.tiers || []).find(x => x.minQty === q);
+          return `<td style="text-align:right;font-weight:700;color:#0052FF">${match ? '$' + fmt(match.price) : '—'}</td>`;
+        }).join('')
+      : `<td style="text-align:right;font-weight:700;color:#0052FF">$${fmt(t.price)}</td>`;
+    return `<tr>
+      <td>${t.commune}${t.zone ? ` <span style="font-size:10px;color:#94a3b8">· ${t.zone}</span>` : ''}</td>
+      ${tierCells}
     </tr>`;
   }).join('');
 
@@ -245,14 +258,14 @@ ${hasPrice ? `
   </table>` : ''}
 
   ${priceTiers.length > 0 ? `
-  <!-- Communes table (full tariff schedule) -->
+  <!-- Per-commune tiers table -->
   <div style="font-size:10px;color:#94a3b8;margin-bottom:6px${volumeTiers.length > 0 ? ';border-top:1px solid #e2e8f0;padding-top:12px;margin-top:4px' : ''}">
-    Lista de precios completa del tarifario. Las comunas resaltadas en azul corresponden a entregas en esta ruta.
+    Precio por paquete según cantidad total en la ruta para cada comuna con entregas.
   </div>
   <table>
     <thead><tr style="background:#f1f5f9">
-      <th style="color:#475569">Comuna / Sector</th>
-      <th style="color:#475569;text-align:right">Precio por entrega</th>
+      <th style="color:#475569">Comuna</th>
+      ${tierHeader}
     </tr></thead>
     <tbody>${tierRows}</tbody>
   </table>` : ''}
