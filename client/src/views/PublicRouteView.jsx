@@ -104,14 +104,34 @@ function generatePdf(route, packages) {
       <td style="text-align:right;font-weight:700">${t.billed > 0 && t.price > 0 ? '$' + fmt(t.billed * t.price) : '—'}</td>
     </tr>`).join('');
 
-  // ── Full price table from tariff/price_configs ──
-  const priceTiers = (route.priceTiers || []).filter(t => t.commune && t.price > 0)
+  // ── Filter: only communes actually used in this route's packages ──
+  const usedCommunes = new Set(active.map(p => (p.commune || '').toLowerCase().trim()).filter(Boolean));
+  const priceTiers = (route.priceTiers || [])
+    .filter(t => t.commune && t.price > 0 && usedCommunes.has(t.commune.toLowerCase().trim()))
     .sort((a, b) => b.price - a.price || a.commune.localeCompare(b.commune));
   const tierRows = priceTiers.map(t => `
     <tr>
       <td>${t.commune}${t.zone ? ` <span style="font-size:10px;color:#94a3b8">· ${t.zone}</span>` : ''}</td>
       <td style="text-align:right;font-weight:700;color:#0052FF">$${fmt(t.price)}</td>
     </tr>`).join('');
+
+  // ── Volume tier logic ──
+  const volumeTiers = (route.volumeTiers || [])
+    .filter(t => t.price > 0)
+    .sort((a, b) => a.minQty - b.minQty);
+  const billedCount  = delivered.length + failed.length;
+  const totalCount   = active.length;
+  const appliedTier  = volumeTiers.length
+    ? [...volumeTiers].reverse().find(t => totalCount >= t.minQty) || volumeTiers[0]
+    : null;
+  const volTierRows = volumeTiers.map((t, i) => {
+    const isApplied = appliedTier && t.minQty === appliedTier.minQty;
+    return `<tr style="${isApplied ? 'background:#0052FF10;font-weight:800' : ''}">
+      <td style="padding:7px 10px">${i === 0 ? '1 paquete' : `≥ ${t.minQty} paquetes`}</td>
+      <td style="padding:7px 10px;text-align:right;color:#0052FF;font-weight:700">$${fmt(t.price)} / paquete</td>
+      ${isApplied ? '<td style="padding:7px 10px;color:#16a34a;font-weight:800;font-size:11px">← aplica esta ruta</td>' : '<td></td>'}
+    </tr>`;
+  }).join('');
 
   const html = `<!DOCTYPE html>
 <html lang="es">
@@ -151,6 +171,9 @@ function generatePdf(route, packages) {
     .tramos-section table thead tr{background:#0052FF08}
     .tramos-section table thead th{color:#0052FF;font-size:10px}
     .tramos-note{font-size:10px;color:#94a3b8;margin-top:8px;line-height:1.5}
+    .vol-box{background:#f0f4ff;border:1.5px solid #0052FF30;border-radius:10px;padding:14px 16px;margin-top:22px}
+    .vol-box h3{color:#0052FF;margin-bottom:8px;border:none}
+    .vol-tag{display:inline-block;background:#0052FF;color:#fff;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:800;margin-left:8px}
     .footer{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;text-align:center}
     @media print{body{padding:16px 20px}}
   </style>
@@ -202,6 +225,27 @@ ${hasPrice ? `
   <div class="br total"><span>NETO (sin IVA)</span><span>$${fmt(netoTotal)}</span></div>
 </div></div>` : ''}
 
+${volumeTiers.length > 0 ? `
+<div class="vol-box">
+  <h3>📦 Escala de precios por volumen <span class="vol-tag">${totalCount} paquete${totalCount !== 1 ? 's' : ''} en esta ruta</span></h3>
+  <div style="font-size:11px;color:#475569;margin-bottom:10px">
+    El precio por entrega varía según la cantidad total de paquetes en la ruta. A mayor volumen, menor precio unitario.
+    ${appliedTier ? `<br><strong>Esta ruta aplica el tramo de ${appliedTier.minQty === 1 ? '1 paquete' : `≥${appliedTier.minQty} paquetes`}: $${fmt(appliedTier.price)} por entrega.</strong>` : ''}
+  </div>
+  <table style="border-collapse:collapse;width:100%">
+    <thead><tr style="background:#0052FF">
+      <th style="padding:7px 10px;color:#fff;font-size:10px;font-weight:700;text-align:left">Cantidad de paquetes en ruta</th>
+      <th style="padding:7px 10px;color:#fff;font-size:10px;font-weight:700;text-align:right">Precio por entrega</th>
+      <th style="padding:7px 10px;width:130px"></th>
+    </tr></thead>
+    <tbody>${volTierRows}</tbody>
+  </table>
+  <div style="font-size:10px;color:#94a3b8;margin-top:6px">
+    * El tramo se determina por el total de paquetes en la ruta (entregados + no entregados + pendientes).
+    Los paquetes no entregados se cobran igual porque el repartidor se presentó en la dirección.
+  </div>
+</div>` : ''}
+
 ${hasPrice && tramos.length > 0 ? `
 <div class="tramos-section">
   <h3>📊 Detalle de precios por tramo / comuna</h3>
@@ -232,9 +276,9 @@ ${hasPrice && tramos.length > 0 ? `
 
 ${priceTiers.length > 0 ? `
 <div class="tramos-section" style="margin-top:22px">
-  <h3 style="color:#64748b">📋 Tabla de precios por comuna (tarifa aplicada)</h3>
+  <h3 style="color:#64748b">📋 Precio por comuna en esta ruta${route.tariffName ? ` <span style="font-size:10px;color:#94a3b8;font-weight:400">(tarifa: ${route.tariffName})</span>` : ''}</h3>
   <div style="font-size:10px;color:#94a3b8;margin-bottom:8px">
-    Estos son los precios acordados para cada commune de entrega. Cualquier envío futuro a estas comunas tendrá el valor indicado.
+    Comunas de entrega en esta ruta y su precio acordado. Futuros envíos a las mismas comunas tendrán el mismo valor.
   </div>
   <table>
     <thead>

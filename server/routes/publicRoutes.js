@@ -1049,11 +1049,16 @@ router.get('/route/:shareToken', publicReadLimiter, async (req, res) => {
       supabaseRequest(`/packages${qs({ route_id: `eq.${route.id}`, select: '*', order: 'stop_order.asc' })}`),
       (async () => {
         if (route.tariff_id) {
-          const items = await supabaseRequest(`/tariff_items${qs({ tariff_id: `eq.${route.tariff_id}`, select: '*', order: 'commune.asc' })}`).catch(() => []);
-          if (items?.length) return items.map(i => ({ commune: i.commune, price: Number(i.price || 0), zone: i.zone || '' }));
+          const [tariffRows, items] = await Promise.all([
+            supabaseRequest(`/tariffs${qs({ id: `eq.${route.tariff_id}`, select: 'volume_tiers,name' })}`).catch(() => []),
+            supabaseRequest(`/tariff_items${qs({ tariff_id: `eq.${route.tariff_id}`, select: '*', order: 'commune.asc' })}`).catch(() => []),
+          ]);
+          const tariff = tariffRows?.[0];
+          const tiers = items?.length ? items.map(i => ({ commune: i.commune, price: Number(i.price || 0), zone: i.zone || '' })) : [];
+          return { tiers, volumeTiers: tariff?.volume_tiers || [], tariffName: tariff?.name || '' };
         }
         const configs = await supabaseRequest(`/price_configs${qs({ select: '*', order: 'commune.asc' })}`).catch(() => []);
-        return (configs || []).map(c => ({ commune: c.commune, price: Number(c.price || 0) }));
+        return { tiers: (configs || []).map(c => ({ commune: c.commune, price: Number(c.price || 0) })), volumeTiers: [], tariffName: '' };
       })(),
     ]);
     const publicPackages = packages.filter(p => p.status !== 'eliminado').map(mapPublicPackage);
@@ -1078,7 +1083,9 @@ router.get('/route/:shareToken', publicReadLimiter, async (req, res) => {
         distanceKm: route.distance_km,
         stats: route.stats || {},
         invoiceAmount: route.invoice?.amount || null,
-        priceTiers: priceTiersRaw || [],
+        priceTiers: priceTiersRaw?.tiers || [],
+        volumeTiers: priceTiersRaw?.volumeTiers || [],
+        tariffName: priceTiersRaw?.tariffName || '',
       },
       packages: publicPackages
     });

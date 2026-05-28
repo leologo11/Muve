@@ -27,10 +27,22 @@ export default function TariffSettings() {
 
   const handleSave = async () => {
     try {
+      const vt = (editing.volumeTiers || [])
+        .filter(t => t.price !== '' && !isNaN(Number(t.price)))
+        .map((t, i) => ({ minQty: i === 0 ? 1 : Number(t.minQty), price: Number(t.price) }))
+        .sort((a, b) => a.minQty - b.minQty);
+
+      if (vt.length > 0) {
+        for (let i = 1; i < vt.length; i++) {
+          if (vt[i].minQty <= vt[i - 1].minQty) return toast('⚠ Los tramos deben tener cantidades crecientes');
+        }
+      }
+
       const updated = await api.updateTariff(editing._id, {
         name: editing.name,
         description: editing.description,
         defaultPrice: Number(editing.defaultPrice) || 0,
+        volumeTiers: vt,
         items: editing.items.map(i => ({ commune: i.commune, price: Number(i.price) || 0, zone: i.zone || '' }))
       });
       setTariffs(prev => prev.map(t => t._id === updated._id ? updated : t));
@@ -59,13 +71,20 @@ export default function TariffSettings() {
     } catch (err) { toast('❌ ' + err.message); }
   };
 
+  const DEFAULT_TIERS = [
+    { minQty: 1, price: '' },
+    { minQty: 2, price: '' },
+    { minQty: 6, price: '' },
+  ];
+
   const toggleExpand = (t) => {
     if (expanded === t._id) {
       setExpanded(null);
       setEditing(null);
     } else {
       setExpanded(t._id);
-      setEditing({ ...t, items: t.items.map(i => ({ ...i })) });
+      const vt = t.volumeTiers?.length ? t.volumeTiers.map(v => ({ ...v })) : DEFAULT_TIERS.map(d => ({ ...d }));
+      setEditing({ ...t, items: t.items.map(i => ({ ...i })), volumeTiers: vt });
     }
   };
 
@@ -180,6 +199,54 @@ export default function TariffSettings() {
                       </button>
                     </div>
                   ))}
+                </div>
+
+                {/* ── Volume tiers ── */}
+                <div style={{ marginTop: 20, padding: '12px 14px', background: '#0052FF06', border: '1px solid #0052FF20', borderRadius: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--accent)', letterSpacing: 1, marginBottom: 4 }}>📊 TRAMOS DE VOLUMEN (descuento por cantidad)</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.4 }}>
+                    El precio por paquete cambia según cuántos hay en la ruta. Aparece en el PDF del cliente.
+                  </div>
+                  {(ed.volumeTiers || DEFAULT_TIERS).map((tier, idx) => (
+                    <div key={idx} style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 8, marginBottom: 7, alignItems: 'center' }}>
+                      <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>
+                        {idx === 0 ? '1 paquete' : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span>≥</span>
+                            <input
+                              type="number"
+                              min={2}
+                              value={tier.minQty}
+                              onChange={e => setEditing(x => {
+                                const vt = [...(x.volumeTiers || DEFAULT_TIERS)];
+                                vt[idx] = { ...vt[idx], minQty: e.target.value };
+                                return { ...x, volumeTiers: vt };
+                              })}
+                              style={{ ...tinp, margin: 0, width: 52, padding: '4px 6px', fontSize: 12 }}
+                            />
+                            <span>pkgs</span>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>$</span>
+                        <input
+                          type="number"
+                          placeholder="precio por paquete"
+                          value={tier.price}
+                          onChange={e => setEditing(x => {
+                            const vt = [...(x.volumeTiers || DEFAULT_TIERS)];
+                            vt[idx] = { ...vt[idx], price: e.target.value };
+                            return { ...x, volumeTiers: vt };
+                          })}
+                          style={{ ...tinp, margin: 0, flex: 1, fontSize: 12 }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>
+                    Ej: 1 pkg → $9.000 · ≥2 pkgs → $6.000 · ≥6 pkgs → $5.000
+                  </div>
                 </div>
 
                 <button

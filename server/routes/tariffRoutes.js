@@ -13,6 +13,7 @@ router.get('/', async (req, res) => {
     ]);
     return res.json(tariffs.map(t => ({
       _id: t.id, id: t.id, name: t.name, description: t.description, defaultPrice: Number(t.default_price || 0),
+      volumeTiers: t.volume_tiers || [],
       items: items.filter(i => i.tariff_id === t.id).map(i => ({ _id: i.id, commune: i.commune, price: Number(i.price || 0), zone: i.zone })),
       createdAt: t.created_at, updatedAt: t.updated_at,
     })));
@@ -29,7 +30,7 @@ router.get('/:id', async (req, res) => {
     ]);
     const t = tariffs?.[0];
     if (!t) return res.status(404).json({ error: 'Tarifa no encontrada' });
-    return res.json({ _id: t.id, id: t.id, name: t.name, description: t.description, defaultPrice: Number(t.default_price || 0), items: items.map(i => ({ _id: i.id, commune: i.commune, price: Number(i.price || 0), zone: i.zone })) });
+    return res.json({ _id: t.id, id: t.id, name: t.name, description: t.description, defaultPrice: Number(t.default_price || 0), volumeTiers: t.volume_tiers || [], items: items.map(i => ({ _id: i.id, commune: i.commune, price: Number(i.price || 0), zone: i.zone })) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -37,9 +38,10 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
+    const vt = Array.isArray(req.body.volumeTiers) ? req.body.volumeTiers : [];
     const rows = await supabaseRequest('/tariffs', {
       method: 'POST',
-      body: JSON.stringify({ name: req.body.name, description: req.body.description || '', default_price: Number(req.body.defaultPrice || 3500) }),
+      body: JSON.stringify({ name: req.body.name, description: req.body.description || '', default_price: Number(req.body.defaultPrice || 3500), volume_tiers: vt }),
     });
     const t = rows[0];
     if (req.body.items?.length) {
@@ -48,7 +50,7 @@ router.post('/', async (req, res) => {
         body: JSON.stringify(req.body.items.map(i => ({ tariff_id: t.id, commune: i.commune, price: Number(i.price || 0), zone: i.zone || '' }))),
       });
     }
-    return res.status(201).json({ _id: t.id, id: t.id, name: t.name, description: t.description, defaultPrice: Number(t.default_price || 0), items: req.body.items || [] });
+    return res.status(201).json({ _id: t.id, id: t.id, name: t.name, description: t.description, defaultPrice: Number(t.default_price || 0), volumeTiers: vt, items: req.body.items || [] });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -60,6 +62,7 @@ router.patch('/:id', async (req, res) => {
     if (req.body.name !== undefined) payload.name = req.body.name;
     if (req.body.description !== undefined) payload.description = req.body.description || '';
     if (req.body.defaultPrice !== undefined) payload.default_price = Number(req.body.defaultPrice || 0);
+    if (req.body.volumeTiers !== undefined) payload.volume_tiers = Array.isArray(req.body.volumeTiers) ? req.body.volumeTiers : [];
     payload.updated_at = new Date().toISOString();
     const rows = await supabaseRequest(`/tariffs${qs({ id: `eq.${req.params.id}` })}`, { method: 'PATCH', body: JSON.stringify(payload) });
     if (!rows?.[0]) return res.status(404).json({ error: 'Tarifa no encontrada' });
@@ -69,7 +72,7 @@ router.patch('/:id', async (req, res) => {
         await supabaseRequest('/tariff_items', { method: 'POST', body: JSON.stringify(req.body.items.map(i => ({ tariff_id: req.params.id, commune: i.commune, price: Number(i.price || 0), zone: i.zone || '' }))) });
       }
     }
-    return res.json({ _id: rows[0].id, id: rows[0].id, name: rows[0].name, description: rows[0].description, defaultPrice: Number(rows[0].default_price || 0), items: req.body.items || [] });
+    return res.json({ _id: rows[0].id, id: rows[0].id, name: rows[0].name, description: rows[0].description, defaultPrice: Number(rows[0].default_price || 0), volumeTiers: rows[0].volume_tiers || [], items: req.body.items || [] });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
