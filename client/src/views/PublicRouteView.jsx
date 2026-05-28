@@ -104,16 +104,18 @@ function generatePdf(route, packages) {
       <td style="text-align:right;font-weight:700">${t.billed > 0 && t.price > 0 ? '$' + fmt(t.billed * t.price) : '—'}</td>
     </tr>`).join('');
 
-  // ── Filter: only communes actually used in this route's packages ──
+  // ── All tariff communes (full price schedule for the client) ──
   const usedCommunes = new Set(active.map(p => (p.commune || '').toLowerCase().trim()).filter(Boolean));
   const priceTiers = (route.priceTiers || [])
-    .filter(t => t.commune && t.price > 0 && usedCommunes.has(t.commune.toLowerCase().trim()))
+    .filter(t => t.commune && t.price > 0)
     .sort((a, b) => b.price - a.price || a.commune.localeCompare(b.commune));
-  const tierRows = priceTiers.map(t => `
-    <tr>
-      <td>${t.commune}${t.zone ? ` <span style="font-size:10px;color:#94a3b8">· ${t.zone}</span>` : ''}</td>
-      <td style="text-align:right;font-weight:700;color:#0052FF">$${fmt(t.price)}</td>
-    </tr>`).join('');
+  const tierRows = priceTiers.map(t => {
+    const inRoute = usedCommunes.has(t.commune.toLowerCase().trim());
+    return `<tr${inRoute ? ' style="background:#f0f4ff"' : ''}>
+      <td>${t.commune}${t.zone ? ` <span style="font-size:10px;color:#94a3b8">· ${t.zone}</span>` : ''}${inRoute ? ' <span style="font-size:9px;background:#0052FF;color:#fff;border-radius:20px;padding:1px 6px;font-weight:700;margin-left:4px">en esta ruta</span>' : ''}</td>
+      <td style="text-align:right;font-weight:700;color:${inRoute ? '#0052FF' : '#475569'}">$${fmt(t.price)}</td>
+    </tr>`;
+  }).join('');
 
   // ── Volume tier logic ──
   const volumeTiers = (route.volumeTiers || [])
@@ -243,9 +245,9 @@ ${hasPrice ? `
   </table>` : ''}
 
   ${priceTiers.length > 0 ? `
-  <!-- Communes table -->
+  <!-- Communes table (full tariff schedule) -->
   <div style="font-size:10px;color:#94a3b8;margin-bottom:6px${volumeTiers.length > 0 ? ';border-top:1px solid #e2e8f0;padding-top:12px;margin-top:4px' : ''}">
-    ${volumeTiers.length > 0 ? 'Precio base por comuna (antes del ajuste por volumen):' : 'Comunas de entrega en esta ruta y su precio acordado. Futuros envíos a las mismas comunas tendrán el mismo valor.'}
+    Lista de precios completa del tarifario. Las comunas resaltadas en azul corresponden a entregas en esta ruta.
   </div>
   <table>
     <thead><tr style="background:#f1f5f9">
