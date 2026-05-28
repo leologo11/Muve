@@ -857,6 +857,7 @@ function mapPublicPackage(p) {
     photoUploadedAt: p.photo_uploaded_at,
     photo2UploadedAt: p.photo2_uploaded_at,
     deliveredAt: p.delivered_at,
+    price: p.price,
     order: p.stop_order,
     lat: p.lat,
     lng: p.lng

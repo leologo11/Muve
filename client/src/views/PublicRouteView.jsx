@@ -42,95 +42,134 @@ function generatePdf(route, packages) {
   const delivered = active.filter(p => p.status === 'entregado');
   const failed    = active.filter(p => p.status === 'no-entregado');
   const pending   = active.filter(p => p.status === 'pendiente');
-  const dateStr   = new Date(route.date).toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const totalAmt  = route.stats?.totalAmount || route.invoiceAmount || 0;
+  const fmt       = n => Number(n || 0).toLocaleString('es-CL');
+  const dateStr   = new Date(route.date + 'T12:00').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-  const rowsHtml = active.map((p, i) => {
-    const status = p.status === 'entregado' ? '✅ Entregado' : p.status === 'no-entregado' ? '❌ No entregado' : '⏳ Pendiente';
-    const time   = p.deliveredAt ? new Date(p.deliveredAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '—';
-    return `<tr>
-      <td style="text-align:center">${i + 1}</td>
+  const subtotalDelivered = delivered.reduce((s, p) => s + Number(p.price || 0), 0);
+  const subtotalFailed    = failed.reduce((s, p) => s + Number(p.price || 0), 0);
+  const subtotalPending   = pending.reduce((s, p) => s + Number(p.price || 0), 0);
+  const netoTotal         = subtotalDelivered + subtotalFailed;
+  const hasPrice          = active.some(p => Number(p.price || 0) > 0);
+
+  const time = p => p.deliveredAt
+    ? new Date(p.deliveredAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
+    : '—';
+
+  const deliveredRows = delivered.map((p, i) => `
+    <tr>
+      <td style="text-align:center;color:#888">${i + 1}</td>
       <td>${p.customerName} ${p.customerLastName || ''}</td>
       <td>${p.address || ''}${p.commune ? ', ' + p.commune : ''}${p.aptFloor ? ' · ' + p.aptFloor : ''}</td>
-      <td>${status}</td>
-      <td>${time}</td>
-      <td>${p.note || p.failReason || ''}</td>
-    </tr>`;
-  }).join('');
+      <td style="color:#555">${time(p)}</td>
+      ${hasPrice ? `<td style="text-align:right;font-weight:700">$${fmt(p.price)}</td>` : ''}
+    </tr>`).join('');
+
+  const failedRows = failed.map((p, i) => `
+    <tr>
+      <td style="text-align:center;color:#888">${i + 1}</td>
+      <td>${p.customerName} ${p.customerLastName || ''}</td>
+      <td>${p.address || ''}${p.commune ? ', ' + p.commune : ''}${p.aptFloor ? ' · ' + p.aptFloor : ''}</td>
+      <td style="color:#cc2244;font-weight:600">${p.failReason || '—'}</td>
+      <td style="color:#555">${time(p)}</td>
+      ${hasPrice ? `<td style="text-align:right;font-weight:700">$${fmt(p.price)}</td>` : ''}
+    </tr>`).join('');
+
+  const pendingRows = pending.map((p, i) => `
+    <tr>
+      <td style="text-align:center;color:#888">${i + 1}</td>
+      <td>${p.customerName} ${p.customerLastName || ''}</td>
+      <td>${p.address || ''}${p.commune ? ', ' + p.commune : ''}${p.aptFloor ? ' · ' + p.aptFloor : ''}</td>
+      ${hasPrice ? `<td style="text-align:right;color:#aaa">$${fmt(p.price)}</td>` : ''}
+    </tr>`).join('');
+
+  const priceHeader = hasPrice ? '<th style="text-align:right">Precio</th>' : '';
 
   const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <title>${route.name || route.routeCode} — Detalle de entrega</title>
+  <title>Liquidación ${route.routeCode} — MUVE</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; font-size: 12px; color: #222; padding: 28px 32px; }
-    h1 { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
-    h2 { font-size: 13px; font-weight: 700; margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 1px; color: #555; }
-    .meta { font-size: 11px; color: #777; margin-bottom: 14px; }
-    .cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
-    .card { border: 1px solid #ddd; border-radius: 8px; padding: 10px 14px; flex: 1; min-width: 180px; }
-    .card-title { font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
-    .card-val { font-size: 14px; font-weight: 800; }
-    .stat-row { display: flex; gap: 20px; margin-bottom: 16px; }
-    .stat { text-align: center; }
-    .stat .num { font-size: 22px; font-weight: 800; }
-    .stat .lbl { font-size: 10px; color: #888; }
-    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-    th { background: #f5f7fa; border: 1px solid #e0e0e0; padding: 7px 8px; text-align: left; font-size: 11px; font-weight: 700; }
-    td { border: 1px solid #eee; padding: 7px 8px; font-size: 11px; vertical-align: top; }
-    tr:nth-child(even) td { background: #fafafa; }
-    .footer { margin-top: 24px; font-size: 10px; color: #bbb; text-align: center; }
-    @media print { button { display: none; } body { padding: 12px 16px; } }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:12px;color:#1e293b;padding:28px 32px}
+    .hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:3px solid #0052FF;margin-bottom:20px}
+    .logo{font-size:26px;font-weight:900;color:#0052FF;letter-spacing:-1px}.logo span{color:#00DAFF}
+    .doc-right{text-align:right}
+    .doc-title{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.8px}
+    .doc-num{font-size:20px;font-weight:900;color:#0052FF}.doc-date{font-size:11px;color:#64748b}
+    .info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px}
+    .card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 13px}
+    .cl{font-size:9px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px}
+    .cv{font-size:13px;font-weight:700}.cs{font-size:11px;color:#64748b;margin-top:2px}
+    .stats{display:flex;gap:0;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:18px}
+    .st{flex:1;text-align:center;padding:10px 4px;border-right:1px solid #e2e8f0}
+    .st:last-child{border-right:none}
+    .sn{font-size:20px;font-weight:900}.sl{font-size:9px;color:#94a3b8;margin-top:2px}
+    h3{font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin:16px 0 7px}
+    table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px}
+    thead tr{background:#0052FF}
+    thead th{padding:7px 9px;color:#fff;font-size:10px;font-weight:700;text-align:left}
+    tbody tr:nth-child(even){background:#f8fafc}
+    tbody td{padding:7px 9px;border-bottom:1px solid #e2e8f0;vertical-align:top}
+    .bill{display:flex;justify-content:flex-end;margin-top:20px}
+    .bill-box{width:280px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
+    .br{display:flex;justify-content:space-between;padding:8px 13px;border-bottom:1px solid #e2e8f0;font-size:12px}
+    .br.total{background:#0052FF;color:#fff;font-size:14px;font-weight:900;border-bottom:none}
+    .br.ref{color:#94a3b8;font-size:11px}
+    .note{font-size:10px;color:#94a3b8;margin-top:5px;text-align:right}
+    .footer{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;text-align:center}
+    @media print{body{padding:16px 20px}}
   </style>
 </head>
 <body>
-  <h1>📦 ${route.name || route.routeCode}</h1>
-  <div class="meta">${dateStr}${route.routeCode !== route.name ? ' · ' + route.routeCode : ''}</div>
-
-  <div class="cards">
-    ${route.driverName ? `<div class="card">
-      <div class="card-title">🚗 Driver</div>
-      <div class="card-val">${route.driverName}</div>
-      ${route.driverPhone ? `<div style="font-size:11px;color:#555;margin-top:3px">${route.driverPhone}</div>` : ''}
-    </div>` : ''}
-    ${route.clientCompany?.name ? `<div class="card">
-      <div class="card-title">🏢 Empresa cliente</div>
-      <div class="card-val">${route.clientCompany.name}</div>
-      ${route.clientCompany.contactPerson ? `<div style="font-size:11px;color:#555;margin-top:3px">👤 ${route.clientCompany.contactPerson}</div>` : ''}
-      ${route.clientCompany.contactPhone ? `<div style="font-size:11px;color:#555;margin-top:2px">${route.clientCompany.contactPhone}</div>` : ''}
-    </div>` : ''}
-    ${totalAmt > 0 ? `<div class="card">
-      <div class="card-title">💰 Total ruta</div>
-      <div class="card-val" style="color:#0052FF">$${totalAmt.toLocaleString('es-CL')}</div>
-    </div>` : ''}
+<div class="hdr">
+  <div><div class="logo">MU<span>VE</span></div><div style="font-size:10px;color:#64748b;margin-top:2px">Logística y Delivery · Chile</div></div>
+  <div class="doc-right">
+    <div class="doc-title">Liquidación de Ruta</div>
+    <div class="doc-num">${route.routeCode}</div>
+    <div class="doc-date">${dateStr}</div>
   </div>
+</div>
 
-  <div class="stat-row">
-    <div class="stat"><div class="num">${active.length}</div><div class="lbl">Total</div></div>
-    <div class="stat"><div class="num" style="color:#0052FF">${delivered.length}</div><div class="lbl">✅ Entregados</div></div>
-    <div class="stat"><div class="num" style="color:#cc2244">${failed.length}</div><div class="lbl">❌ No entregados</div></div>
-    <div class="stat"><div class="num" style="color:#f57c00">${pending.length}</div><div class="lbl">⏳ Pendientes</div></div>
-  </div>
+<div class="info-grid">
+  ${route.clientCompany?.name ? `<div class="card"><div class="cl">Cliente</div><div class="cv">${route.clientCompany.name}</div>${route.clientCompany.contactPerson ? `<div class="cs">👤 ${route.clientCompany.contactPerson}</div>` : ''}${route.clientCompany.contactPhone ? `<div class="cs">${route.clientCompany.contactPhone}</div>` : ''}</div>` : ''}
+  ${route.driverName ? `<div class="card"><div class="cl">🚗 Repartidor</div><div class="cv">${route.driverName}</div>${route.driverPhone ? `<div class="cs">${route.driverPhone}</div>` : ''}</div>` : ''}
+  <div class="card"><div class="cl">Ruta</div><div class="cv">${route.routeCode}${route.name ? ' · ' + route.name : ''}</div><div class="cs">${active.length} paquetes</div></div>
+</div>
 
-  <h2>Detalle de paquetes</h2>
-  <table>
-    <thead>
-      <tr>
-        <th style="width:32px">#</th>
-        <th>Destinatario</th>
-        <th>Dirección</th>
-        <th>Estado</th>
-        <th>Hora</th>
-        <th>Nota</th>
-      </tr>
-    </thead>
-    <tbody>${rowsHtml}</tbody>
-  </table>
+<div class="stats">
+  <div class="st"><div class="sn">${active.length}</div><div class="sl">Total</div></div>
+  <div class="st"><div class="sn" style="color:#16a34a">${delivered.length}</div><div class="sl">✅ Entregados</div></div>
+  <div class="st"><div class="sn" style="color:#cc2244">${failed.length}</div><div class="sl">❌ Incidencias</div></div>
+  <div class="st"><div class="sn" style="color:#f57c00">${pending.length}</div><div class="sl">⏳ Pendientes</div></div>
+</div>
 
-  <div class="footer">Generado por MUVE · ${new Date().toLocaleString('es-CL')}</div>
-  <script>window.onload = () => { window.print(); }</script>
+${delivered.length ? `
+<h3>✅ Entregados (${delivered.length})</h3>
+<table><thead><tr><th>#</th><th>Destinatario</th><th>Dirección</th><th>Hora</th>${priceHeader}</tr></thead>
+<tbody>${deliveredRows}</tbody></table>` : ''}
+
+${failed.length ? `
+<h3>❌ No entregados — cobro por intento (${failed.length})</h3>
+<table><thead><tr><th>#</th><th>Destinatario</th><th>Dirección</th><th>Motivo</th><th>Hora</th>${priceHeader}</tr></thead>
+<tbody>${failedRows}</tbody></table>
+<div style="font-size:10px;color:#cc2244;margin:4px 0 0">* El repartidor se presentó en el domicilio. Se cobra el intento de entrega.</div>` : ''}
+
+${pending.length ? `
+<h3>⏳ Pendientes — sin cobrar aún (${pending.length})</h3>
+<table><thead><tr><th>#</th><th>Destinatario</th><th>Dirección</th>${hasPrice ? '<th style="text-align:right">Precio ref.</th>' : ''}</tr></thead>
+<tbody>${pendingRows}</tbody></table>` : ''}
+
+${hasPrice ? `
+<div class="bill"><div class="bill-box">
+  <div class="br"><span>Entregados (${delivered.length})</span><span>$${fmt(subtotalDelivered)}</span></div>
+  ${failed.length ? `<div class="br"><span>Incidencias — cobro por intento (${failed.length})</span><span>$${fmt(subtotalFailed)}</span></div>` : ''}
+  ${pending.length ? `<div class="br ref"><span>Pendientes sin cobrar (${pending.length})</span><span>$${fmt(subtotalPending)}</span></div>` : ''}
+  <div class="br total"><span>NETO (sin IVA)</span><span>$${fmt(netoTotal)}</span></div>
+</div></div>` : ''}
+
+<div class="footer">Generado por MUVE · ${new Date().toLocaleString('es-CL')}</div>
+<script>window.onload = () => { window.print(); }</script>
 </body>
 </html>`;
 
@@ -219,9 +258,19 @@ function PkgCard({ pkg, expanded, onToggle }) {
             {pkg.address}{pkg.commune ? `, ${pkg.commune}` : ''}
           </div>
           {pkg.aptFloor && <div style={{ fontSize: 11, color: '#d4650a', fontWeight: 600 }}>{pkg.aptFloor}</div>}
+          {pkg.status === 'no-entregado' && pkg.failReason && (
+            <div style={{ fontSize: 11, color: '#cc2244', fontWeight: 600, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              ✗ {pkg.failReason}
+            </div>
+          )}
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: meta.color }}>{meta.label}</div>
+          {Number(pkg.price || 0) > 0 && (
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#1e293b', marginTop: 3 }}>
+              ${Number(pkg.price).toLocaleString('es-CL')}
+            </div>
+          )}
           {pkg.deliveredAt && (
             <div style={{ fontSize: 10, color: '#aaa', marginTop: 2 }}>
               {new Date(pkg.deliveredAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
