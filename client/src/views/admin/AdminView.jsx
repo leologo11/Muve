@@ -1249,6 +1249,95 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
     } catch (err) { toast('Error: ' + err.message); }
   };
 
+  const handlePrintPDF = () => {
+    const delivered = packages.filter(p => p.status === 'entregado');
+    const failed    = packages.filter(p => p.status === 'no-entregado');
+    const pending   = packages.filter(p => p.status === 'pendiente');
+    const billed    = [...delivered, ...failed];
+    const total     = billed.reduce((s, p) => s + Number(p.price || 0), 0);
+    const pendingAmt= pending.reduce((s, p) => s + Number(p.price || 0), 0);
+    const fmt = n => Number(n || 0).toLocaleString('es-CL');
+    const dateStr = route.date ? new Date(route.date + 'T12:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' }) : '';
+    const client = route.clientCompany?.name || route.companyName || '';
+
+    const pkgRows = (list, color, badge) => list.map((p, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${p.customerName || ''} ${p.customerLastName || ''}</td>
+        <td>${p.address || ''}${p.commune ? ', ' + p.commune : ''}${p.aptFloor ? ' · ' + p.aptFloor : ''}</td>
+        <td>${p.trackingId || ''}</td>
+        <td style="text-align:center"><span style="background:${color}20;color:${color};border:1px solid ${color}40;border-radius:20px;padding:2px 8px;font-size:10px;font-weight:700">${badge}</span></td>
+        <td style="text-align:right;font-weight:700">$${fmt(p.price)}</td>
+      </tr>`).join('');
+
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Liquidación ${route.routeCode} · MUVE</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1e293b;background:#fff;padding:36px;font-size:13px;line-height:1.5}
+.header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:18px;border-bottom:3px solid #0052FF;margin-bottom:24px}
+.logo{font-size:28px;font-weight:900;color:#0052FF;letter-spacing:-1px}.logo span{color:#00DAFF}
+.doc-title{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.8px;text-align:right}
+.doc-number{font-size:22px;font-weight:900;color:#0052FF;text-align:right}
+.doc-date{font-size:11px;color:#64748b;text-align:right}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px}
+.card-label{font-size:9px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px}
+.card-value{font-size:14px;font-weight:700;color:#1e293b}
+.card-sub{font-size:11px;color:#64748b;margin-top:2px}
+h3{font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin:18px 0 8px}
+table{width:100%;border-collapse:collapse;margin-bottom:6px;font-size:12px}
+thead tr{background:#0052FF}
+thead th{padding:8px 10px;color:#fff;font-size:10px;font-weight:700;text-transform:uppercase;text-align:left}
+tbody tr:nth-child(even){background:#f8fafc}
+tbody td{padding:8px 10px;border-bottom:1px solid #e2e8f0}
+.totals{display:flex;justify-content:flex-end;margin-top:20px}
+.totals-box{width:260px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden}
+.t-row{display:flex;justify-content:space-between;padding:9px 14px;border-bottom:1px solid #e2e8f0;font-size:12px}
+.t-row:last-child{background:#0052FF;color:#fff;font-size:15px;font-weight:900;border-bottom:none}
+.t-row.pending{color:#94a3b8}
+.note{font-size:10px;color:#94a3b8;margin-top:6px;text-align:right}
+.footer{margin-top:28px;padding-top:16px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8}
+@media print{body{padding:20px}}
+</style></head><body>
+<div class="header">
+  <div><div class="logo">MU<span>VE</span></div><div style="font-size:10px;color:#64748b;margin-top:2px">Logística y Delivery · Chile</div></div>
+  <div>
+    <div class="doc-title">Liquidación de Ruta</div>
+    <div class="doc-number">${route.routeCode}</div>
+    <div class="doc-date">${dateStr}</div>
+  </div>
+</div>
+<div class="info-grid">
+  <div class="card"><div class="card-label">Cliente</div><div class="card-value">${client || '—'}</div>${route.clientCompany?.contactPerson ? `<div class="card-sub">${route.clientCompany.contactPerson}</div>` : ''}</div>
+  <div class="card"><div class="card-label">Ruta</div><div class="card-value">${route.routeCode}${route.name ? ' · ' + route.name : ''}</div><div class="card-sub">${route.driverId?.name ? '🚗 ' + route.driverId.name : 'Sin driver'}</div></div>
+</div>
+${delivered.length ? `<h3>✅ Entregados (${delivered.length})</h3>
+<table><thead><tr><th>#</th><th>Cliente</th><th>Dirección</th><th>Tracking</th><th>Estado</th><th style="text-align:right">Precio</th></tr></thead>
+<tbody>${pkgRows(delivered, '#16a34a', 'Entregado')}</tbody></table>` : ''}
+${failed.length ? `<h3>❌ No entregados — cobro por intento (${failed.length})</h3>
+<table><thead><tr><th>#</th><th>Cliente</th><th>Dirección</th><th>Tracking</th><th>Estado</th><th style="text-align:right">Precio</th></tr></thead>
+<tbody>${pkgRows(failed, '#ef4444', 'No entregado')}</tbody></table>` : ''}
+${pending.length ? `<h3>⏳ Pendientes — sin cobrar aún (${pending.length})</h3>
+<table><thead><tr><th>#</th><th>Cliente</th><th>Dirección</th><th>Tracking</th><th>Estado</th><th style="text-align:right">Precio ref.</th></tr></thead>
+<tbody>${pkgRows(pending, '#94a3b8', 'Pendiente')}</tbody></table>` : ''}
+<div class="totals"><div class="totals-box">
+  <div class="t-row"><span>Entregados (${delivered.length})</span><span>$${fmt(delivered.reduce((s,p)=>s+Number(p.price||0),0))}</span></div>
+  ${failed.length ? `<div class="t-row"><span>No entregados — cobro (${failed.length})</span><span>$${fmt(failed.reduce((s,p)=>s+Number(p.price||0),0))}</span></div>` : ''}
+  ${pending.length ? `<div class="t-row pending"><span>Pendientes (${pending.length})</span><span>$${fmt(pendingAmt)}</span></div>` : ''}
+  <div class="t-row"><span>TOTAL A COBRAR</span><span>$${fmt(total)}</span></div>
+</div></div>
+${total ? `<div class="note">* Los paquetes "No entregados" se cobran porque el repartidor se presentó en la dirección.</div>` : ''}
+<div class="footer"><span>Generado por MUVE · ${new Date().toLocaleDateString('es-CL')}</span><span>📞 Consultas: ${route.clientCompany?.contactPhone || '—'}</span></div>
+</body></html>`;
+
+    const w = window.open('', '_blank');
+    if (!w) { toast('⚠ Permite popups para generar el PDF'); return; }
+    w.document.write(html);
+    w.document.close();
+    w.onload = () => { w.focus(); w.print(); };
+  };
+
   return (
     <div style={{ padding: '14px 10px calc(80px + env(safe-area-inset-bottom))', overflowY: 'auto', height: '100%' }}>
 
@@ -1302,9 +1391,14 @@ function AdminReport({ packages, route, geocoding, onGeocode, onRouteUpdate, onR
       <div style={{ background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 13, padding: 14, marginBottom: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: 'var(--muted)' }}>INFO DE RUTA</div>
-          <button onClick={() => setEditingRoute(v => !v)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', cursor: 'pointer' }}>
-            {editingRoute ? '✕ Cancelar' : '✏️ Editar'}
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={handlePrintPDF} style={{ background: '#0052FF10', border: '1px solid #0052FF40', borderRadius: 8, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: 'var(--accent)', cursor: 'pointer' }}>
+              📄 Liquidación
+            </button>
+            <button onClick={() => setEditingRoute(v => !v)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', cursor: 'pointer' }}>
+              {editingRoute ? '✕ Cancelar' : '✏️ Editar'}
+            </button>
+          </div>
         </div>
 
         {editingRoute ? (

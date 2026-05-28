@@ -79,7 +79,8 @@ async function syncRouteStats(routeId) {
     failed: pkgs.filter(p => p.status === 'no-entregado').length,
     pending: pkgs.filter(p => p.status === 'pendiente').length,
     totalAmount: pkgs.reduce((s, p) => s + Number(p.price || 0), 0),
-    collectedAmount: pkgs.filter(p => p.status === 'entregado').reduce((s, p) => s + Number(p.price || 0), 0),
+    // entregado + no-entregado: both are billed (client pays for the attempt)
+    collectedAmount: pkgs.filter(p => p.status === 'entregado' || p.status === 'no-entregado').reduce((s, p) => s + Number(p.price || 0), 0),
   };
   await supabaseRequest(`/routes${qs({ id: `eq.${routeId}` })}`, {
     method: 'PATCH',
