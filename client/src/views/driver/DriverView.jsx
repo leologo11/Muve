@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../api/index.js';
+import { watchGeoPosition, clearGeoWatch } from '../../utils/geo.js';
 import Header from '../../components/Header.jsx';
 import RouteMap from '../../components/RouteMap.jsx';
 import PackageCard from '../../components/PackageCard.jsx';
 import DeliveryModal from '../../components/DeliveryModal.jsx';
 import Toast, { toast } from '../../components/Toast.jsx';
 
-export default function DriverView() {
+export default function DriverView({ onLogout, nativeApp = false }) {
   const [routes, setRoutes] = useState([]);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [packages, setPackages] = useState([]);
@@ -17,11 +18,11 @@ export default function DriverView() {
   const [showLoadCheck, setShowLoadCheck] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // GPS tracking — only the driver uses this; location is sent to server for admin visibility
+  // GPS tracking — uses native Capacitor GPS on Android, browser fallback on web
   const [myLocation, setMyLocation] = useState(null);
   const [gpsState, setGpsState] = useState('pending'); // 'pending' | 'active' | 'denied' | 'unavailable'
-  const watchIdRef = useRef(null);
-  const lastSentRef = useRef(0);
+  const watchHandleRef = useRef(null);
+  const lastSentRef    = useRef(0);
 
   useEffect(() => {
     api.getRoutes().then(r => {
@@ -31,33 +32,31 @@ export default function DriverView() {
     }).catch(e => toast('❌ ' + e.message)).finally(() => setLoading(false));
   }, []);
 
-  // Start GPS tracking on mount — send updates to server so admin can see driver location
+  // Start GPS — native Capacitor on Android, browser fallback on web. Updates every 8s.
   useEffect(() => {
-    if (!navigator.geolocation) { setGpsState('unavailable'); return; }
-
-    watchIdRef.current = navigator.geolocation.watchPosition(
+    let cancelled = false;
+    watchGeoPosition(
       (pos) => {
+        if (cancelled) return;
         const { latitude: lat, longitude: lng, accuracy, heading, speed } = pos.coords;
         setMyLocation({ lat, lng, accuracy, heading: heading ?? null, speed: speed ?? null });
         setGpsState('active');
-
-        // Send to server at most every 15 seconds
         const now = Date.now();
-        if (now - lastSentRef.current > 15000) {
+        if (now - lastSentRef.current > 8000) {
           lastSentRef.current = now;
           api.updateDriverLocation({ lat, lng, accuracy, heading: heading ?? null, speed: speed ?? null }).catch(() => {});
         }
       },
-      (err) => {
-        setGpsState(err.code === 1 ? 'denied' : 'unavailable');
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
-    );
+      (err) => { if (!cancelled) setGpsState(err.code === 1 ? 'denied' : 'unavailable'); },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 2000 }
+    ).then(handle => {
+      if (cancelled) { clearGeoWatch(handle); return; }
+      watchHandleRef.current = handle;
+    }).catch(() => { if (!cancelled) setGpsState('unavailable'); });
 
     return () => {
-      if (watchIdRef.current != null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
+      cancelled = true;
+      if (watchHandleRef.current) { clearGeoWatch(watchHandleRef.current); watchHandleRef.current = null; }
     };
   }, []);
 
@@ -157,6 +156,19 @@ export default function DriverView() {
         title={selectedRoute ? `🚗 ${selectedRoute.routeCode}` : '🚚 MUVE'}
         stats={selectedRoute ? stats : null}
       />
+
+      {/* Native app top bar with logout */}
+      {nativeApp && (
+        <div style={{ background: '#0052FF', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <div style={{ fontSize: 16, fontWeight: 900, color: '#fff', letterSpacing: -0.5 }}>🚗 MUVE Driver</div>
+          <button
+            onClick={onLogout}
+            style={{ background: 'rgba(255,255,255,.2)', border: 'none', borderRadius: 20, padding: '6px 13px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+          >
+            Cerrar sesión
+          </button>
+        </div>
+      )}
 
       {/* GPS status indicator */}
       {gpsState === 'denied' && (

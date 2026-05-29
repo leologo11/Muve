@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/@capacitor/config/config.schema.json",
+  "appId": "cl.muve.driver",
+  "appName": "MUVE Driver",
+  "webDir": "dist-driver",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1800,
+      "backgroundColor": "#0052FF",
+      "showSpinner": false,
+      "androidSplashResourceName": "splash"
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0052FF",
+      "overlaysWebView": false
+    }
+  }
+}
