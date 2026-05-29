@@ -1,10 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import L from 'leaflet';
+import { loadGoogleMaps, geoJsonToLatLngs, polygonToGeoJson, polygonBounds } from '../../utils/googleMaps.js';
 import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
 import ImportPricesModal from './ImportPricesModal.jsx';
 
-// GeoJSON bundled in /public — no external dependency
 const LOCAL_GEO = '/comunas_rm.json';
 
 const TIERS = [
@@ -26,29 +25,22 @@ const INP = {
   boxSizing: 'border-box', background: '#fff', color: '#111'
 };
 
-function makeVertexIcon() {
-  return L.divIcon({
-    className: '',
-    html: '<div style="width:14px;height:14px;border-radius:50%;background:#5c35cc;border:3px solid #fff;box-shadow:0 2px 8px #0006;cursor:grab;box-sizing:border-box"></div>',
-    iconSize: [14, 14],
-    iconAnchor: [7, 7]
-  });
-}
-
 export default function SectorMap() {
-  const mapRef   = useRef(null);
-  const mapInst  = useRef(null);
-  const layerGrp = useRef(null);
-  const dmRef    = useRef(false);
-  const rmRef    = useRef(false);
-  const ds       = useRef({ pts: [], mks: [], ln: null });
-  const finalizeRef = useRef(null);
+  const mapRef      = useRef(null);
+  const tooltipRef  = useRef(null);
+  const gmRef       = useRef(null);
+  const mapInst     = useRef(null);
+  const polyLayersRef    = useRef([]);  // { poly: gm.Polygon, zoneId }[]
+  const drawVerticesRef  = useRef([]);  // gm.Marker[] for draw mode vertices
+  const drawPolylineRef  = useRef(null);
+  const drawPointsRef    = useRef([]);  // [{lat,lng}]
+  const reshapePolyRef   = useRef(null);
+  const dmRef       = useRef(false);
+  const rmRef       = useRef(false);
   const didAutoSeed = useRef(false);
+  const finalizeRef = useRef(null);
 
-  const reshapeMarkersRef = useRef([]);
-  const reshapePolyRef    = useRef(null);
-  const reshapePtsRef     = useRef([]);
-
+  const [mapReady, setMapReady] = useState(false);
   const [zones, setZones]         = useState([]);
   const [loading, setLoading]     = useState(true);
   const [seeding, setSeeding]     = useState(false);
@@ -64,17 +56,14 @@ export default function SectorMap() {
   const [editPrice, setEditPrice]   = useState('');
   const [editName, setEditName]     = useState('');
   const [editTiers, setEditTiers]   = useState([
-    { minQty: 1, price: '' },
-    { minQty: 4, price: '' },
-    { minQty: 8, price: '' },
+    { minQty: 1, price: '' }, { minQty: 4, price: '' }, { minQty: 8, price: '' },
   ]);
   const [savingZone, setSavingZone] = useState(false);
 
-  // Auto vs manual tier pricing mode inside the panel
-  const [tierInputMode, setTierInputMode]   = useState('auto');  // 'auto' | 'manual'
-  const [autoDiscMode, setAutoDiscMode]     = useState('flat');  // 'flat' | 'pct'
-  const [autoD2, setAutoD2]                 = useState('');
-  const [autoD3, setAutoD3]                 = useState('');
+  const [tierInputMode, setTierInputMode] = useState('auto');
+  const [autoDiscMode, setAutoDiscMode]   = useState('flat');
+  const [autoD2, setAutoD2]               = useState('');
+  const [autoD3, setAutoD3]               = useState('');
   const [panelTemplates, setPanelTemplates] = useState([]);
 
   const [newModal, setNewModal]   = useState(null);
@@ -83,7 +72,7 @@ export default function SectorMap() {
   const [newColor, setNewColor]   = useState(CUSTOM_COLORS[0]);
   const [savingNew, setSavingNew] = useState(false);
 
-  const [showSidebar, setShowSidebar]   = useState(true);
+  const [showSidebar, setShowSidebar]     = useState(true);
   const [sidebarSearch, setSidebarSearch] = useState('');
   const [sidebarEdits, setSidebarEdits]   = useState({});
   const [savingIds, setSavingIds]         = useState({});
@@ -111,46 +100,31 @@ export default function SectorMap() {
   const communeCount = zones.filter(z => z.source === 'commune').length;
   const customCount  = zones.filter(z => z.source === 'custom').length;
 
-  // ── Seed from local file ──────────────────────────────────────────────────────
+  // Seed communes
   const runSeed = useCallback(async (showToast = true) => {
     setSeeding(true);
     try {
       setSeedStep('Cargando comunas del RM…');
       let features = null;
-      try {
-        const r = await fetch(LOCAL_GEO);
-        if (r.ok) { const d = await r.json(); features = d.features; }
-      } catch { /* server will try on its own */ }
+      try { const r = await fetch(LOCAL_GEO); if (r.ok) { const d = await r.json(); features = d.features; } } catch {}
       setSeedStep('Guardando en base de datos…');
       const result = await api.seedCommunes(features);
       if (showToast) toast(`✅ ${result.created} comunas cargadas`);
       return true;
-    } catch (err) {
-      toast('❌ ' + err.message);
-      return false;
-    } finally {
-      setSeeding(false);
-      setSeedStep('');
-    }
+    } catch (err) { toast('❌ ' + err.message); return false; }
+    finally { setSeeding(false); setSeedStep(''); }
   }, []);
 
-  // ── Load zones (auto-seeds if empty) ─────────────────────────────────────────
   const loadZones = useCallback(async (autoSeed = false) => {
     setLoading(true);
     try {
       const data = await api.getZones();
       setZones(data);
-
-      // Auto-seed communes on first open if none exist
       if (autoSeed && !didAutoSeed.current && data.filter(z => z.source === 'commune').length === 0) {
         didAutoSeed.current = true;
         setLoading(false);
         const ok = await runSeed(false);
-        if (ok) {
-          const data2 = await api.getZones();
-          setZones(data2);
-          toast(`✅ ${data2.filter(z => z.source === 'commune').length} comunas del RM cargadas`);
-        }
+        if (ok) { const data2 = await api.getZones(); setZones(data2); toast(`✅ ${data2.filter(z => z.source === 'commune').length} comunas del RM cargadas`); }
         return;
       }
     } catch (err) { toast('❌ ' + err.message); }
@@ -159,205 +133,233 @@ export default function SectorMap() {
 
   useEffect(() => { loadZones(true); }, [loadZones]);
 
-  // ── Init map ──────────────────────────────────────────────────────────────────
+  // Init Google Maps
   useEffect(() => {
-    if (mapInst.current) return;
-    const map = L.map(mapRef.current, { zoomControl: true }).setView([-33.45, -70.65], 11);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap', maxZoom: 19
-    }).addTo(map);
-    mapInst.current = map;
-    setTimeout(() => map.invalidateSize(), 120);
+    loadGoogleMaps().then(gm => {
+      if (!mapRef.current || mapInst.current) return;
+      gmRef.current = gm;
+      const map = new gm.Map(mapRef.current, {
+        center: { lat: -33.45, lng: -70.65 },
+        zoom: 11,
+        gestureHandling: 'cooperative',
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+      });
+      mapInst.current = map;
+      setMapReady(true);
+      setTimeout(() => gm.event.trigger(map, 'resize'), 120);
+    });
   }, []);
 
-  // Recalcular tamaño del mapa cuando el sidebar se abre/cierra
   useEffect(() => {
-    setTimeout(() => mapInst.current?.invalidateSize(), 150);
-  }, [showSidebar]);
+    if (mapReady && gmRef.current && mapInst.current) {
+      setTimeout(() => gmRef.current.event.trigger(mapInst.current, 'resize'), 150);
+    }
+  }, [showSidebar, mapReady]);
 
-  // ── Render zones ──────────────────────────────────────────────────────────────
+  // Render zone polygons
   useEffect(() => {
+    if (!mapReady) return;
     const map = mapInst.current;
-    if (!map) return;
-    if (layerGrp.current) { map.removeLayer(layerGrp.current); layerGrp.current = null; }
+    const gm  = gmRef.current;
+    if (!map || !gm) return;
+
+    // Clear existing polygons
+    polyLayersRef.current.forEach(({ poly }) => poly.setMap(null));
+    polyLayersRef.current = [];
+    if (tooltipRef.current) tooltipRef.current.style.display = 'none';
+
     if (!zones.length) return;
 
-    layerGrp.current = L.layerGroup();
     const ordered = [
       ...zones.filter(z => z.source === 'commune'),
-      ...zones.filter(z => z.source === 'custom')
+      ...zones.filter(z => z.source === 'custom'),
     ];
 
     ordered.forEach(z => {
-      const latlngs  = z.polygon.coordinates[0].map(([lng, lat]) => [lat, lng]);
+      const coords    = z.polygon?.coordinates?.[0];
+      if (!coords) return;
+      const path      = coords.map(([lng, lat]) => ({ lat, lng }));
       const isCommune = z.source === 'commune';
+      const fillColor = isCommune ? tierColor(z.price) : (z.color || '#5c35cc');
 
-      const poly = L.polygon(latlngs, {
-        color:       isCommune ? '#ffffff' : z.color || '#5c35cc',
-        fillColor:   isCommune ? tierColor(z.price) : z.color || '#5c35cc',
-        fillOpacity: isCommune ? 0.50 : 0.28,
-        weight:      isCommune ? 1.5 : 2.5,
-        opacity:     isCommune ? 0.85 : 1,
-        dashArray:   isCommune ? null : '9,6'
+      const poly = new gm.Polygon({
+        paths: path,
+        strokeColor:   isCommune ? '#ffffff' : (z.color || '#5c35cc'),
+        fillColor,
+        fillOpacity:   isCommune ? 0.50 : 0.28,
+        strokeWeight:  isCommune ? 1.5 : 2.5,
+        strokeOpacity: isCommune ? 0.85 : 1,
+        strokeDasharray: isCommune ? null : '9,6',
+        map,
       });
 
+      // Tooltip content
       const hasTiers = z.tiers?.length === 3;
-      const priceHtml = hasTiers
-        ? z.tiers.map((t, i) =>
-            `<span style="font-size:11px;display:block">${i === 0 ? '1 pkg' : `≥${t.minQty} pkgs`}: <b style="color:${isCommune ? tierColor(t.price) : z.color || '#5c35cc'}">$${Number(t.price).toLocaleString('es-CL')}</b></span>`
-          ).join('')
-        : `<span style="font-weight:800;color:${isCommune ? tierColor(z.price) : z.color || '#5c35cc'}">$${Number(z.price).toLocaleString('es-CL')}</span>`;
-      poly.bindTooltip(
-        `<div style="font-family:'Inter',sans-serif;font-size:13px;line-height:1.6">
-          ${isCommune ? '' : '<b style="font-size:10px;color:#5c35cc">ZONA CUSTOM · </b>'}
-          <b>${z.name}</b><br>
-          ${priceHtml}
-        </div>`,
-        { sticky: true }
-      );
+      const tooltipContent = `<div style="font-family:'Inter',sans-serif;font-size:13px;line-height:1.6;padding:4px 2px">
+        ${isCommune ? '' : '<div style="font-size:10px;color:#5c35cc;font-weight:700">ZONA CUSTOM</div>'}
+        <b>${z.name}</b><br>
+        ${hasTiers
+          ? z.tiers.map((t, i) => `<span style="font-size:11px;display:block">${i === 0 ? '1 pkg' : `≥${t.minQty} pkgs`}: <b style="color:${isCommune ? tierColor(t.price) : (z.color || '#5c35cc')}">$${Number(t.price).toLocaleString('es-CL')}</b></span>`).join('')
+          : `<span style="font-weight:800;color:${isCommune ? tierColor(z.price) : (z.color || '#5c35cc')}">$${Number(z.price).toLocaleString('es-CL')}</span>`
+        }
+      </div>`;
 
-      poly.on('mouseover', () => {
-        if (!dmRef.current && !rmRef.current) poly.setStyle({ fillOpacity: isCommune ? 0.78 : 0.50 });
+      // Hover: show tooltip, highlight
+      poly.addListener('mouseover', () => {
+        if (!dmRef.current && !rmRef.current) poly.setOptions({ fillOpacity: isCommune ? 0.78 : 0.50 });
       });
-      poly.on('mouseout', () => {
-        if (!dmRef.current && !rmRef.current) poly.setStyle({ fillOpacity: isCommune ? 0.50 : 0.28 });
+      poly.addListener('mousemove', e => {
+        if (!tooltipRef.current) return;
+        const rect = mapRef.current.getBoundingClientRect();
+        tooltipRef.current.style.display = 'block';
+        tooltipRef.current.style.left = (e.domEvent.clientX - rect.left + 14) + 'px';
+        tooltipRef.current.style.top  = (e.domEvent.clientY - rect.top  - 10) + 'px';
+        tooltipRef.current.innerHTML   = tooltipContent;
       });
-      poly.on('click', e => {
-        if (dmRef.current) { addPt(e.latlng); return; }
+      poly.addListener('mouseout', () => {
+        if (!dmRef.current && !rmRef.current) poly.setOptions({ fillOpacity: isCommune ? 0.50 : 0.28 });
+        if (tooltipRef.current) tooltipRef.current.style.display = 'none';
+      });
+
+      poly.addListener('click', e => {
+        if (dmRef.current) { addPt(e.latLng); return; }
         if (rmRef.current) return;
+        if (tooltipRef.current) tooltipRef.current.style.display = 'none';
         setPanel({ zone: z });
         setEditName(z.name);
         setEditPrice(String(z.price));
         initEditTiers(z);
       });
-      poly.on('dblclick', e => {
-        if (dmRef.current) { L.DomEvent.stop(e); finalizeRef.current?.(); }
+      poly.addListener('dblclick', e => {
+        if (dmRef.current) { gm.event.trigger(map, 'click', e); finalizeRef.current?.(); }
       });
 
-      poly.addTo(layerGrp.current);
+      polyLayersRef.current.push({ poly, zoneId: z._id });
     });
+  }, [mapReady, zones]);
 
-    layerGrp.current.addTo(map);
-  }, [zones]);
-
-  // ── Draw ──────────────────────────────────────────────────────────────────────
-  const addPt = useCallback((latlng) => {
+  // Draw mode: click-by-click vertex addition
+  const addPt = useCallback((latLng) => {
     const map = mapInst.current;
-    if (!map) return;
-    ds.current.pts.push([latlng.lat, latlng.lng]);
-    const mk = L.circleMarker([latlng.lat, latlng.lng], {
-      radius: 6, color: '#5c35cc', fillColor: '#fff', fillOpacity: 1, weight: 2.5
-    }).addTo(map);
-    ds.current.mks.push(mk);
-    if (ds.current.ln) map.removeLayer(ds.current.ln);
-    const pts = ds.current.pts;
-    if (pts.length > 1)
-      ds.current.ln = L.polyline([...pts, pts[0]], {
-        color: '#5c35cc', weight: 2.5, dashArray: '7,6', opacity: 0.85
-      }).addTo(map);
+    const gm  = gmRef.current;
+    if (!map || !gm) return;
+
+    const pt = { lat: latLng.lat(), lng: latLng.lng() };
+    drawPointsRef.current.push(pt);
+
+    const mk = new gm.Marker({
+      position: pt,
+      icon: {
+        path: gm.SymbolPath.CIRCLE,
+        scale: 6,
+        fillColor: '#fff',
+        fillOpacity: 1,
+        strokeColor: '#5c35cc',
+        strokeWeight: 2.5,
+      },
+      map,
+      zIndex: 20,
+    });
+    drawVerticesRef.current.push(mk);
+
+    // Update preview polyline
+    if (drawPolylineRef.current) drawPolylineRef.current.setMap(null);
+    const pts = drawPointsRef.current;
+    if (pts.length > 1) {
+      drawPolylineRef.current = new gm.Polyline({
+        path: [...pts, pts[0]],
+        strokeColor: '#5c35cc', strokeWeight: 2.5, strokeOpacity: 0.85,
+        icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3, strokeColor: '#5c35cc' }, offset: '0', repeat: '14px' }],
+        map,
+      });
+    }
     setDrawCount(pts.length);
   }, []);
 
   const clearDraw = useCallback(() => {
     const map = mapInst.current;
-    if (map) {
-      ds.current.mks.forEach(m => map.removeLayer(m));
-      if (ds.current.ln) map.removeLayer(ds.current.ln);
-    }
-    ds.current = { pts: [], mks: [], ln: null };
+    drawVerticesRef.current.forEach(m => m.setMap(null));
+    drawVerticesRef.current = [];
+    if (drawPolylineRef.current) { drawPolylineRef.current.setMap(null); drawPolylineRef.current = null; }
+    drawPointsRef.current = [];
     setDrawCount(0);
   }, []);
 
   const finalize = useCallback(() => {
-    const pts = [...ds.current.pts];
+    const pts = [...drawPointsRef.current];
     clearDraw();
     if (pts.length < 3) { toast('⚠ Necesitas al menos 3 puntos'); return; }
-    setNewModal({ latlngs: pts });
+    setNewModal({ latlngs: pts.map(p => [p.lat, p.lng]) });
     setNewName(''); setNewPrice(''); setNewColor(CUSTOM_COLORS[0]);
     setDrawMode(false);
   }, [clearDraw]);
 
   useEffect(() => { finalizeRef.current = finalize; }, [finalize]);
 
+  // Attach/detach draw click handler
   useEffect(() => {
     const map = mapInst.current;
-    if (!map || !drawMode) return;
-    map.doubleClickZoom.disable();
-    map.getContainer().style.cursor = 'crosshair';
-    const onClick    = e => { L.DomEvent.stop(e); addPt(e.latlng); };
-    const onDblClick = e => { L.DomEvent.stop(e); finalize(); };
-    map.on('click', onClick);
-    map.on('dblclick', onDblClick);
+    const gm  = gmRef.current;
+    if (!map || !gm || !mapReady) return;
+    if (!drawMode) return;
+
+    map.setOptions({ draggableCursor: 'crosshair', disableDoubleClickZoom: true });
+    const onClickListener   = map.addListener('click',    e => { e.stop?.(); addPt(e.latLng); });
+    const onDblClickListener = map.addListener('dblclick', e => { e.stop?.(); finalize(); });
     return () => {
-      map.doubleClickZoom.enable();
-      map.getContainer().style.cursor = '';
-      map.off('click', onClick);
-      map.off('dblclick', onDblClick);
+      gm.event.removeListener(onClickListener);
+      gm.event.removeListener(onDblClickListener);
+      map.setOptions({ draggableCursor: null, disableDoubleClickZoom: false });
     };
-  }, [drawMode, addPt, finalize]);
+  }, [drawMode, mapReady, addPt, finalize]);
 
-  // ── Reshape ───────────────────────────────────────────────────────────────────
-  const clearReshape = useCallback(() => {
-    const map = mapInst.current;
-    if (map) {
-      reshapeMarkersRef.current.forEach(mk => map.removeLayer(mk));
-      if (reshapePolyRef.current) map.removeLayer(reshapePolyRef.current);
-    }
-    reshapeMarkersRef.current = [];
-    reshapePolyRef.current = null;
-    reshapePtsRef.current = [];
-  }, []);
-
+  // Reshape: use Google Maps editable polygon
   const enterReshape = useCallback((zone) => {
     const map = mapInst.current;
-    if (!map) return;
-    clearReshape(); clearDraw();
-    setDrawMode(false); setPanel(null);
+    const gm  = gmRef.current;
+    if (!map || !gm) return;
+    clearDraw(); setDrawMode(false); setPanel(null);
 
-    const latlngs = zone.polygon.coordinates[0].slice(0, -1).map(([lng, lat]) => [lat, lng]);
-    reshapePtsRef.current = [...latlngs];
+    if (reshapePolyRef.current) { reshapePolyRef.current.setMap(null); reshapePolyRef.current = null; }
 
-    reshapePolyRef.current = L.polygon(latlngs, {
-      color: '#5c35cc', fillColor: '#5c35cc', fillOpacity: 0.18, weight: 3, dashArray: '8,5'
-    }).addTo(map);
-
-    const icon = makeVertexIcon();
-    latlngs.forEach((pt, idx) => {
-      const mk = L.marker(pt, { draggable: true, icon, zIndexOffset: 1000 }).addTo(map);
-      mk.on('drag', () => {
-        const ll = mk.getLatLng();
-        reshapePtsRef.current[idx] = [ll.lat, ll.lng];
-        reshapePolyRef.current?.setLatLngs([...reshapePtsRef.current]);
-      });
-      reshapeMarkersRef.current.push(mk);
+    const path = zone.polygon.coordinates[0].slice(0, -1).map(([lng, lat]) => ({ lat, lng }));
+    reshapePolyRef.current = new gm.Polygon({
+      paths: path,
+      editable: true,
+      strokeColor: '#5c35cc', fillColor: '#5c35cc', fillOpacity: 0.18, strokeWeight: 3,
+      map,
     });
 
     setReshapeZone(zone);
     setReshapeMode(true);
-    map.fitBounds(reshapePolyRef.current.getBounds(), { padding: [50, 50], maxZoom: 14 });
-  }, [clearReshape, clearDraw]);
+    const bounds = new gm.LatLngBounds();
+    path.forEach(p => bounds.extend(p));
+    map.fitBounds(bounds, 50);
+  }, [clearDraw]);
 
   const cancelReshape = useCallback(() => {
-    clearReshape(); setReshapeMode(false); setReshapeZone(null);
-  }, [clearReshape]);
+    if (reshapePolyRef.current) { reshapePolyRef.current.setMap(null); reshapePolyRef.current = null; }
+    setReshapeMode(false); setReshapeZone(null);
+  }, []);
 
   const saveReshape = async () => {
-    if (!reshapeZone) return;
+    if (!reshapeZone || !reshapePolyRef.current) return;
     setSavingShape(true);
     try {
-      const coords = reshapePtsRef.current.map(([lat, lng]) => [lng, lat]);
+      const arr    = reshapePolyRef.current.getPath().getArray();
+      const coords = arr.map(ll => [ll.lng(), ll.lat()]);
       coords.push(coords[0]);
-      const updated = await api.updateZone(reshapeZone._id, {
-        polygon: { type: 'Polygon', coordinates: [coords] }
-      });
+      const updated = await api.updateZone(reshapeZone._id, { polygon: { type: 'Polygon', coordinates: [coords] } });
       setZones(prev => prev.map(z => z._id === updated._id ? { ...z, ...updated } : z));
-      clearReshape(); setReshapeMode(false); setReshapeZone(null);
+      if (reshapePolyRef.current) { reshapePolyRef.current.setMap(null); reshapePolyRef.current = null; }
+      setReshapeMode(false); setReshapeZone(null);
       toast(`✅ Forma de "${updated.name}" guardada`);
     } catch (err) { toast('❌ ' + err.message); }
     finally { setSavingShape(false); }
   };
 
-  // ── Reseed ────────────────────────────────────────────────────────────────────
   const handleReseed = async () => {
     if (!confirm('¿Eliminar todas las comunas y recargarlas?')) return;
     setSeeding(true);
@@ -372,27 +374,17 @@ export default function SectorMap() {
 
   const initEditTiers = (z) => {
     const base = z.price || 0;
-    const defaults = [
-      { minQty: 1, price: base },
-      { minQty: 4, price: base },
-      { minQty: 8, price: base },
-    ];
-    const tiers = z.tiers?.length === 3
-      ? z.tiers.map(t => ({ minQty: t.minQty, price: t.price }))
-      : defaults;
+    const defaults = [{ minQty: 1, price: base }, { minQty: 4, price: base }, { minQty: 8, price: base }];
+    const tiers = z.tiers?.length === 3 ? z.tiers.map(t => ({ minQty: t.minQty, price: t.price })) : defaults;
     setEditTiers(tiers);
-    // Use 'manual' if zone already has distinct tier prices, else 'auto'
-    const hasDistinct = z.tiers?.length === 3 &&
-      (z.tiers[1].price !== z.tiers[0].price || z.tiers[2].price !== z.tiers[0].price);
+    const hasDistinct = z.tiers?.length === 3 && (z.tiers[1].price !== z.tiers[0].price || z.tiers[2].price !== z.tiers[0].price);
     setTierInputMode(hasDistinct ? 'manual' : 'auto');
-    setAutoD2('');
-    setAutoD3('');
+    setAutoD2(''); setAutoD3('');
   };
 
   const calcAuto = (base, d, mode) =>
     Math.max(0, mode === 'flat' ? base - d : Math.round(base * (1 - d / 100)));
 
-  // ── Save zone price ───────────────────────────────────────────────────────────
   const saveZonePrice = async () => {
     if (!panel) return;
     let tiers;
@@ -402,24 +394,21 @@ export default function SectorMap() {
       const d3   = Number(autoD3) || 0;
       if (!base) return toast('⚠ El precio base es obligatorio');
       tiers = [
-        { minQty: 1,                           price: base },
+        { minQty: 1,                            price: base },
         { minQty: Number(editTiers[1]?.minQty), price: calcAuto(base, d2, autoDiscMode) },
         { minQty: Number(editTiers[2]?.minQty), price: calcAuto(base, d3, autoDiscMode) },
       ];
     } else {
       tiers = editTiers.map(t => ({ minQty: Number(t.minQty), price: Number(t.price) }));
     }
-    if (tiers.some(t => !t.price || isNaN(t.price) || t.price <= 0))
-      return toast('⚠ Todos los precios deben ser válidos');
-    if (tiers[1].minQty <= 1 || tiers[2].minQty <= tiers[1].minQty)
-      return toast('⚠ Los tramos deben tener cantidades crecientes');
+    if (tiers.some(t => !t.price || isNaN(t.price) || t.price <= 0)) return toast('⚠ Todos los precios deben ser válidos');
+    if (tiers[1].minQty <= 1 || tiers[2].minQty <= tiers[1].minQty) return toast('⚠ Los tramos deben tener cantidades crecientes');
     const price = tiers[0].price;
     setSavingZone(true);
     try {
       const updated = await api.updateZone(panel.zone._id, { name: editName, price, tiers });
       setZones(prev => prev.map(z => z._id === updated._id ? { ...z, ...updated } : z));
-      if (panel.zone.source === 'commune')
-        await api.upsertPrice({ commune: editName, price }).catch(() => {});
+      if (panel.zone.source === 'commune') await api.upsertPrice({ commune: editName, price }).catch(() => {});
       setPanel(null);
       toast(`✅ ${editName}: $${price.toLocaleString('es-CL')}`);
     } catch (err) { toast('❌ ' + err.message); }
@@ -436,7 +425,6 @@ export default function SectorMap() {
     } catch (err) { toast('❌ ' + err.message); }
   };
 
-  // ── Save price from sidebar ───────────────────────────────────────────────────
   const saveSidebarPrice = async (zone) => {
     const price = Number(sidebarEdits[zone._id]);
     if (!price || isNaN(price)) return;
@@ -451,10 +439,8 @@ export default function SectorMap() {
     finally { setSavingIds(s => { const n = { ...s }; delete n[zone._id]; return n; }); }
   };
 
-  // ── Tariff configs management ─────────────────────────────────────────────────
   const openTariffPanel = async () => {
-    setShowTariffPanel(true);
-    setLoadingTariffs(true);
+    setShowTariffPanel(true); setLoadingTariffs(true);
     try { setTariffConfigs(await api.getTariffs()); }
     catch (err) { toast('❌ ' + err.message); }
     finally { setLoadingTariffs(false); }
@@ -462,11 +448,8 @@ export default function SectorMap() {
 
   const deleteTariffConfig = async (id) => {
     if (!confirm('¿Eliminar esta configuración de precios?')) return;
-    try {
-      await api.deleteTariff(id);
-      setTariffConfigs(prev => prev.filter(t => t._id !== id));
-      toast('🗑️ Configuración eliminada');
-    } catch (err) { toast('❌ ' + err.message); }
+    try { await api.deleteTariff(id); setTariffConfigs(prev => prev.filter(t => t._id !== id)); toast('🗑️ Eliminada'); }
+    catch (err) { toast('❌ ' + err.message); }
   };
 
   const saveTariffName = async (id) => {
@@ -479,7 +462,6 @@ export default function SectorMap() {
     } catch (err) { toast('❌ ' + err.message); }
   };
 
-  // ── Save zones as named tariff config ────────────────────────────────────────
   const saveConfig = async () => {
     if (!configName.trim()) return toast('⚠ Escribe el nombre');
     setSavingConfig(true);
@@ -488,14 +470,12 @@ export default function SectorMap() {
       const prices = items.map(i => i.price).filter(Boolean);
       const defaultPrice = prices.length ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : 3500;
       await api.createTariff({ name: configName.trim(), defaultPrice, items });
-      setConfigName('');
-      setShowSaveConfig(false);
+      setConfigName(''); setShowSaveConfig(false);
       toast(`✅ Configuración "${configName.trim()}" guardada`);
     } catch (err) { toast('❌ ' + err.message); }
     finally { setSavingConfig(false); }
   };
 
-  // ── Save drawn zone ───────────────────────────────────────────────────────────
   const saveNewZone = async () => {
     if (!newModal) return;
     if (!newName.trim()) return toast('⚠ Escribe el nombre');
@@ -505,10 +485,7 @@ export default function SectorMap() {
     try {
       const coords = newModal.latlngs.map(([lat, lng]) => [lng, lat]);
       coords.push(coords[0]);
-      const zone = await api.createZone({
-        name: newName.trim(), price, color: newColor, source: 'custom',
-        polygon: { type: 'Polygon', coordinates: [coords] }
-      });
+      const zone = await api.createZone({ name: newName.trim(), price, color: newColor, source: 'custom', polygon: { type: 'Polygon', coordinates: [coords] } });
       setZones(prev => [...prev, zone]);
       setNewModal(null);
       toast(`✅ Zona "${zone.name}" creada`);
@@ -516,7 +493,6 @@ export default function SectorMap() {
     finally { setSavingNew(false); }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────────
   const isBusy = loading || seeding;
 
   return (
@@ -524,98 +500,44 @@ export default function SectorMap() {
 
       {/* Toolbar */}
       <div style={{ background: '#fff', borderBottom: '1px solid var(--border)', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap', minHeight: 44 }}>
-
         {isBusy ? (
-          <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>
-            ⏳ {seedStep || 'Cargando…'}
-          </span>
-
+          <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>⏳ {seedStep || 'Cargando…'}</span>
         ) : reshapeMode ? (
           <>
-            <button onClick={cancelReshape}
-              style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid #cc224430', background: '#cc224408', color: '#cc2244', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-              ✕ Cancelar
-            </button>
-            <button onClick={saveReshape} disabled={savingShape}
-              style={{ padding: '7px 13px', borderRadius: 20, border: 'none', background: savingShape ? 'var(--border)' : '#5c35cc', color: '#fff', fontSize: 12, fontWeight: 700, cursor: savingShape ? 'not-allowed' : 'pointer' }}>
+            <button onClick={cancelReshape} style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid #cc224430', background: '#cc224408', color: '#cc2244', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✕ Cancelar</button>
+            <button onClick={saveReshape} disabled={savingShape} style={{ padding: '7px 13px', borderRadius: 20, border: 'none', background: savingShape ? 'var(--border)' : '#5c35cc', color: '#fff', fontSize: 12, fontWeight: 700, cursor: savingShape ? 'not-allowed' : 'pointer' }}>
               {savingShape ? '⏳…' : '✅ Guardar forma'}
             </button>
             <span style={{ fontSize: 11, color: '#5c35cc', fontWeight: 600 }}>
-              Arrastra los puntos para ajustar · {reshapeMarkersRef.current.length} vértices
-              {reshapeZone && <> — <b>{reshapeZone.name}</b></>}
+              Arrastra los vértices para ajustar{reshapeZone && <> — <b>{reshapeZone.name}</b></>}
             </span>
-
           </>
         ) : drawMode ? (
           <>
-            <button onClick={() => { clearDraw(); setDrawMode(false); }}
-              style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid #cc224430', background: '#cc224408', color: '#cc2244', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-              ✕ Cancelar
-            </button>
-            <button onClick={finalize} disabled={drawCount < 3}
-              style={{ padding: '7px 13px', borderRadius: 20, border: 'none', background: drawCount >= 3 ? '#5c35cc' : 'var(--card2)', color: drawCount >= 3 ? '#fff' : 'var(--muted)', fontSize: 12, fontWeight: 700, cursor: drawCount >= 3 ? 'pointer' : 'not-allowed' }}>
+            <button onClick={() => { clearDraw(); setDrawMode(false); }} style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid #cc224430', background: '#cc224408', color: '#cc2244', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✕ Cancelar</button>
+            <button onClick={finalize} disabled={drawCount < 3} style={{ padding: '7px 13px', borderRadius: 20, border: 'none', background: drawCount >= 3 ? '#5c35cc' : 'var(--card2)', color: drawCount >= 3 ? '#fff' : 'var(--muted)', fontSize: 12, fontWeight: 700, cursor: drawCount >= 3 ? 'pointer' : 'not-allowed' }}>
               ✓ Cerrar zona {drawCount > 0 ? `(${drawCount} puntos)` : ''}
             </button>
-            <span style={{ fontSize: 11, color: '#5c35cc', fontWeight: 600 }}>
-              Toca el mapa para agregar vértices · doble-toque para cerrar
-            </span>
-
+            <span style={{ fontSize: 11, color: '#5c35cc', fontWeight: 600 }}>Toca el mapa para agregar vértices · doble-toque para cerrar</span>
           </>
         ) : (
           <>
-            <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>
-              {communeCount} comunas · {customCount} sub-zona{customCount !== 1 ? 's' : ''}
-            </span>
-            <button onClick={() => { setPanel(null); setDrawMode(true); }}
-              style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid #5c35cc30', background: '#5c35cc12', color: '#5c35cc', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-              ✏️ Dibujar sub-zona
-            </button>
-            <button onClick={handleReseed} disabled={seeding}
-              style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid var(--border)', background: 'none', color: 'var(--muted)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-              🔄 Recargar
-            </button>
-            <button
-              onClick={() => setShowImport(true)}
-              style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid #22863a40', background: '#22863a10', color: '#22863a', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-            >
-              📥 Importar precios
-            </button>
-            <button
-              onClick={openTariffPanel}
-              style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid #5c35cc30', background: '#5c35cc0c', color: '#5c35cc', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-            >
-              📋 Configs
-            </button>
+            <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>{communeCount} comunas · {customCount} sub-zona{customCount !== 1 ? 's' : ''}</span>
+            <button onClick={() => { setPanel(null); setDrawMode(true); }} style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid #5c35cc30', background: '#5c35cc12', color: '#5c35cc', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✏️ Dibujar sub-zona</button>
+            <button onClick={handleReseed} disabled={seeding} style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid var(--border)', background: 'none', color: 'var(--muted)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>🔄 Recargar</button>
+            <button onClick={() => setShowImport(true)} style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid #22863a40', background: '#22863a10', color: '#22863a', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>📥 Importar precios</button>
+            <button onClick={openTariffPanel} style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid #5c35cc30', background: '#5c35cc0c', color: '#5c35cc', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>📋 Configs</button>
             {!showSaveConfig ? (
-              <button
-                onClick={() => setShowSaveConfig(true)}
-                style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid #0052FF30', background: '#0052FF10', color: 'var(--accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-              >
-                💾 Guardar config
-              </button>
+              <button onClick={() => setShowSaveConfig(true)} style={{ padding: '7px 13px', borderRadius: 20, border: '1px solid #0052FF30', background: '#0052FF10', color: 'var(--accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>💾 Guardar config</button>
             ) : (
               <>
-                <input
-                  value={configName}
-                  onChange={e => setConfigName(e.target.value)}
+                <input value={configName} onChange={e => setConfigName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') saveConfig(); if (e.key === 'Escape') { setShowSaveConfig(false); setConfigName(''); } }}
-                  placeholder="Nombre de la configuración…"
-                  autoFocus
+                  placeholder="Nombre de la configuración…" autoFocus
                   style={{ padding: '6px 10px', borderRadius: 20, border: '1px solid var(--accent)', fontSize: 12, outline: 'none', width: 190, background: '#fff' }}
                 />
-                <button
-                  onClick={saveConfig}
-                  disabled={savingConfig || !configName.trim()}
-                  style={{ padding: '7px 12px', borderRadius: 20, border: 'none', background: savingConfig ? 'var(--border)' : 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: savingConfig ? 'not-allowed' : 'pointer' }}
-                >
-                  {savingConfig ? '⏳' : '✓ Guardar'}
-                </button>
-                <button
-                  onClick={() => { setShowSaveConfig(false); setConfigName(''); }}
-                  style={{ padding: '7px 11px', borderRadius: 20, border: '1px solid #cc224430', background: 'none', color: '#cc2244', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-                >
-                  ✕
-                </button>
+                <button onClick={saveConfig} disabled={savingConfig || !configName.trim()} style={{ padding: '7px 12px', borderRadius: 20, border: 'none', background: savingConfig ? 'var(--border)' : 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: savingConfig ? 'not-allowed' : 'pointer' }}>{savingConfig ? '⏳' : '✓ Guardar'}</button>
+                <button onClick={() => { setShowSaveConfig(false); setConfigName(''); }} style={{ padding: '7px 11px', borderRadius: 20, border: '1px solid #cc224430', background: 'none', color: '#cc2244', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✕</button>
               </>
             )}
           </>
@@ -633,27 +555,32 @@ export default function SectorMap() {
             <div style={{ width: 10, height: 10, borderRadius: 2, border: '2px dashed #5c35cc', background: '#5c35cc28' }} />
             <span style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700 }}>Sub-zona</span>
           </div>
-          <button
-            onClick={() => setShowSidebar(s => !s)}
-            style={{ padding: '4px 10px', borderRadius: 14, border: '1px solid var(--border)', background: showSidebar ? 'var(--accent)' : 'var(--card2)', color: showSidebar ? '#fff' : 'var(--muted)', fontSize: 10, fontWeight: 700, cursor: 'pointer', marginLeft: 4 }}
-          >
+          <button onClick={() => setShowSidebar(s => !s)} style={{ padding: '4px 10px', borderRadius: 14, border: '1px solid var(--border)', background: showSidebar ? 'var(--accent)' : 'var(--card2)', color: showSidebar ? '#fff' : 'var(--muted)', fontSize: 10, fontWeight: 700, cursor: 'pointer', marginLeft: 4 }}>
             {showSidebar ? '◀ Lista' : '▶ Lista'}
           </button>
         </div>
       </div>
 
-      {/* Map + Sidebar row */}
+      {/* Map + Sidebar */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        <div ref={mapRef} style={{ flex: 1, background: '#e8e8e0' }} />
+        <div style={{ flex: 1, position: 'relative' }}>
+          <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+          {/* Floating tooltip */}
+          <div
+            ref={tooltipRef}
+            style={{
+              display: 'none', position: 'absolute', zIndex: 999,
+              background: 'white', border: '1px solid #e2e8f0', borderRadius: 10,
+              padding: '6px 10px', boxShadow: '0 4px 16px rgba(0,0,0,.15)',
+              pointerEvents: 'none', maxWidth: 220, fontSize: 13,
+            }}
+          />
+        </div>
 
-        {/* Sidebar: zone list with editable prices */}
         {showSidebar && (
           <div style={{ width: 240, flexShrink: 0, background: '#fff', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ padding: '8px 10px 6px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-              <input
-                value={sidebarSearch}
-                onChange={e => setSidebarSearch(e.target.value)}
-                placeholder="🔍 Buscar comuna…"
+              <input value={sidebarSearch} onChange={e => setSidebarSearch(e.target.value)} placeholder="🔍 Buscar comuna…"
                 style={{ width: '100%', background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 9px', fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
               />
             </div>
@@ -662,33 +589,25 @@ export default function SectorMap() {
                 .filter(z => !sidebarSearch || z.name.toLowerCase().includes(sidebarSearch.toLowerCase()))
                 .sort((a, b) => a.name.localeCompare(b.name, 'es'))
                 .map(z => {
-                  const edited  = sidebarEdits[z._id] != null;
+                  const edited   = sidebarEdits[z._id] != null;
                   const curPrice = edited ? sidebarEdits[z._id] : String(z.price ?? '');
                   const color    = z.source === 'commune' ? tierColor(z.price) : (z.color || '#5c35cc');
                   const saving   = savingIds[z._id];
                   return (
                     <div key={z._id} style={{ padding: '5px 10px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <div style={{ width: 9, height: 9, borderRadius: 2, background: color, flexShrink: 0 }} />
-                      <span
-                        style={{ flex: 1, fontSize: 11, fontWeight: 600, color: 'var(--text)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                        title={z.name}
-                        onClick={() => { setPanel({ zone: z }); setEditName(z.name); setEditPrice(String(z.price)); initEditTiers(z); }}
-                      >
+                      <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: 'var(--text)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={z.name}
+                        onClick={() => { setPanel({ zone: z }); setEditName(z.name); setEditPrice(String(z.price)); initEditTiers(z); }}>
                         {z.name}
                       </span>
-                      <input
-                        type="number"
-                        value={curPrice}
+                      <input type="number" value={curPrice}
                         onChange={e => setSidebarEdits(s => ({ ...s, [z._id]: e.target.value }))}
                         onKeyDown={e => e.key === 'Enter' && saveSidebarPrice(z)}
                         style={{ width: 68, background: edited ? '#fff8f0' : 'var(--card2)', border: `1px solid ${edited ? '#d4650a50' : 'var(--border)'}`, borderRadius: 7, padding: '4px 6px', fontSize: 11, fontWeight: edited ? 700 : 400, outline: 'none', color: 'var(--text)', textAlign: 'right' }}
                       />
                       {edited && (
-                        <button
-                          onClick={() => saveSidebarPrice(z)}
-                          disabled={saving}
-                          style={{ padding: '3px 7px', borderRadius: 7, border: 'none', background: saving ? 'var(--border)' : '#0052FF', color: '#fff', fontSize: 10, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', flexShrink: 0 }}
-                        >
+                        <button onClick={() => saveSidebarPrice(z)} disabled={saving}
+                          style={{ padding: '3px 7px', borderRadius: 7, border: 'none', background: saving ? 'var(--border)' : '#0052FF', color: '#fff', fontSize: 10, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', flexShrink: 0 }}>
                           {saving ? '…' : '✓'}
                         </button>
                       )}
@@ -706,40 +625,24 @@ export default function SectorMap() {
 
       {/* Zone panel */}
       {panel && !drawMode && !reshapeMode && (
-        <div style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 900,
-          background: '#fff', borderRadius: '18px 18px 0 0',
-          borderTop: '1px solid var(--border)',
-          padding: '16px 16px calc(18px + env(safe-area-inset-bottom))',
-          boxShadow: '0 -8px 28px #00000018'
-        }}>
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 900, background: '#fff', borderRadius: '18px 18px 0 0', borderTop: '1px solid var(--border)', padding: '16px 16px calc(18px + env(safe-area-inset-bottom))', boxShadow: '0 -8px 28px #00000018' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 17, fontWeight: 800 }}>
-                {panel.zone.source === 'custom' &&
-                  <span style={{ width: 13, height: 13, borderRadius: 3, background: panel.zone.color, display: 'inline-block', marginRight: 7, verticalAlign: 'middle' }} />
-                }
+                {panel.zone.source === 'custom' && <span style={{ width: 13, height: 13, borderRadius: 3, background: panel.zone.color, display: 'inline-block', marginRight: 7, verticalAlign: 'middle' }} />}
                 {panel.zone.name}
               </div>
               <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
                 {panel.zone.source === 'commune' ? '🗺 Comuna del RM' : '✏️ Sub-zona personalizada'}
-                {' · '}<b style={{ color: panel.zone.source === 'commune' ? tierColor(panel.zone.price) : panel.zone.color }}>
-                  ${Number(panel.zone.price).toLocaleString('es-CL')}
-                </b>
+                {' · '}<b style={{ color: panel.zone.source === 'commune' ? tierColor(panel.zone.price) : panel.zone.color }}>${Number(panel.zone.price).toLocaleString('es-CL')}</b>
               </div>
             </div>
             <button onClick={() => setPanel(null)} style={{ background: 'none', border: 'none', fontSize: 22, color: 'var(--muted)', cursor: 'pointer', padding: 0 }}>✕</button>
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-            <button onClick={() => enterReshape(panel.zone)}
-              style={{ flex: 1, padding: '8px', borderRadius: 9, border: '1px solid #5c35cc30', background: '#5c35cc0c', color: '#5c35cc', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-              ✏️ Editar forma
-            </button>
-            <button onClick={() => { setPanel(null); setDrawMode(true); }}
-              style={{ flex: 1, padding: '8px', borderRadius: 9, border: '1px solid #f57c0030', background: '#f57c000c', color: '#f57c00', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-              ✂️ Sub-dividir
-            </button>
+            <button onClick={() => enterReshape(panel.zone)} style={{ flex: 1, padding: '8px', borderRadius: 9, border: '1px solid #5c35cc30', background: '#5c35cc0c', color: '#5c35cc', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✏️ Editar forma</button>
+            <button onClick={() => { setPanel(null); setDrawMode(true); }} style={{ flex: 1, padding: '8px', borderRadius: 9, border: '1px solid #f57c0030', background: '#f57c000c', color: '#f57c00', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✂️ Sub-dividir</button>
           </div>
 
           {panel.zone.source === 'custom' && (
@@ -750,39 +653,27 @@ export default function SectorMap() {
           )}
 
           <div style={{ marginBottom: 14 }}>
-            {/* Header + mode toggle */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: 1 }}>TRAMOS POR VOLUMEN</span>
               <div style={{ display: 'flex', borderRadius: 7, overflow: 'hidden', border: '1px solid var(--border)' }}>
                 {[['auto', '% Auto'], ['manual', 'Manual']].map(([m, label]) => (
-                  <button key={m} onClick={() => setTierInputMode(m)} style={{
-                    padding: '4px 11px', border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer',
-                    background: tierInputMode === m ? 'var(--accent)' : '#fff',
-                    color: tierInputMode === m ? '#fff' : 'var(--muted)',
-                  }}>{label}</button>
+                  <button key={m} onClick={() => setTierInputMode(m)} style={{ padding: '4px 11px', border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer', background: tierInputMode === m ? 'var(--accent)' : '#fff', color: tierInputMode === m ? '#fff' : 'var(--muted)' }}>{label}</button>
                 ))}
               </div>
             </div>
 
             {tierInputMode === 'auto' ? (
               <>
-                {/* Base price */}
                 <div style={{ marginBottom: 8 }}>
                   <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: 0.5, marginBottom: 4 }}>PRECIO BASE · T1 (1 pkg)</div>
                   <input type="number" value={editTiers[0]?.price} placeholder="0"
                     onChange={e => { setEditPrice(e.target.value); setEditTiers(prev => prev.map((t,i) => i===0 ? {...t, price: e.target.value} : t)); }}
                     style={{ ...INP, borderColor: 'var(--accent)', fontWeight: 700 }} />
                 </div>
-
-                {/* Discount mode + preset loader */}
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
                   <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
                     {[['flat','$ CLP'],['pct','%']].map(([m, label]) => (
-                      <button key={m} onClick={() => setAutoDiscMode(m)} style={{
-                        padding: '4px 9px', border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer',
-                        background: autoDiscMode === m ? '#5c35cc' : '#fff',
-                        color: autoDiscMode === m ? '#fff' : 'var(--muted)',
-                      }}>{label}</button>
+                      <button key={m} onClick={() => setAutoDiscMode(m)} style={{ padding: '4px 9px', border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer', background: autoDiscMode === m ? '#5c35cc' : '#fff', color: autoDiscMode === m ? '#fff' : 'var(--muted)' }}>{label}</button>
                     ))}
                   </div>
                   {panelTemplates.length > 0 && (
@@ -798,16 +689,14 @@ export default function SectorMap() {
                     </select>
                   )}
                 </div>
-
-                {/* T2 row */}
                 {[1, 2].map(idx => {
-                  const isT2 = idx === 1;
-                  const d = isT2 ? autoD2 : autoD3;
-                  const setD = isT2 ? setAutoD2 : setAutoD3;
-                  const base = Number(editTiers[0]?.price) || 0;
-                  const calc = d ? calcAuto(base, Number(d), autoDiscMode) : null;
-                  const color = isT2 ? 'var(--accent)' : '#7b1fa2';
-                  const bg    = isT2 ? '#f4f7ff' : '#fdf4ff';
+                  const isT2  = idx === 1;
+                  const d     = isT2 ? autoD2 : autoD3;
+                  const setD  = isT2 ? setAutoD2 : setAutoD3;
+                  const base  = Number(editTiers[0]?.price) || 0;
+                  const calc  = d ? calcAuto(base, Number(d), autoDiscMode) : null;
+                  const color  = isT2 ? 'var(--accent)' : '#7b1fa2';
+                  const bg     = isT2 ? '#f4f7ff' : '#fdf4ff';
                   const border = isT2 ? '#0052FF30' : '#7b1fa230';
                   return (
                     <div key={idx} style={{ marginBottom: 8 }}>
@@ -823,17 +712,12 @@ export default function SectorMap() {
                           placeholder={autoDiscMode === 'flat' ? 'descuento $' : 'descuento %'}
                           style={{ padding: '5px 8px', borderRadius: 6, border: `1px solid ${border}`, fontSize: 12, outline: 'none', background: bg, textAlign: 'right', width: '100%', boxSizing: 'border-box' }} />
                       </div>
-                      {calc !== null && (
-                        <div style={{ fontSize: 10, color, fontWeight: 700, textAlign: 'right', marginTop: 2 }}>
-                          = ${calc.toLocaleString('es-CL')} por pkg
-                        </div>
-                      )}
+                      {calc !== null && <div style={{ fontSize: 10, color, fontWeight: 700, textAlign: 'right', marginTop: 2 }}>= ${calc.toLocaleString('es-CL')} por pkg</div>}
                     </div>
                   );
                 })}
               </>
             ) : (
-              /* Manual mode */
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '4px 8px', alignItems: 'center', marginBottom: 4 }}>
                   <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: 0.5 }}>CANTIDAD</span>
@@ -852,11 +736,7 @@ export default function SectorMap() {
                       </div>
                     )}
                     <input type="number" value={tier.price} placeholder="0"
-                      onChange={e => {
-                        const val = e.target.value;
-                        setEditTiers(prev => prev.map((t, idx) => idx === i ? { ...t, price: val } : t));
-                        if (i === 0) setEditPrice(val);
-                      }}
+                      onChange={e => { const val = e.target.value; setEditTiers(prev => prev.map((t, idx) => idx === i ? { ...t, price: val } : t)); if (i === 0) setEditPrice(val); }}
                       style={{ ...INP, background: i===0 ? '#fff' : '#f8f9ff', borderColor: i===0 ? 'var(--accent)' : 'var(--border)', fontWeight: i===0 ? 700 : 400 }} />
                   </div>
                 ))}
@@ -865,33 +745,21 @@ export default function SectorMap() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: panel.zone.source === 'custom' ? '1fr 1fr' : '1fr', gap: 10 }}>
-            <button onClick={saveZonePrice} disabled={savingZone} style={{
-              padding: 13, borderRadius: 12, border: 'none',
-              background: savingZone ? 'var(--border)' : 'var(--accent)', color: '#fff',
-              fontSize: 14, fontWeight: 700, cursor: savingZone ? 'not-allowed' : 'pointer'
-            }}>
+            <button onClick={saveZonePrice} disabled={savingZone} style={{ padding: 13, borderRadius: 12, border: 'none', background: savingZone ? 'var(--border)' : 'var(--accent)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: savingZone ? 'not-allowed' : 'pointer' }}>
               {savingZone ? '⏳…' : `✅ Guardar $${Number(editTiers[0]?.price || 0).toLocaleString('es-CL')}${tierInputMode === 'auto' ? ' · auto' : ''}`}
             </button>
             {panel.zone.source === 'custom' && (
-              <button onClick={() => deleteZone(panel.zone)} style={{
-                padding: 13, borderRadius: 12, border: '1px solid #cc224430',
-                background: 'none', color: '#cc2244', fontSize: 13, fontWeight: 700, cursor: 'pointer'
-              }}>
-                🗑️ Eliminar
-              </button>
+              <button onClick={() => deleteZone(panel.zone)} style={{ padding: 13, borderRadius: 12, border: '1px solid #cc224430', background: 'none', color: '#cc2244', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>🗑️ Eliminar</button>
             )}
           </div>
         </div>
       )}
 
-      {/* Tariff configs management panel */}
+      {/* Tariff configs panel */}
       {showTariffPanel && (
         <div style={{ position: 'absolute', inset: 0, background: '#0004', zIndex: 1000, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
           onClick={e => { if (e.target === e.currentTarget) { setShowTariffPanel(false); setEditingTariff(null); } }}>
-          <div style={{
-            background: '#fff', borderRadius: '18px 18px 0 0', padding: '18px 16px calc(20px + env(safe-area-inset-bottom))',
-            boxShadow: '0 -8px 28px #00000020', maxHeight: '70vh', display: 'flex', flexDirection: 'column'
-          }}>
+          <div style={{ background: '#fff', borderRadius: '18px 18px 0 0', padding: '18px 16px calc(20px + env(safe-area-inset-bottom))', boxShadow: '0 -8px 28px #00000020', maxHeight: '70vh', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexShrink: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 800 }}>📋 Configuraciones de precios</div>
               <button onClick={() => { setShowTariffPanel(false); setEditingTariff(null); }} style={{ background: 'none', border: 'none', fontSize: 22, color: 'var(--muted)', cursor: 'pointer', padding: 0 }}>✕</button>
@@ -908,13 +776,9 @@ export default function SectorMap() {
                 <div key={t._id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '11px 13px', marginBottom: 8 }}>
                   {editingTariff === t._id ? (
                     <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
-                      <input
-                        value={editTariffName}
-                        onChange={e => setEditTariffName(e.target.value)}
+                      <input value={editTariffName} onChange={e => setEditTariffName(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') saveTariffName(t._id); if (e.key === 'Escape') setEditingTariff(null); }}
-                        autoFocus
-                        style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: '1px solid var(--accent)', fontSize: 13, outline: 'none' }}
-                      />
+                        autoFocus style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: '1px solid var(--accent)', fontSize: 13, outline: 'none' }} />
                       <button onClick={() => saveTariffName(t._id)} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✓</button>
                       <button onClick={() => setEditingTariff(null)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', color: 'var(--muted)', fontSize: 12, cursor: 'pointer' }}>✕</button>
                     </div>
@@ -922,20 +786,11 @@ export default function SectorMap() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                          {t.items?.length || 0} comunas · Precio base: ${(t.defaultPrice || 0).toLocaleString('es-CL')}
-                        </div>
-                        {t.description && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>{t.description}</div>}
+                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{t.items?.length || 0} comunas · Precio base: ${(t.defaultPrice || 0).toLocaleString('es-CL')}</div>
                       </div>
                       <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                        <button
-                          onClick={() => { setEditingTariff(t._id); setEditTariffName(t.name); }}
-                          style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #0077aa30', background: '#0077aa0c', color: '#0077aa', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-                        >✏️</button>
-                        <button
-                          onClick={() => deleteTariffConfig(t._id)}
-                          style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #cc224430', background: '#cc224408', color: '#cc2244', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-                        >🗑️</button>
+                        <button onClick={() => { setEditingTariff(t._id); setEditTariffName(t.name); }} style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #0077aa30', background: '#0077aa0c', color: '#0077aa', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✏️</button>
+                        <button onClick={() => deleteTariffConfig(t._id)} style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #cc224430', background: '#cc224408', color: '#cc2244', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>🗑️</button>
                       </div>
                     </div>
                   )}
@@ -951,15 +806,9 @@ export default function SectorMap() {
         <div style={{ position: 'absolute', inset: 0, background: '#0007', zIndex: 1000, display: 'flex', alignItems: 'flex-end' }}>
           <div style={{ background: '#fff', width: '100%', borderRadius: '18px 18px 0 0', padding: '20px 16px calc(22px + env(safe-area-inset-bottom))', boxShadow: '0 -8px 28px #00000025' }}>
             <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 4 }}>✏️ Nueva sub-zona</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>
-              {newModal.latlngs.length} vértices · Precio de esta zona tiene <b>prioridad</b> sobre la comuna
-            </div>
-
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>{newModal.latlngs.length} vértices · Precio tiene prioridad sobre la comuna</div>
             <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 5, letterSpacing: 1 }}>NOMBRE</div>
-            <input value={newName} onChange={e => setNewName(e.target.value)}
-              placeholder="Ej: Maipú Norte, Las Condes Oriente…"
-              style={{ ...INP, marginBottom: 12 }} autoFocus />
-
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Ej: Maipú Norte…" style={{ ...INP, marginBottom: 12 }} autoFocus />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'end', marginBottom: 16 }}>
               <div>
                 <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 5, letterSpacing: 1 }}>PRECIO CLP</div>
@@ -969,16 +818,11 @@ export default function SectorMap() {
                 <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 5, letterSpacing: 1 }}>COLOR</div>
                 <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                   {CUSTOM_COLORS.map(c => (
-                    <button key={c} onClick={() => setNewColor(c)} style={{
-                      width: 26, height: 26, borderRadius: '50%',
-                      border: newColor === c ? '3px solid #111' : '2px solid transparent',
-                      background: c, cursor: 'pointer', padding: 0
-                    }} />
+                    <button key={c} onClick={() => setNewColor(c)} style={{ width: 26, height: 26, borderRadius: '50%', border: newColor === c ? '3px solid #111' : '2px solid transparent', background: c, cursor: 'pointer', padding: 0 }} />
                   ))}
                 </div>
               </div>
             </div>
-
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <button onClick={() => setNewModal(null)} style={{ padding: 13, borderRadius: 12, border: '1px solid var(--border)', background: 'none', color: 'var(--muted)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cancelar</button>
               <button onClick={saveNewZone} disabled={savingNew} style={{ padding: 13, borderRadius: 12, border: 'none', background: savingNew ? 'var(--border)' : newColor, color: '#fff', fontSize: 13, fontWeight: 700, cursor: savingNew ? 'not-allowed' : 'pointer' }}>
@@ -990,10 +834,7 @@ export default function SectorMap() {
       )}
 
       {showImport && (
-        <ImportPricesModal
-          onClose={() => setShowImport(false)}
-          onImported={() => { setShowImport(false); loadZones(); }}
-        />
+        <ImportPricesModal onClose={() => setShowImport(false)} onImported={() => { setShowImport(false); loadZones(); }} />
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { loadGoogleMaps } from '../../utils/googleMaps.js';
 import {
   ArrowLeft, ArrowRight, Check, X, Sparkles,
   Building2, Shield, PenLine, Phone, Users, Mail,
@@ -43,77 +44,80 @@ const GROUPED = CATS_ORDER.map(cat => ({
   items: CATALOG.filter(c => c.cat === cat),
 })).filter(g => g.items.length > 0);
 
-// ─── Leaflet route map (free, no API key) ────────────────────
-let _leafletCss = false;
-function injectLeafletCss() {
-  if (_leafletCss || document.getElementById('czLeaflet')) return;
-  const link = document.createElement('link');
-  link.id = 'czLeaflet';
-  link.rel = 'stylesheet';
-  link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-  document.head.appendChild(link);
-  _leafletCss = true;
-}
-
+// ─── Google Maps route map ────────────────────────────────────
 function LeafletRouteMap({ from, to, distanceKm }) {
-  const divRef     = useRef(null);
-  const mapRef     = useRef(null);
-  const routeRef   = useRef(null);
-  const markersRef = useRef([]);
+  const divRef    = useRef(null);
+  const mapRef    = useRef(null);
+  const gmRef     = useRef(null);
+  const routeRef  = useRef(null);
+  const mksRef    = useRef([]);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
-    injectLeafletCss();
-    if (!divRef.current || mapRef.current) return;
-    import('leaflet').then(({ default: L }) => {
-      if (!divRef.current || mapRef.current || divRef.current._leaflet_id) return;
-      mapRef.current = L.map(divRef.current, {
+    loadGoogleMaps().then(gm => {
+      gmRef.current = gm;
+      mapRef.current = new gm.Map(divRef.current, {
+        center: { lat: -33.45, lng: -70.65 },
+        zoom: 11,
         zoomControl: false,
-        attributionControl: false,
-        scrollWheelZoom: false,
-        dragging: false,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+        gestureHandling: 'none',
       });
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 })
-       .addTo(mapRef.current);
-      mapRef.current.setView([-33.45, -70.65], 11);
+      setMapReady(true);
     });
-    return () => { mapRef.current?.remove(); mapRef.current = null; };
+    return () => { mapRef.current = null; gmRef.current = null; };
   }, []);
 
   useEffect(() => {
-    if (!from.lat || !to.lat) return;
-    import('leaflet').then(({ default: L }) => {
-      if (!mapRef.current) return;
-      markersRef.current.forEach(m => m.remove());
-      markersRef.current = [];
-      routeRef.current?.remove();
-      routeRef.current = null;
+    const gm  = gmRef.current;
+    const map = mapRef.current;
+    if (!gm || !map || !from.lat || !to.lat) return;
+    mksRef.current.forEach(m => m.setMap(null));
+    mksRef.current = [];
+    routeRef.current?.setMap(null);
+    routeRef.current = null;
 
-      const mkIcon = color => L.divIcon({
-        html: `<div style="width:12px;height:12px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)"></div>`,
-        className: '', iconSize: [12, 12], iconAnchor: [6, 6],
-      });
-      markersRef.current.push(
-        L.marker([from.lat, from.lng], { icon: mkIcon(B) }).addTo(mapRef.current),
-        L.marker([to.lat, to.lng],   { icon: mkIcon(SUC) }).addTo(mapRef.current),
-      );
-
-      fetch(`https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?geometries=geojson&overview=simplified`)
-        .then(r => r.json())
-        .then(data => {
-          if (!mapRef.current) return;
-          const coords = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-          routeRef.current = L.polyline(coords, { color: B, weight: 4.5, opacity: 0.9 }).addTo(mapRef.current);
-          mapRef.current.fitBounds(routeRef.current.getBounds().pad(0.2));
-        })
-        .catch(() => {
-          if (!mapRef.current) return;
-          routeRef.current = L.polyline([[from.lat, from.lng], [to.lat, to.lng]], {
-            color: B, weight: 3, opacity: 0.7, dashArray: '8,6',
-          }).addTo(mapRef.current);
-          mapRef.current.fitBounds([[from.lat, from.lng], [to.lat, to.lng]], { padding: [30, 30] });
-        });
+    const mkIcon = color => ({
+      path: gm.SymbolPath.CIRCLE,
+      scale: 6,
+      fillColor: color,
+      fillOpacity: 1,
+      strokeColor: '#fff',
+      strokeWeight: 3,
     });
-  }, [from.lat, from.lng, to.lat, to.lng]);
+    mksRef.current.push(
+      new gm.Marker({ position: { lat: from.lat, lng: from.lng }, map, icon: mkIcon(B) }),
+      new gm.Marker({ position: { lat: to.lat, lng: to.lng }, map, icon: mkIcon(SUC) }),
+    );
+
+    fetch(`https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?geometries=geojson&overview=simplified`)
+      .then(r => r.json())
+      .then(data => {
+        if (!mapRef.current) return;
+        const path = data.routes[0].geometry.coordinates.map(([lng, lat]) => ({ lat, lng }));
+        routeRef.current = new gm.Polyline({ path, strokeColor: B, strokeWeight: 4.5, strokeOpacity: 0.9, map });
+        const bounds = new gm.LatLngBounds();
+        path.forEach(p => bounds.extend(p));
+        map.fitBounds(bounds, { top: 30, right: 30, bottom: 30, left: 30 });
+      })
+      .catch(() => {
+        if (!mapRef.current) return;
+        routeRef.current = new gm.Polyline({
+          path: [{ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }],
+          strokeColor: B,
+          strokeOpacity: 0,
+          strokeWeight: 3,
+          icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.7, strokeColor: B, scale: 3 }, offset: '0', repeat: '16px' }],
+          map,
+        });
+        const bounds = new gm.LatLngBounds();
+        bounds.extend({ lat: from.lat, lng: from.lng });
+        bounds.extend({ lat: to.lat, lng: to.lng });
+        map.fitBounds(bounds, { top: 30, right: 30, bottom: 30, left: 30 });
+      });
+  }, [mapReady, from.lat, from.lng, to.lat, to.lng]);
 
   return (
     <div style={{ borderRadius: 14, overflow: 'hidden', height: 160, marginBottom: 14, border: `1px solid ${BDR}`, position: 'relative', background: '#EEF3FF' }}>

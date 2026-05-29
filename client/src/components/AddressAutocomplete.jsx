@@ -70,40 +70,6 @@ async function googleDetails(placeId) {
   };
 }
 
-// ── Nominatim (OpenStreetMap) — fallback gratuito ─────────────────────────────
-async function nominatimSearch(q) {
-  const params = new URLSearchParams({
-    q: q + ', Chile', countrycodes: 'cl', format: 'json',
-    addressdetails: '1', limit: '7', 'accept-language': 'es',
-  });
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 5000);
-  const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
-    headers: { 'User-Agent': 'MUVE/1.0' },
-    signal: ctrl.signal,
-  }).finally(() => clearTimeout(t));
-  if (!res.ok) throw new Error(`OSM ${res.status}`);
-  const list = await res.json();
-  return list.map(r => {
-    const a      = r.address || {};
-    const road   = [a.road, a.house_number].filter(Boolean).join(' ');
-    const main   = mergeTypedStreetNumber(road || a.pedestrian || r.display_name.split(',')[0], q);
-    const commune = a.suburb || a.city_district || a.town || a.municipality || a.county || '';
-    const city    = a.city || a.state_district || '';
-    const address = mergeTypedStreetNumber([road || main, commune, city, 'Chile'].filter(Boolean).join(', '), q);
-    return {
-      main,
-      secondary: [commune, city, 'Chile'].filter(Boolean).join(', '),
-      commune,
-      lat:       parseFloat(r.lat),
-      lng:       parseFloat(r.lon),
-      address,
-      source:    'osm',
-      typed:     q,
-    };
-  });
-}
-
 // ── Estilos ───────────────────────────────────────────────────────────────────
 const INP = {
   width: '100%', background: 'var(--card2)', border: '1px solid var(--border)',
@@ -146,7 +112,6 @@ export default function AddressAutocomplete({
     setDropPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width });
   };
 
-  // ── Buscar: Google primero, Nominatim de fallback ────────────────────────────
   const search = useCallback((q) => {
     clearTimeout(debounceRef.current);
     if (!q || q.trim().length < 3) { setSuggestions([]); setOpen(false); return; }
@@ -155,29 +120,16 @@ export default function AddressAutocomplete({
       if (!mountedRef.current) return;
       setLoading(true);
       let results = [];
-      let src = '';
 
       try {
-        if (KEY) {
-          results = await googleSearch(q.trim());
-          src = 'google';
-        }
+        if (KEY) results = await googleSearch(q.trim());
       } catch (e) {
-        console.warn('[Google Places]', e.message, '→ usando OSM');
-      }
-
-      if (!results.length) {
-        try {
-          results = await nominatimSearch(q.trim());
-          src = 'osm';
-        } catch (e) {
-          console.warn('[Nominatim]', e.message);
-        }
+        console.warn('[Google Places]', e.message);
       }
 
       if (!mountedRef.current) return;
       setLoading(false);
-      setProvider(src);
+      setProvider(results.length ? 'google' : '');
       if (results.length) {
         calcDropPos();
         setSuggestions(results);
@@ -213,11 +165,10 @@ export default function AddressAutocomplete({
         onSelect?.({ address, commune: '', lat: null, lng: null });
       }
     } else {
-      // OSM ya tiene todo
-      const addr = mergeTypedStreetNumber(sugg.address || sugg.main, sugg.typed || query);
+      const addr = mergeTypedStreetNumber(sugg.fullText || sugg.main, sugg.typed || query);
       setQuery(addr);
       onChange?.(addr);
-      onSelect?.({ address: addr, commune: sugg.commune || '', lat: sugg.lat, lng: sugg.lng });
+      onSelect?.({ address: addr, commune: '', lat: null, lng: null });
     }
   };
 
@@ -270,9 +221,7 @@ export default function AddressAutocomplete({
             </div>
           ))}
           <div style={{ padding: '4px 10px 5px', textAlign: 'right', background: '#fafafa', borderTop: '1px solid var(--border)' }}>
-            <span style={{ fontSize: 9, color: 'var(--muted)' }}>
-              {provider === 'google' ? '🗺 Google Maps' : '© OpenStreetMap'}
-            </span>
+            <span style={{ fontSize: 9, color: 'var(--muted)' }}>🗺 Google Maps</span>
           </div>
         </div>
       )}

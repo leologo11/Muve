@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import L from 'leaflet';
+import { loadGoogleMaps } from '../utils/googleMaps.js';
 import { api } from '../api/index.js';
 
 const STATUS_META = {
@@ -23,18 +23,6 @@ function pinColor(status) {
   return '#f57c00';
 }
 
-function makePin(num, status) {
-  const bg = pinColor(status);
-  const symbol = status === 'entregado' ? '✓' : status === 'no-entregado' ? '✗' : num;
-  return L.divIcon({
-    className: '',
-    html: `<div style="width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${bg};border:2px solid #fff;box-shadow:0 2px 6px #0005;display:flex;align-items:center;justify-content:center">
-             <span style="transform:rotate(45deg);color:#fff;font-size:10px;font-weight:800;line-height:1">${symbol}</span>
-           </div>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 28]
-  });
-}
 
 // ── PDF generator ──────────────────────────────────────────────────────────────
 function generatePdf(route, packages) {
@@ -308,42 +296,59 @@ ${hasPrice ? `
 function PublicMap({ packages }) {
   const mapRef  = useRef(null);
   const mapInst = useRef(null);
+  const gmRef   = useRef(null);
   const mksRef  = useRef([]);
+  const infoRef = useRef(null);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
-    if (mapInst.current) return;
-    const map = L.map(mapRef.current, { zoomControl: true }).setView([-33.45, -70.65], 11);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap', maxZoom: 19
-    }).addTo(map);
-    mapInst.current = map;
-    setTimeout(() => map.invalidateSize(), 120);
+    loadGoogleMaps().then(gm => {
+      gmRef.current   = gm;
+      mapInst.current = new gm.Map(mapRef.current, {
+        center: { lat: -33.45, lng: -70.65 },
+        zoom: 11,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+      });
+      infoRef.current = new gm.InfoWindow();
+      setMapReady(true);
+    });
   }, []);
 
   useEffect(() => {
+    const gm  = gmRef.current;
     const map = mapInst.current;
-    if (!map) return;
-    mksRef.current.forEach(m => map.removeLayer(m));
+    if (!gm || !map) return;
+    mksRef.current.forEach(m => m.setMap(null));
     mksRef.current = [];
-    const active = packages.filter(p => p.status !== 'eliminado');
+    const active     = packages.filter(p => p.status !== 'eliminado');
     const withCoords = active.filter(p => p.lat && p.lng);
     withCoords.forEach((pkg, i) => {
-      const mk = L.marker([pkg.lat, pkg.lng], { icon: makePin(i + 1, pkg.status) }).addTo(map);
-      mk.bindPopup(
-        `<div style="font-family:'Inter',sans-serif;min-width:160px">
-          <b style="font-size:13px">${pkg.customerName} ${pkg.customerLastName || ''}</b><br>
-          <span style="font-size:11px;color:#555">${pkg.address || ''}${pkg.commune ? ', ' + pkg.commune : ''}</span><br>
-          <span style="font-size:12px;font-weight:700;color:${pinColor(pkg.status)}">${STATUS_META[pkg.status]?.label || pkg.status}</span>
-        </div>`,
-        { maxWidth: 240 }
-      );
-      mksRef.current.push(mk);
+      const bg  = pinColor(pkg.status);
+      const lbl = pkg.status === 'entregado' ? '✓' : pkg.status === 'no-entregado' ? '✗' : String(i + 1);
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="36" viewBox="0 0 32 36"><path d="M16 0C7.16 0 0 7.16 0 16c0 8.84 16 20 16 20s16-11.16 16-20C32 7.16 24.84 0 16 0Z" fill="${bg}" stroke="white" stroke-width="2"/><text x="16" y="21" text-anchor="middle" fill="white" font-size="11" font-weight="800" font-family="Arial,sans-serif">${lbl}</text></svg>`;
+      const icon = {
+        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+        scaledSize: new gm.Size(32, 36),
+        anchor: new gm.Point(16, 36),
+      };
+      const marker = new gm.Marker({ position: { lat: pkg.lat, lng: pkg.lng }, map, icon });
+      marker.addListener('click', () => {
+        infoRef.current.setContent(
+          `<div style="font-family:'Inter',sans-serif;min-width:160px;padding:4px"><b style="font-size:13px">${pkg.customerName} ${pkg.customerLastName || ''}</b><br><span style="font-size:11px;color:#555">${pkg.address || ''}${pkg.commune ? ', ' + pkg.commune : ''}</span><br><span style="font-size:12px;font-weight:700;color:${pinColor(pkg.status)}">${STATUS_META[pkg.status]?.label || pkg.status}</span></div>`
+        );
+        infoRef.current.open(map, marker);
+      });
+      mksRef.current.push(marker);
     });
     if (withCoords.length > 0) {
-      map.fitBounds(L.latLngBounds(withCoords.map(p => [p.lat, p.lng])), { padding: [30, 30], maxZoom: 14 });
+      const bounds = new gm.LatLngBounds();
+      withCoords.forEach(p => bounds.extend({ lat: p.lat, lng: p.lng }));
+      map.fitBounds(bounds, { top: 30, right: 30, bottom: 30, left: 30 });
+      if (withCoords.length === 1) map.setZoom(14);
     }
-    setTimeout(() => map.invalidateSize(), 80);
-  }, [packages]);
+  }, [mapReady, packages]);
 
   const withCoords = packages.filter(p => p.lat && p.lng && p.status !== 'eliminado').length;
   const total      = packages.filter(p => p.status !== 'eliminado').length;

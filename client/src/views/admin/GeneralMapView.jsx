@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import L from 'leaflet';
+import { loadGoogleMaps } from '../../utils/googleMaps.js';
 import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
@@ -22,8 +22,6 @@ const COMMUNES = [
   'San José de Maipo','San Miguel','San Pedro','San Ramón','Santiago','Talagante','Tiltil',
   'Vitacura',
 ];
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function pinColor(pkg) {
   if (pkg.routeStatus === 'active' && pkg.status === 'pendiente') return '#f59e0b';
@@ -48,22 +46,17 @@ function fmtDate(value) {
 }
 function escapeHtml(value = '') {
   return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+    .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
 
-// Ray-casting point-in-polygon
 function pointInPolygon(point, polygon) {
   const { lat: px, lng: py } = point;
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
     const { lat: xi, lng: yi } = polygon[i];
     const { lat: xj, lng: yj } = polygon[j];
-    const intersect = ((yi > py) !== (yj > py)) &&
-      (px < (xj - xi) * (py - yi) / (yj - yi) + xi);
+    const intersect = ((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi);
     if (intersect) inside = !inside;
   }
   return inside;
@@ -79,19 +72,29 @@ function popupHtml(pkg) {
       <div style="font-weight:800;font-size:13px;margin-bottom:5px;color:#0f172a">${pkg.trackingId || '—'}</div>
       ${pkg.customerName ? `<div style="font-size:12px;color:#334155;margin-bottom:3px">👤 ${pkg.customerName}</div>` : ''}
       <div style="font-size:11px;color:#64748b;margin-bottom:3px">📍 ${pkg.address || ''}${pkg.commune ? ', ' + pkg.commune : ''}</div>
-      ${pkg.companyName ? `<div style="font-size:11px;color:#64748b;margin-bottom:3px">🏢 ${pkg.companyName}</div>` : ''}
-      ${pkg.driverName  ? `<div style="font-size:11px;color:#64748b;margin-bottom:3px">🚚 ${pkg.driverName}</div>` : ''}
       <div style="font-size:11px;color:#475569;margin-bottom:3px"><b>Empresa:</b> ${escapeHtml(pkg.companyName || 'Sin empresa')}</div>
       <div style="font-size:11px;color:#475569;margin-bottom:3px"><b>Ruta:</b> ${escapeHtml(routeInfo)}</div>
       <div style="font-size:11px;color:#475569;margin-bottom:3px"><b>Driver:</b> ${escapeHtml(pkg.driverName || 'Sin driver asignado')}</div>
       ${pkg.createdAt ? `<div style="font-size:11px;color:#64748b;margin-bottom:3px"><b>Ingreso:</b> ${escapeHtml(fmtDate(pkg.createdAt))}</div>` : ''}
       <div style="margin-top:6px;font-size:12px;font-weight:700;color:#0f172a">${escapeHtml(sl)}</div>
-      ${pkg.failReason  ? `<div style="font-size:11px;color:#ef4444;margin-top:2px">${pkg.failReason}</div>` : ''}
+      ${pkg.failReason ? `<div style="font-size:11px;color:#ef4444;margin-top:2px">${pkg.failReason}</div>` : ''}
     </div>
   `;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+function makeCircleIcon(gm, color, selected, dimmed) {
+  const size    = selected ? 18 : 14;
+  const stroke  = selected ? 3 : (dimmed ? 1 : 2);
+  const opacity = dimmed ? 0.45 : 1;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+    <circle cx="${size/2}" cy="${size/2}" r="${size/2-1}" fill="${color}" stroke="white" stroke-width="${stroke}" opacity="${opacity}"/>
+  </svg>`;
+  return {
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+    scaledSize: new gm.Size(size, size),
+    anchor: new gm.Point(size / 2, size / 2),
+  };
+}
 
 const STATUS_FILTERS = [
   { val: 'todos',        label: 'Todos',        color: '#64748b' },
@@ -100,54 +103,53 @@ const STATUS_FILTERS = [
   { val: 'pendiente',    label: '⚪ Pendientes', color: '#94a3b8' },
   { val: 'no-entregado', label: '🔴 Incidencias',color: '#ef4444' },
 ];
-
 const ROUTE_FILTERS = [
   { val: 'sin-ruta', label: '📭 Sin asignar', color: '#6366f1' },
   { val: 'con-ruta', label: '📬 Asignados',   color: '#0891b2' },
 ];
 
 export default function GeneralMapView() {
-  // ── Refs ──────────────────────────────────────────────────────────────────
-  const mapRef         = useRef(null);
-  const mapInst        = useRef(null);
-  const markersRef     = useRef([]);       // L.circleMarker list
-  const lassoLayerRef  = useRef(null);     // L.polygon while drawing
-  const lassoModeRef   = useRef(false);    // live lasso state for map handlers
-  const drawingRef     = useRef(false);    // currently dragging lasso
-  const lassoPointsRef = useRef([]);       // points accumulated during draw
-  const filteredRef    = useRef([]);       // live filtered list for lasso handler
-  const spaceHeldRef   = useRef(false);    // Space held → temp pan mode
+  const mapRef          = useRef(null);
+  const gmRef           = useRef(null);
+  const mapInst         = useRef(null);
+  const markersRef      = useRef([]);
+  const lassoPolyRef    = useRef(null);
+  const lassoModeRef    = useRef(false);
+  const drawingRef      = useRef(false);
+  const lassoPointsRef  = useRef([]);
+  const filteredRef     = useRef([]);
+  const spaceHeldRef    = useRef(false);
+  const infoWindowRef   = useRef(null);
 
-  // ── State ─────────────────────────────────────────────────────────────────
-  const [packages,       setPackages]       = useState([]);
-  const [routes,         setRoutes]         = useState([]);
-  const [loading,        setLoading]        = useState(true);
-  const [search,         setSearch]         = useState('');
-  const [statusFilter,   setStatusFilter]   = useState('todos');
-  const [companyFilter,  setCompanyFilter]  = useState('');
-  const [driverFilter,   setDriverFilter]   = useState('');
-  const [dateFrom,       setDateFrom]       = useState('');
-  const [dateTo,         setDateTo]         = useState('');
-  const [lassoMode,      setLassoMode]      = useState(false);
-  const [selectedIds,    setSelectedIds]    = useState(new Set());
-  const [showAssignPanel,setShowAssignPanel]= useState(false);
-  const [targetRouteId,  setTargetRouteId]  = useState('');
-  const [assigning,      setAssigning]      = useState(false);
-  const [drivers,        setDrivers]        = useState([]);
-  const [showNoGeoPanel, setShowNoGeoPanel] = useState(false);
-  const [editingNoGeo,   setEditingNoGeo]   = useState(null);  // { id, address, commune }
-  const [savingNoGeo,    setSavingNoGeo]    = useState(false);
+  const [mapReady,         setMapReady]         = useState(false);
+  const [packages,         setPackages]         = useState([]);
+  const [routes,           setRoutes]           = useState([]);
+  const [loading,          setLoading]          = useState(true);
+  const [search,           setSearch]           = useState('');
+  const [statusFilter,     setStatusFilter]     = useState('todos');
+  const [companyFilter,    setCompanyFilter]    = useState('');
+  const [driverFilter,     setDriverFilter]     = useState('');
+  const [dateFrom,         setDateFrom]         = useState('');
+  const [dateTo,           setDateTo]           = useState('');
+  const [lassoMode,        setLassoMode]        = useState(false);
+  const [selectedIds,      setSelectedIds]      = useState(new Set());
+  const [showAssignPanel,  setShowAssignPanel]  = useState(false);
+  const [targetRouteId,    setTargetRouteId]    = useState('');
+  const [assigning,        setAssigning]        = useState(false);
+  const [drivers,          setDrivers]          = useState([]);
+  const [showNoGeoPanel,   setShowNoGeoPanel]   = useState(false);
+  const [editingNoGeo,     setEditingNoGeo]     = useState(null);
+  const [savingNoGeo,      setSavingNoGeo]      = useState(false);
 
-  // Create route inline form
-  const [showCreateForm,    setShowCreateForm]    = useState(false);
-  const [newRouteName,      setNewRouteName]      = useState('');
-  const [newRouteDate,      setNewRouteDate]      = useState(new Date().toISOString().slice(0, 10));
-  const [newRouteDriverId,  setNewRouteDriverId]  = useState('');
-  const [newRouteStatus,    setNewRouteStatus]    = useState('active');
-  const [newRouteStart,     setNewRouteStart]     = useState({ address: '', lat: null, lng: null });
-  const [creating,          setCreating]          = useState(false);
+  const [showCreateForm,   setShowCreateForm]   = useState(false);
+  const [newRouteName,     setNewRouteName]     = useState('');
+  const [newRouteDate,     setNewRouteDate]     = useState(new Date().toISOString().slice(0, 10));
+  const [newRouteDriverId, setNewRouteDriverId] = useState('');
+  const [newRouteStatus,   setNewRouteStatus]   = useState('active');
+  const [newRouteStart,    setNewRouteStart]    = useState({ address: '', lat: null, lng: null });
+  const [creating,         setCreating]         = useState(false);
 
-  // ── Load data ─────────────────────────────────────────────────────────────
+  // Load data
   useEffect(() => {
     setLoading(true);
     Promise.all([api.getMapPackages({ from: dateFrom, to: dateTo }), api.getRoutes(), api.getUsers()])
@@ -160,7 +162,6 @@ export default function GeneralMapView() {
       .finally(() => setLoading(false));
   }, [dateFrom, dateTo]);
 
-  // ── Derived lists for filter dropdowns ────────────────────────────────────
   const companies = useMemo(() => {
     const s = new Set(packages.map(p => p.companyName).filter(Boolean));
     return [...s].sort();
@@ -171,33 +172,27 @@ export default function GeneralMapView() {
     return [...s].sort();
   }, [packages]);
 
-  // ── Filtered packages ─────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return packages.filter(p => {
       const isActive = p.routeStatus === 'active' && p.status === 'pendiente';
-
       const passStatus =
-        statusFilter === 'todos'       ? true
+        statusFilter === 'todos'        ? true
         : statusFilter === 'activo'    ? isActive
         : statusFilter === 'pendiente' ? (p.status === 'pendiente' && !isActive)
         : statusFilter === 'sin-ruta'  ? !hasAssignedRoute(p)
         : statusFilter === 'con-ruta'  ? hasAssignedRoute(p)
         : p.status === statusFilter;
-
       const passCompany = !companyFilter || p.companyName === companyFilter;
       const passDriver  = !driverFilter  || p.driverName  === driverFilter;
       const passSearch  = !q || [p.trackingId, p.customerName, p.address, p.commune, p.companyName, p.driverName, p.routeCode]
         .filter(Boolean).join(' ').toLowerCase().includes(q);
-
       return passStatus && passCompany && passDriver && passSearch;
     });
   }, [packages, search, statusFilter, companyFilter, driverFilter]);
 
-  // Keep ref in sync so lasso handlers can read current filtered list
   filteredRef.current = filtered;
 
-  // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => ({
     active:     packages.filter(p => p.routeStatus === 'active' && p.status === 'pendiente').length,
     delivered:  packages.filter(p => p.status === 'entregado').length,
@@ -213,86 +208,94 @@ export default function GeneralMapView() {
 
   const hasActiveFilters = statusFilter !== 'todos' || companyFilter || driverFilter || dateFrom || dateTo || search;
 
-  // ── Init map + lasso events ───────────────────────────────────────────────
+  // Init Google Maps
   useEffect(() => {
     if (!mapRef.current || mapInst.current) return;
+    loadGoogleMaps().then(gm => {
+      if (!mapRef.current || mapInst.current) return;
+      gmRef.current = gm;
+      const map = new gm.Map(mapRef.current, {
+        center: { lat: -33.455, lng: -70.648 },
+        zoom: 11,
+        gestureHandling: 'cooperative',
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+      });
+      infoWindowRef.current = new gm.InfoWindow();
 
-    const map = L.map(mapRef.current, { center: [-33.455, -70.648], zoom: 11 });
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 19,
-    }).addTo(map);
+      // Lasso: mousedown → start drawing
+      map.addListener('mousedown', e => {
+        if (!lassoModeRef.current || spaceHeldRef.current) return;
+        drawingRef.current = true;
+        map.setOptions({ draggable: false });
+        lassoPointsRef.current = [{ lat: e.latLng.lat(), lng: e.latLng.lng() }];
+        if (lassoPolyRef.current) { lassoPolyRef.current.setMap(null); lassoPolyRef.current = null; }
+        lassoPolyRef.current = new gm.Polygon({
+          paths: lassoPointsRef.current,
+          strokeColor: '#0052FF', strokeOpacity: 1, strokeWeight: 2.5,
+          fillColor: '#0052FF', fillOpacity: 0.08,
+          map,
+        });
+      });
 
-    // Lasso: mousedown → start drawing (skip if Space held for panning)
-    map.on('mousedown', e => {
-      if (!lassoModeRef.current || spaceHeldRef.current) return;
-      drawingRef.current = true;
-      lassoPointsRef.current = [e.latlng];
-      if (lassoLayerRef.current) { map.removeLayer(lassoLayerRef.current); lassoLayerRef.current = null; }
-      lassoLayerRef.current = L.polygon([[e.latlng.lat, e.latlng.lng]], {
-        color: '#0052FF', weight: 2.5, fillColor: '#0052FF', fillOpacity: 0.08, dashArray: '6 4',
-      }).addTo(map);
-      map.dragging.disable();
+      // Lasso: mousemove → extend polygon
+      map.addListener('mousemove', e => {
+        if (!drawingRef.current) return;
+        lassoPointsRef.current.push({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+        lassoPolyRef.current?.setPath(lassoPointsRef.current);
+      });
+
+      mapInst.current = map;
+      setMapReady(true);
     });
+    return () => { mapInst.current = null; };
+  }, []);
 
-    // Lasso: mousemove → extend polygon
-    map.on('mousemove', e => {
-      if (!drawingRef.current) return;
-      lassoPointsRef.current.push(e.latlng);
-      if (lassoLayerRef.current) lassoLayerRef.current.setLatLngs([lassoPointsRef.current]);
-    });
-
-    // Lasso: mouseup → detect packages inside, show assign panel
-    map.on('mouseup', () => {
+  // Document mouseup: finish lasso
+  useEffect(() => {
+    const onMouseUp = () => {
       if (!drawingRef.current) return;
       drawingRef.current = false;
-      map.dragging.enable();
+      const map = mapInst.current;
+      if (map) map.setOptions({ draggable: true });
       const pts = lassoPointsRef.current;
       if (pts.length < 3) return;
       const inside = filteredRef.current.filter(pkg =>
         pkg.lat && pkg.lng && pointInPolygon({ lat: pkg.lat, lng: pkg.lng }, pts)
       );
+      if (lassoPolyRef.current) { lassoPolyRef.current.setMap(null); lassoPolyRef.current = null; }
       if (inside.length === 0) {
         toast('Sin paquetes en el área seleccionada');
-        if (lassoLayerRef.current) { map.removeLayer(lassoLayerRef.current); lassoLayerRef.current = null; }
         return;
       }
       setSelectedIds(new Set(inside.map(pkgId)));
       setShowAssignPanel(true);
-    });
-
-    mapInst.current = map;
-    return () => { map.remove(); mapInst.current = null; };
+    };
+    document.addEventListener('mouseup', onMouseUp);
+    return () => document.removeEventListener('mouseup', onMouseUp);
   }, []);
 
-  // ── Space = pan while in lasso mode ──────────────────────────────────────
+  // Space = pan while in lasso mode
   useEffect(() => {
-    const onKeyDown = (e) => {
+    const onKeyDown = e => {
       if (e.code !== 'Space' || !lassoModeRef.current || spaceHeldRef.current) return;
       e.preventDefault();
       spaceHeldRef.current = true;
-
-      // Cancel any in-progress draw
       if (drawingRef.current) {
         drawingRef.current = false;
         lassoPointsRef.current = [];
-        const map = mapInst.current;
-        if (map && lassoLayerRef.current) { map.removeLayer(lassoLayerRef.current); lassoLayerRef.current = null; }
+        if (lassoPolyRef.current) { lassoPolyRef.current.setMap(null); lassoPolyRef.current = null; }
       }
-
-      const map = mapInst.current;
-      if (map) map.dragging.enable();
+      mapInst.current?.setOptions({ draggable: true });
       if (mapRef.current) mapRef.current.style.cursor = 'grab';
     };
-
-    const onKeyUp = (e) => {
+    const onKeyUp = e => {
       if (e.code !== 'Space' || !lassoModeRef.current) return;
       e.preventDefault();
       spaceHeldRef.current = false;
       if (mapRef.current) mapRef.current.style.cursor = 'crosshair';
-      // dragging stays enabled until the next lasso mousedown
     };
-
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup',   onKeyUp);
     return () => {
@@ -301,27 +304,26 @@ export default function GeneralMapView() {
     };
   }, []);
 
-  // ── Toggle lasso mode ─────────────────────────────────────────────────────
+  // Toggle lasso mode
   useEffect(() => {
     lassoModeRef.current = lassoMode;
     if (!mapRef.current) return;
     mapRef.current.style.cursor = lassoMode ? 'crosshair' : '';
     if (!lassoMode) {
       drawingRef.current = false;
-      const map = mapInst.current;
-      if (map) {
-        map.dragging.enable();
-        if (lassoLayerRef.current) { map.removeLayer(lassoLayerRef.current); lassoLayerRef.current = null; }
-      }
+      mapInst.current?.setOptions({ draggable: true });
+      if (lassoPolyRef.current) { lassoPolyRef.current.setMap(null); lassoPolyRef.current = null; }
     }
   }, [lassoMode]);
 
-  // ── Redraw markers ────────────────────────────────────────────────────────
+  // Redraw markers
   useEffect(() => {
+    if (!mapReady) return;
     const map = mapInst.current;
-    if (!map) return;
+    const gm  = gmRef.current;
+    if (!map || !gm) return;
 
-    markersRef.current.forEach(m => map.removeLayer(m));
+    markersRef.current.forEach(m => m.setMap(null));
     markersRef.current = [];
 
     const visiblePackages = hasActiveFilters ? filtered : packages;
@@ -329,31 +331,20 @@ export default function GeneralMapView() {
 
     visiblePackages.forEach(pkg => {
       if (!pkg.lat || !pkg.lng) return;
-
       const id         = pkgId(pkg);
       const isSelected = selectedIds.has(id);
-
-      // Dimmed when: lasso active → not selected  /  filter active → doesn't match
-      const dimmed = hasSelection ? !isSelected : false;
-      const color  = isSelected ? '#0052FF' : (dimmed ? '#94a3b8' : pinColor(pkg));
-
-      const marker = L.circleMarker([pkg.lat, pkg.lng], {
-        radius:      isSelected ? 9 : 7,
-        fillColor:   color,
-        color:       dimmed ? '#64748b' : '#fff',
-        weight:      isSelected ? 3 : (dimmed ? 1 : 2),
-        opacity:     1,
-        fillOpacity: dimmed ? 0.45 : 0.92,
+      const dimmed     = hasSelection ? !isSelected : false;
+      const color      = isSelected ? '#0052FF' : (dimmed ? '#94a3b8' : pinColor(pkg));
+      const icon       = makeCircleIcon(gm, color, isSelected, dimmed);
+      const marker     = new gm.Marker({ position: { lat: pkg.lat, lng: pkg.lng }, icon, map });
+      marker.addListener('click', () => {
+        infoWindowRef.current.setContent(popupHtml(pkg));
+        infoWindowRef.current.open(map, marker);
       });
-
-      marker.bindPopup(popupHtml(pkg), { maxWidth: 260 });
-
-      marker.addTo(map);
       markersRef.current.push(marker);
     });
-  }, [packages, filtered, selectedIds, lassoMode, hasActiveFilters]);
+  }, [mapReady, packages, filtered, selectedIds, lassoMode, hasActiveFilters]);
 
-  // ── Clear lasso selection ─────────────────────────────────────────────────
   const clearSelection = () => {
     setSelectedIds(new Set());
     setShowAssignPanel(false);
@@ -365,38 +356,30 @@ export default function GeneralMapView() {
     setNewRouteDate(new Date().toISOString().slice(0, 10));
     setNewRouteStart({ address: '', lat: null, lng: null });
     setLassoMode(false);
-    const map = mapInst.current;
-    if (map && lassoLayerRef.current) { map.removeLayer(lassoLayerRef.current); lassoLayerRef.current = null; }
+    if (lassoPolyRef.current) { lassoPolyRef.current.setMap(null); lassoPolyRef.current = null; }
   };
 
   const selectFilteredPackages = () => {
     const ids = filtered.map(pkgId).filter(Boolean);
-    if (ids.length === 0) {
-      toast('No hay paquetes con esos filtros');
-      return;
-    }
+    if (ids.length === 0) { toast('No hay paquetes con esos filtros'); return; }
     setSelectedIds(new Set(ids));
     setShowAssignPanel(true);
     setLassoMode(true);
   };
 
-  // ── Selection breakdown (computed fresh every render) ────────────────────
   const selBreakdown = useMemo(() => {
     const sel      = packages.filter(p => selectedIds.has(pkgId(p)));
     const free     = sel.filter(p => !hasAssignedRoute(p));
     const assigned = sel.filter(p => hasAssignedRoute(p));
     const inActive = assigned.filter(p => p.routeStatus === 'active');
-    const routes   = [...new Set(assigned.map(p => p.routeCode).filter(Boolean))];
-    return { total: sel.length, free, assigned, inActive, routes };
+    const rts      = [...new Set(assigned.map(p => p.routeCode).filter(Boolean))];
+    return { total: sel.length, free, assigned, inActive, routes: rts };
   }, [packages, selectedIds]);
 
-  // ── Assign selected packages to an existing route (all selected) ──────────
   const handleAssign = async () => {
     if (!targetRouteId || selectedIds.size === 0) return;
     if (selBreakdown.inActive.length > 0) {
-      const ok = window.confirm(
-        `⚠️ ${selBreakdown.inActive.length} paquete${selBreakdown.inActive.length !== 1 ? 's están' : ' está'} en una ruta activa (driver en camino).\n\nReasignarlos los sacará de esa ruta inmediatamente.\n\n¿Confirmas?`
-      );
+      const ok = window.confirm(`⚠️ ${selBreakdown.inActive.length} paquete${selBreakdown.inActive.length !== 1 ? 's están' : ' está'} en una ruta activa.\n\n¿Confirmas?`);
       if (!ok) return;
     }
     setAssigning(true);
@@ -406,33 +389,22 @@ export default function GeneralMapView() {
       const fresh = await api.getMapPackages();
       setPackages(fresh);
       clearSelection();
-    } catch (err) {
-      toast('❌ ' + err.message);
-    } finally {
-      setAssigning(false);
-    }
+    } catch (err) { toast('❌ ' + err.message); }
+    finally { setAssigning(false); }
   };
 
-  // ── Create new route — only assigns FREE packages (no route yet) ──────────
   const handleCreateAndAssign = async () => {
     const selectedPackageIds = [...selectedIds];
-    if (selectedPackageIds.length === 0) {
-      toast('⚠️ Todos los paquetes seleccionados ya tienen ruta. Solo los sin ruta se pueden agregar a una nueva.');
-      return;
-    }
+    if (selectedPackageIds.length === 0) { toast('⚠️ Todos los paquetes ya tienen ruta.'); return; }
     if (selBreakdown.inActive.length > 0) {
-      const ok = window.confirm(
-        `Hay ${selBreakdown.inActive.length} paquete${selBreakdown.inActive.length !== 1 ? 's' : ''} en una ruta activa.\n\nCrear una nueva ruta los movera a la ruta nueva y saldran de la ruta anterior inmediatamente.\n\nConfirmas?`
-      );
+      const ok = window.confirm(`Hay ${selBreakdown.inActive.length} paquete${selBreakdown.inActive.length !== 1 ? 's' : ''} en una ruta activa. ¿Confirmas?`);
       if (!ok) return;
     }
     setCreating(true);
     try {
       const route = await api.createRoute({
-        name:       newRouteName.trim() || undefined,
-        date:       newRouteDate,
-        status:     newRouteStatus,
-        driverId:   newRouteDriverId || undefined,
+        name: newRouteName.trim() || undefined, date: newRouteDate, status: newRouteStatus,
+        driverId: newRouteDriverId || undefined,
         startPoint: newRouteStart.lat ? newRouteStart : undefined,
       });
       await Promise.all(selectedPackageIds.map(id => api.updatePackage(id, { routeId: route._id || route.id })));
@@ -441,38 +413,25 @@ export default function GeneralMapView() {
       setPackages(fresh);
       setRoutes(freshRoutes);
       clearSelection();
-    } catch (err) {
-      toast('❌ ' + err.message);
-    } finally {
-      setCreating(false);
-    }
+    } catch (err) { toast('❌ ' + err.message); }
+    finally { setCreating(false); }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
-      {/* ── Top bar ──────────────────────────────────────────────────────── */}
+      {/* Top bar */}
       <div style={{ background: '#fff', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-
-        {/* Search row */}
         <div style={{ padding: '8px 12px 0' }}>
           <div style={{ position: 'relative' }}>
             <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#94a3b8', pointerEvents: 'none' }}>🔍</span>
             <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
+              value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Buscar por nombre, dirección o ID de paquete…"
-              style={{
-                width: '100%', boxSizing: 'border-box', padding: '8px 12px 8px 32px',
-                borderRadius: 10, border: '1px solid var(--border)', fontSize: 12,
-                outline: 'none', background: 'var(--card2)', color: '#0f172a',
-              }}
+              style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px 8px 32px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 12, outline: 'none', background: 'var(--card2)', color: '#0f172a' }}
             />
           </div>
         </div>
-
-        {/* Filter pills + dropdowns row */}
         <div style={{ padding: '6px 12px 8px', display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
           {STATUS_FILTERS.map(({ val, label, color }) => {
             const active = statusFilter === val;
@@ -480,120 +439,74 @@ export default function GeneralMapView() {
               <button key={val} onClick={() => setStatusFilter(val)} style={{
                 padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer',
                 border: active ? `2px solid ${color}` : '1px solid var(--border)',
-                background: active ? `${color}18` : '#fff',
-                color: active ? color : 'var(--muted)',
-                transition: 'all .1s',
-              }}>
-                {label}
-              </button>
+                background: active ? `${color}18` : '#fff', color: active ? color : 'var(--muted)',
+              }}>{label}</button>
             );
           })}
-
           <div style={{ width: 1, height: 18, background: 'var(--border)', flexShrink: 0 }} />
-
           {ROUTE_FILTERS.map(({ val, label, color }) => {
             const active = statusFilter === val;
             return (
               <button key={val} onClick={() => setStatusFilter(val)} style={{
                 padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer',
                 border: active ? `2px solid ${color}` : '1px solid var(--border)',
-                background: active ? `${color}18` : '#fff',
-                color: active ? color : 'var(--muted)',
-                transition: 'all .1s',
-              }}>
-                {label}
-              </button>
+                background: active ? `${color}18` : '#fff', color: active ? color : 'var(--muted)',
+              }}>{label}</button>
             );
           })}
-
           {companies.length > 0 && (
             <select value={companyFilter} onChange={e => setCompanyFilter(e.target.value)} style={selStyle(!!companyFilter)}>
               <option value="">🏢 Empresa</option>
               {companies.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
-
           {driverNames.length > 0 && (
             <select value={driverFilter} onChange={e => setDriverFilter(e.target.value)} style={selStyle(!!driverFilter)}>
               <option value="">🚚 Driver</option>
               {driverNames.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           )}
-
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={e => setDateFrom(e.target.value)}
-            title="Fecha de ingreso desde"
-            style={{ ...selStyle(!!dateFrom), width: 126 }}
-          />
-          <input
-            type="date"
-            value={dateTo}
-            onChange={e => setDateTo(e.target.value)}
-            title="Fecha de ingreso hasta"
-            style={{ ...selStyle(!!dateTo), width: 126 }}
-          />
-
-          <button
-            onClick={selectFilteredPackages}
-            disabled={filtered.length === 0}
-            title="Seleccionar todos los paquetes que cumplen los filtros actuales"
-            style={{
-              padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 800,
-              border: '1px solid #0052FF55',
-              background: filtered.length ? '#0052FF10' : '#f1f5f9',
-              color: filtered.length ? '#0052FF' : '#94a3b8',
-              cursor: filtered.length ? 'pointer' : 'not-allowed',
-            }}
-          >
-            Seleccionar filtrados ({filtered.length})
-          </button>
-
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="Desde" style={{ ...selStyle(!!dateFrom), width: 126 }} />
+          <input type="date" value={dateTo}   onChange={e => setDateTo(e.target.value)}   title="Hasta" style={{ ...selStyle(!!dateTo), width: 126 }} />
+          <button onClick={selectFilteredPackages} disabled={filtered.length === 0} style={{
+            padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 800,
+            border: '1px solid #0052FF55', background: filtered.length ? '#0052FF10' : '#f1f5f9',
+            color: filtered.length ? '#0052FF' : '#94a3b8', cursor: filtered.length ? 'pointer' : 'not-allowed',
+          }}>Seleccionar filtrados ({filtered.length})</button>
           {hasActiveFilters && (
             <button onClick={() => { setStatusFilter('todos'); setCompanyFilter(''); setDriverFilter(''); setDateFrom(''); setDateTo(''); setSearch(''); }} style={{
               padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
               border: '1px solid var(--border)', background: 'none', color: 'var(--muted)', cursor: 'pointer',
-            }}>
-              ✕ Limpiar
-            </button>
+            }}>✕ Limpiar</button>
           )}
-
           <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
             {loading ? 'Cargando…' : `${filtered.length} paquetes`}
           </span>
         </div>
       </div>
 
-      {/* ── Map area ─────────────────────────────────────────────────────── */}
+      {/* Map area */}
       <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
         {loading && (
           <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
             <div style={{ fontSize: 13, color: 'var(--muted)' }}>Cargando paquetes…</div>
           </div>
         )}
-
         <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
-        {/* Lasso button — top-left overlay */}
+        {/* Lasso button */}
         <button
           onClick={() => { if (lassoMode) { clearSelection(); } else { setLassoMode(true); setSelectedIds(new Set()); } }}
-          title={lassoMode ? 'Cancelar selección' : 'Activar lazo — dibuja en el mapa para seleccionar paquetes'}
           style={{
             position: 'absolute', top: 10, left: 10, zIndex: 999,
             padding: '8px 14px', borderRadius: 10, fontSize: 12, fontWeight: 800, cursor: 'pointer',
             border: lassoMode ? '2px solid #0052FF' : '1.5px solid #0052FF40',
-            background: lassoMode ? '#0052FF' : '#ffffffee',
-            color: lassoMode ? '#fff' : '#0052FF',
-            boxShadow: '0 2px 12px #0003',
-            transition: 'all .15s',
+            background: lassoMode ? '#0052FF' : '#ffffffee', color: lassoMode ? '#fff' : '#0052FF',
+            boxShadow: '0 2px 12px #0003', transition: 'all .15s',
             display: 'flex', alignItems: 'center', gap: 6,
           }}
-        >
-          {lassoMode ? '✕ Cancelar' : '⬡ Lazo'}
-        </button>
+        >{lassoMode ? '✕ Cancelar' : '⬡ Lazo'}</button>
 
-        {/* Lasso hint */}
         {lassoMode && !showAssignPanel && (
           <div style={{
             position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 999,
@@ -605,7 +518,7 @@ export default function GeneralMapView() {
           </div>
         )}
 
-        {/* Legend — bottom right */}
+        {/* Legend */}
         <div style={{
           position: 'absolute', bottom: showAssignPanel ? 90 : 16, right: 10, zIndex: 999,
           background: 'rgba(255,255,255,.95)', borderRadius: 12, padding: '10px 14px',
@@ -626,7 +539,7 @@ export default function GeneralMapView() {
           ))}
         </div>
 
-        {/* No-geo panel — slides up from bottom of map */}
+        {/* No-geo panel */}
         {showNoGeoPanel && (
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 1001,
@@ -634,260 +547,125 @@ export default function GeneralMapView() {
             boxShadow: '0 -6px 24px #ef444420',
             display: 'flex', flexDirection: 'column', maxHeight: '60%',
           }}>
-            {/* Header */}
             <div style={{ padding: '10px 16px 8px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               <span style={{ fontSize: 16 }}>⛔</span>
-              <span style={{ fontWeight: 800, fontSize: 13, color: '#0f172a' }}>
-                {noGeoPackages.length} paquete{noGeoPackages.length !== 1 ? 's' : ''} sin geolocalizar
-              </span>
-              <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>— no aparecen en el mapa · edita dirección y comuna para corregir</span>
-              <button onClick={() => { setShowNoGeoPanel(false); setEditingNoGeo(null); }}
-                style={{ background: 'none', border: 'none', fontSize: 18, color: 'var(--muted)', cursor: 'pointer', lineHeight: 1, padding: '2px 6px' }}>✕</button>
+              <span style={{ fontWeight: 800, fontSize: 13, color: '#0f172a' }}>{noGeoPackages.length} paquete{noGeoPackages.length !== 1 ? 's' : ''} sin geolocalizar</span>
+              <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>— no aparecen en el mapa</span>
+              <button onClick={() => { setShowNoGeoPanel(false); setEditingNoGeo(null); }} style={{ background: 'none', border: 'none', fontSize: 18, color: 'var(--muted)', cursor: 'pointer', lineHeight: 1, padding: '2px 6px' }}>✕</button>
             </div>
-
-            {/* List */}
             <div style={{ overflowY: 'auto', flex: 1 }}>
-              {noGeoPackages.length === 0
-                ? <div style={{ textAlign: 'center', padding: '24px 16px', color: 'var(--muted)', fontSize: 13 }}>✅ Todos los paquetes están geolocalizados</div>
-                : noGeoPackages.map((pkg, i) => {
-                    const id        = pkgId(pkg);
-                    const isEditing = editingNoGeo?.id === id;
-                    const noCommune = !pkg.commune;
-                    const noAddrNum = pkg.address && !/\d/.test(pkg.address.trim());
-                    const noAddress = !pkg.address;
-                    const noPhone   = !pkg.customerPhone;
-
-                    return (
-                      <div key={id} style={{
-                        borderBottom: '1px solid var(--border)',
-                        background: isEditing ? '#f0f7ff' : i % 2 === 0 ? '#fff' : '#fafafa',
-                        borderLeft: isEditing ? '3px solid #0052FF' : '3px solid transparent',
-                      }}>
-                        {/* Info row */}
-                        <div style={{ padding: '9px 16px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              <span style={{ fontWeight: 700, fontSize: 12, color: '#0f172a' }}>
-                                {pkg.customerName}{pkg.customerLastName ? ` ${pkg.customerLastName}` : ''}
-                              </span>
-                              <span style={{ fontSize: 10, color: 'var(--muted)', fontFamily: 'monospace' }}>{pkg.trackingId}</span>
-                            </div>
-                            <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
-                              {noAddress
-                                ? <span style={{ color: '#b91c1c', fontWeight: 600 }}>⛔ Sin dirección</span>
-                                : <span style={{ color: noAddrNum ? '#b91c1c' : 'inherit', fontWeight: noAddrNum ? 600 : 'normal' }}>{pkg.address}</span>
-                              }
-                              {pkg.commune
-                                ? <span style={{ color: 'var(--muted)' }}>, {pkg.commune}</span>
-                                : <span style={{ color: '#b91c1c', fontWeight: 600 }}> ⛔ sin comuna</span>
-                              }
-                            </div>
-                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 3 }}>
-                              {noAddress  && <GeoErrBadge>⛔ Sin dirección</GeoErrBadge>}
-                              {noAddrNum  && <GeoErrBadge>⛔ Sin número</GeoErrBadge>}
-                              {noCommune  && <GeoErrBadge>⛔ Sin comuna</GeoErrBadge>}
-                              {noPhone    && <WarnBadge>📞 Sin teléfono</WarnBadge>}
-                              {pkg.aiFlags?.length > 0 && <WarnBadge>⚠ IA: {pkg.aiFlags.join(', ')}</WarnBadge>}
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-                            <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'right' }}>
-                              {pkg.companyName && <div style={{ color: '#7c3aed', fontWeight: 600 }}>{pkg.companyName}</div>}
-                              {pkg.routeCode   && <div>{pkg.routeCode}</div>}
-                            </div>
-                            <button
-                              onClick={() => setEditingNoGeo(isEditing ? null : { id, address: pkg.address || '', commune: pkg.commune || '' })}
-                              style={{
-                                padding: '4px 10px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                                border: isEditing ? '1.5px solid #0052FF' : '1px solid var(--border)',
-                                background: isEditing ? '#0052FF' : '#fff',
-                                color: isEditing ? '#fff' : '#0052FF',
-                              }}
-                            >
-                              {isEditing ? '▲ Cerrar' : '✏️ Editar'}
-                            </button>
-                          </div>
+              {noGeoPackages.map((pkg, i) => {
+                const id        = pkgId(pkg);
+                const isEditing = editingNoGeo?.id === id;
+                return (
+                  <div key={id} style={{ borderBottom: '1px solid var(--border)', background: isEditing ? '#f0f7ff' : i % 2 === 0 ? '#fff' : '#fafafa', borderLeft: isEditing ? '3px solid #0052FF' : '3px solid transparent' }}>
+                    <div style={{ padding: '9px 16px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 12, color: '#0f172a' }}>
+                          {pkg.customerName}{pkg.customerLastName ? ` ${pkg.customerLastName}` : ''}
+                          <span style={{ fontSize: 10, color: 'var(--muted)', marginLeft: 6, fontFamily: 'monospace' }}>{pkg.trackingId}</span>
                         </div>
-
-                        {/* Inline edit form */}
-                        {isEditing && (
-                          <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            <div>
-                              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 3, letterSpacing: .5 }}>DIRECCIÓN</div>
-                              <AddressAutocomplete
-                                compact
-                                value={editingNoGeo.address}
-                                placeholder="Ej: Av. Principal 123"
-                                onChange={v => setEditingNoGeo(e => ({ ...e, address: v }))}
-                                onSelect={({ address, commune }) => {
-                                  const normalized = SECTOR_TO_COMMUNE[(commune || '').toLowerCase().trim()] || commune;
-                                  setEditingNoGeo(e => ({ ...e, address, ...(normalized ? { commune: normalized } : {}) }));
-                                }}
-                              />
-                            </div>
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 3, letterSpacing: .5 }}>COMUNA</div>
-                                <select
-                                  value={editingNoGeo.commune}
-                                  onChange={e => setEditingNoGeo(ed => ({ ...ed, commune: e.target.value }))}
-                                  style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 7, padding: '5px 8px', fontSize: 12, outline: 'none', background: '#fff', boxSizing: 'border-box' }}
-                                >
-                                  <option value="">— Sin comuna —</option>
-                                  {COMMUNES.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
-                              </div>
-                              <button
-                                disabled={savingNoGeo || (!editingNoGeo.address && !editingNoGeo.commune)}
-                                onClick={async () => {
-                                  setSavingNoGeo(true);
-                                  try {
-                                    await api.updatePackage(id, {
-                                      address: editingNoGeo.address || undefined,
-                                      commune: editingNoGeo.commune || undefined,
-                                    });
-                                    toast('✅ Guardado — se geocodificará al procesar');
-                                    const fresh = await api.getMapPackages({ from: dateFrom, to: dateTo });
-                                    setPackages(fresh);
-                                    setEditingNoGeo(null);
-                                  } catch (err) {
-                                    toast('❌ ' + err.message);
-                                  } finally {
-                                    setSavingNoGeo(false);
-                                  }
-                                }}
-                                style={{
-                                  padding: '6px 16px', borderRadius: 7, fontSize: 12, fontWeight: 800,
-                                  border: 'none', cursor: savingNoGeo ? 'not-allowed' : 'pointer',
-                                  background: savingNoGeo ? '#e2e8f0' : '#0052FF',
-                                  color: savingNoGeo ? '#94a3b8' : '#fff', whiteSpace: 'nowrap',
-                                }}
-                              >
-                                {savingNoGeo ? 'Guardando…' : '💾 Guardar'}
-                              </button>
-                            </div>
-                            <div style={{ fontSize: 10, color: 'var(--muted)' }}>
-                              💡 El sistema geocodificará la dirección automáticamente al guardar el paquete.
-                              Si tienes Chicureo, escríbelo y la comuna se completará como Colina.
-                            </div>
-                          </div>
-                        )}
+                        <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
+                          {pkg.address || <span style={{ color: '#b91c1c', fontWeight: 600 }}>⛔ Sin dirección</span>}
+                          {pkg.commune ? <span style={{ color: 'var(--muted)' }}>, {pkg.commune}</span> : <span style={{ color: '#b91c1c', fontWeight: 600 }}> ⛔ sin comuna</span>}
+                        </div>
                       </div>
-                    );
-                  })
-              }
+                      <button onClick={() => setEditingNoGeo(isEditing ? null : { id, address: pkg.address || '', commune: pkg.commune || '' })} style={{
+                        padding: '4px 10px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                        border: isEditing ? '1.5px solid #0052FF' : '1px solid var(--border)',
+                        background: isEditing ? '#0052FF' : '#fff', color: isEditing ? '#fff' : '#0052FF',
+                      }}>{isEditing ? '▲ Cerrar' : '✏️ Editar'}</button>
+                    </div>
+                    {isEditing && (
+                      <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 3 }}>DIRECCIÓN</div>
+                          <AddressAutocomplete compact value={editingNoGeo.address} placeholder="Ej: Av. Principal 123"
+                            onChange={v => setEditingNoGeo(e => ({ ...e, address: v }))}
+                            onSelect={({ address, commune }) => {
+                              const normalized = SECTOR_TO_COMMUNE[(commune || '').toLowerCase().trim()] || commune;
+                              setEditingNoGeo(e => ({ ...e, address, ...(normalized ? { commune: normalized } : {}) }));
+                            }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 3 }}>COMUNA</div>
+                            <select value={editingNoGeo.commune} onChange={e => setEditingNoGeo(ed => ({ ...ed, commune: e.target.value }))}
+                              style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 7, padding: '5px 8px', fontSize: 12, outline: 'none', background: '#fff', boxSizing: 'border-box' }}>
+                              <option value="">— Sin comuna —</option>
+                              {COMMUNES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </div>
+                          <button disabled={savingNoGeo || (!editingNoGeo.address && !editingNoGeo.commune)}
+                            onClick={async () => {
+                              setSavingNoGeo(true);
+                              try {
+                                await api.updatePackage(id, { address: editingNoGeo.address || undefined, commune: editingNoGeo.commune || undefined });
+                                toast('✅ Guardado');
+                                const fresh = await api.getMapPackages({ from: dateFrom, to: dateTo });
+                                setPackages(fresh);
+                                setEditingNoGeo(null);
+                              } catch (err) { toast('❌ ' + err.message); }
+                              finally { setSavingNoGeo(false); }
+                            }}
+                            style={{ padding: '6px 16px', borderRadius: 7, fontSize: 12, fontWeight: 800, border: 'none', cursor: savingNoGeo ? 'not-allowed' : 'pointer', background: savingNoGeo ? '#e2e8f0' : '#0052FF', color: savingNoGeo ? '#94a3b8' : '#fff', whiteSpace: 'nowrap' }}>
+                            {savingNoGeo ? 'Guardando…' : '💾 Guardar'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* Assign panel — slides up from bottom of map */}
+        {/* Assign panel */}
         {showAssignPanel && selectedIds.size > 0 && (
-          <div style={{
-            position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 1000,
-            background: '#fff', borderTop: '2px solid #0052FF',
-            boxShadow: '0 -6px 24px #0052ff18',
-          }}>
-            {/* Warning banner — packages already in a route */}
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 1000, background: '#fff', borderTop: '2px solid #0052FF', boxShadow: '0 -6px 24px #0052ff18' }}>
             {selBreakdown.assigned.length > 0 && (
-              <div style={{
-                padding: '8px 16px', display: 'flex', alignItems: 'flex-start', gap: 8,
-                background: selBreakdown.inActive.length ? '#fff1f2' : '#fffbeb',
-                borderBottom: `1px solid ${selBreakdown.inActive.length ? '#fecdd3' : '#fde68a'}`,
-              }}>
+              <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'flex-start', gap: 8, background: selBreakdown.inActive.length ? '#fff1f2' : '#fffbeb', borderBottom: `1px solid ${selBreakdown.inActive.length ? '#fecdd3' : '#fde68a'}` }}>
                 <span style={{ fontSize: 15, flexShrink: 0 }}>{selBreakdown.inActive.length ? '🚨' : '⚠️'}</span>
                 <div style={{ fontSize: 12, lineHeight: 1.5, color: selBreakdown.inActive.length ? '#9f1239' : '#92400e' }}>
-                  {selBreakdown.inActive.length > 0 && (
-                    <span style={{ fontWeight: 800 }}>
-                      {selBreakdown.inActive.length} paquete{selBreakdown.inActive.length !== 1 ? 's están' : ' está'} en una ruta <u>activa</u> (driver en camino).{' '}
-                    </span>
-                  )}
-                  <span style={{ fontWeight: 700 }}>
-                    {selBreakdown.assigned.length} ya {selBreakdown.assigned.length !== 1 ? 'tienen' : 'tiene'} ruta
-                    {selBreakdown.routes.length > 0 ? ` (${selBreakdown.routes.join(', ')})` : ''}.
-                  </span>
-                  {' '}Al crear una nueva ruta, los seleccionados se moveran a esa ruta sin duplicarse.
+                  {selBreakdown.inActive.length > 0 && <span style={{ fontWeight: 800 }}>{selBreakdown.inActive.length} paquete{selBreakdown.inActive.length !== 1 ? 's están' : ' está'} en una ruta <u>activa</u>. </span>}
+                  <span style={{ fontWeight: 700 }}>{selBreakdown.assigned.length} ya {selBreakdown.assigned.length !== 1 ? 'tienen' : 'tiene'} ruta{selBreakdown.routes.length > 0 ? ` (${selBreakdown.routes.join(', ')})` : ''}.</span>
                 </div>
               </div>
             )}
-
-            {/* Row 1 — selector + actions */}
             <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 13, color: '#0f172a', whiteSpace: 'nowrap', lineHeight: 1.3 }}>
+              <div style={{ fontSize: 13, color: '#0f172a', whiteSpace: 'nowrap' }}>
                 <span style={{ fontWeight: 800 }}>📦 {selectedIds.size} seleccionado{selectedIds.size !== 1 ? 's' : ''}</span>
-                {selBreakdown.assigned.length > 0 && (
-                  <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 700 }}>
-                    {' '}· {selBreakdown.free.length} libre{selBreakdown.free.length !== 1 ? 's' : ''} · {selBreakdown.assigned.length} con ruta
-                  </span>
-                )}
               </div>
-
-              <select
-                value={targetRouteId}
-                onChange={e => { setTargetRouteId(e.target.value); setShowCreateForm(false); }}
-                style={{
-                  flex: 1, minWidth: 180, padding: '8px 10px', borderRadius: 9, fontSize: 12, fontWeight: 600,
-                  border: '1.5px solid var(--border)', background: '#fff', color: '#0f172a',
-                  outline: 'none', cursor: 'pointer',
-                }}
-              >
+              <select value={targetRouteId} onChange={e => { setTargetRouteId(e.target.value); setShowCreateForm(false); }}
+                style={{ flex: 1, minWidth: 180, padding: '8px 10px', borderRadius: 9, fontSize: 12, fontWeight: 600, border: '1.5px solid var(--border)', background: '#fff', color: '#0f172a', outline: 'none', cursor: 'pointer' }}>
                 <option value="">— Ruta existente —</option>
-                {routes
-                  .filter(r => ['draft', 'active'].includes(r.status))
-                  .map(r => (
-                    <option key={r._id || r.id} value={r._id || r.id}>
-                      {r.routeCode}{r.name ? ` · ${r.name}` : ''}{r.clientCompany?.name ? ` (${r.clientCompany.name})` : ''}
-                      {r.status === 'active' ? ' ●' : ' ○'}
-                    </option>
-                  ))}
+                {routes.filter(r => ['draft', 'active'].includes(r.status)).map(r => (
+                  <option key={r._id || r.id} value={r._id || r.id}>
+                    {r.routeCode}{r.name ? ` · ${r.name}` : ''}{r.clientCompany?.name ? ` (${r.clientCompany.name})` : ''}{r.status === 'active' ? ' ●' : ' ○'}
+                  </option>
+                ))}
               </select>
-
-              <button
-                onClick={handleAssign}
-                disabled={!targetRouteId || assigning || showCreateForm}
-                style={{
-                  padding: '9px 16px', borderRadius: 9, fontSize: 12, fontWeight: 800,
-                  border: 'none', whiteSpace: 'nowrap', transition: 'all .15s',
-                  background: targetRouteId && !assigning && !showCreateForm ? '#0052FF' : '#e2e8f0',
-                  color:      targetRouteId && !assigning && !showCreateForm ? '#fff' : '#94a3b8',
-                  cursor:     targetRouteId && !assigning && !showCreateForm ? 'pointer' : 'not-allowed',
-                }}
-              >
-                {assigning ? 'Asignando…' : '✓ Asignar'}
-              </button>
-
-              <button
-                onClick={() => { setShowCreateForm(v => !v); setTargetRouteId(''); }}
-                style={{
-                  padding: '9px 14px', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                  border: showCreateForm ? '2px solid #16a34a' : '1.5px solid #16a34a',
-                  background: showCreateForm ? '#dcfce7' : '#f0fdf4',
-                  color: '#16a34a', whiteSpace: 'nowrap',
-                }}
-              >
-                {showCreateForm ? '▲ Cancelar' : '➕ Nueva ruta'}
-              </button>
-
-              <button
-                onClick={clearSelection}
-                style={{
-                  padding: '9px 12px', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                  border: '1px solid var(--border)', background: 'none', color: 'var(--muted)',
-                }}
-              >
-                ✕
-              </button>
+              <button onClick={handleAssign} disabled={!targetRouteId || assigning || showCreateForm} style={{
+                padding: '9px 16px', borderRadius: 9, fontSize: 12, fontWeight: 800, border: 'none', whiteSpace: 'nowrap',
+                background: targetRouteId && !assigning && !showCreateForm ? '#0052FF' : '#e2e8f0',
+                color: targetRouteId && !assigning && !showCreateForm ? '#fff' : '#94a3b8',
+                cursor: targetRouteId && !assigning && !showCreateForm ? 'pointer' : 'not-allowed',
+              }}>{assigning ? 'Asignando…' : '✓ Asignar'}</button>
+              <button onClick={() => { setShowCreateForm(v => !v); setTargetRouteId(''); }} style={{
+                padding: '9px 14px', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                border: showCreateForm ? '2px solid #16a34a' : '1.5px solid #16a34a',
+                background: showCreateForm ? '#dcfce7' : '#f0fdf4', color: '#16a34a', whiteSpace: 'nowrap',
+              }}>{showCreateForm ? '▲ Cancelar' : '➕ Nueva ruta'}</button>
+              <button onClick={clearSelection} style={{ padding: '9px 12px', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: '1px solid var(--border)', background: 'none', color: 'var(--muted)' }}>✕</button>
             </div>
-
-            {/* Row 2 — inline create route form */}
             {showCreateForm && (
-              <div style={{
-                borderTop: '1px solid #dcfce7', background: '#f0fdf4',
-                padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10,
-              }}>
+              <div style={{ borderTop: '1px solid #dcfce7', background: '#f0fdf4', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                   <div style={{ flex: 2, minWidth: 160 }}>
                     <div style={labelStyle}>Nombre de la ruta</div>
-                    <input value={newRouteName} onChange={e => setNewRouteName(e.target.value)} placeholder="Ej: Zona Norte — Lunes" style={miniInp} />
+                    <input value={newRouteName} onChange={e => setNewRouteName(e.target.value)} placeholder="Ej: Zona Norte" style={miniInp} />
                   </div>
                   <div style={{ flex: 1, minWidth: 130 }}>
                     <div style={labelStyle}>Fecha</div>
@@ -908,45 +686,26 @@ export default function GeneralMapView() {
                     </select>
                   </div>
                 </div>
-                {/* Pickup / start point */}
                 <div>
-                  <div style={{ ...labelStyle, color: '#15803d' }}>📍 DIRECCIÓN DE RETIRO (punto nº1 — origen optimización)</div>
-                  <AddressAutocomplete
-                    compact
-                    value={newRouteStart.address}
-                    placeholder="Bodega o dirección de recogida…"
+                  <div style={{ ...labelStyle, color: '#15803d' }}>📍 DIRECCIÓN DE RETIRO</div>
+                  <AddressAutocomplete compact value={newRouteStart.address} placeholder="Bodega o dirección de recogida…"
                     onChange={v => setNewRouteStart(s => ({ ...s, address: v, lat: null, lng: null }))}
                     onSelect={({ address, lat, lng }) => setNewRouteStart({ address, lat, lng })}
                   />
-                  {newRouteStart.lat
-                    ? <div style={{ fontSize: 10, color: '#16a34a', marginTop: 3, fontWeight: 600 }}>✓ Coordenadas listas — se usará como punto de partida para optimizar</div>
-                    : newRouteStart.address
-                      ? <div style={{ fontSize: 10, color: '#f59e0b', marginTop: 3 }}>⚠ Selecciona una sugerencia para coordenadas exactas</div>
-                      : null
-                  }
                 </div>
-                <button
-                  onClick={handleCreateAndAssign}
-                  disabled={creating}
-                  style={{
-                    alignSelf: 'flex-end', padding: '9px 18px', borderRadius: 9, fontSize: 12, fontWeight: 800, cursor: creating ? 'not-allowed' : 'pointer',
-                    border: 'none', background: creating ? '#e2e8f0' : '#16a34a',
-                    color: creating ? '#94a3b8' : '#fff', whiteSpace: 'nowrap',
-                  }}
-                >
-                  {creating ? 'Creando...' : `Crear y mover (${selectedIds.size})`}
-                </button>
+                <button onClick={handleCreateAndAssign} disabled={creating} style={{
+                  alignSelf: 'flex-end', padding: '9px 18px', borderRadius: 9, fontSize: 12, fontWeight: 800,
+                  border: 'none', background: creating ? '#e2e8f0' : '#16a34a',
+                  color: creating ? '#94a3b8' : '#fff', cursor: creating ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
+                }}>{creating ? 'Creando...' : `Crear y mover (${selectedIds.size})`}</button>
               </div>
             )}
           </div>
         )}
       </div>
 
-      {/* ── Stats bar ────────────────────────────────────────────────────── */}
-      <div style={{
-        padding: '8px 16px', background: '#fff', borderTop: '1px solid var(--border)',
-        display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', flexShrink: 0,
-      }}>
+      {/* Stats bar */}
+      <div style={{ padding: '8px 16px', background: '#fff', borderTop: '1px solid var(--border)', display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
         <StatPill label="Total"       count={packages.length}   color="#64748b" />
         <div style={{ width: 1, height: 14, background: 'var(--border)' }} />
         <StatPill label="Activos"     count={stats.active}      color="#f59e0b" onClick={() => setStatusFilter('activo')} />
@@ -959,57 +718,28 @@ export default function GeneralMapView() {
         {noGeoPackages.length > 0 && (
           <>
             <div style={{ width: 1, height: 14, background: 'var(--border)' }} />
-            <StatPill
-              label="Sin ubicar"
-              count={noGeoPackages.length}
-              color="#ef4444"
-              onClick={() => setShowNoGeoPanel(v => !v)}
-              active={showNoGeoPanel}
-            />
+            <StatPill label="Sin ubicar" count={noGeoPackages.length} color="#ef4444" onClick={() => setShowNoGeoPanel(v => !v)} active={showNoGeoPanel} />
           </>
         )}
         {filtered.length !== packages.length && (
-          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)' }}>
-            Mostrando {filtered.length}
-          </span>
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)' }}>Mostrando {filtered.length}</span>
         )}
       </div>
     </div>
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
 function StatPill({ label, count, color, onClick, active }) {
   return (
     <button onClick={onClick} style={{
       display: 'flex', alignItems: 'center', gap: 6,
-      background: active ? `${color}15` : 'none',
-      border: active ? `1.5px solid ${color}` : '1.5px solid transparent',
-      borderRadius: 20, padding: active ? '3px 8px' : '3px 0',
-      cursor: onClick ? 'pointer' : 'default',
-      transition: 'all .15s',
+      background: active ? `${color}15` : 'none', border: active ? `1.5px solid ${color}` : '1.5px solid transparent',
+      borderRadius: 20, padding: active ? '3px 8px' : '3px 0', cursor: onClick ? 'pointer' : 'default',
     }}>
       <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
       <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{count}</span>
       <span style={{ fontSize: 11, color: 'var(--muted)' }}>{label}</span>
     </button>
-  );
-}
-
-function GeoErrBadge({ children }) {
-  return (
-    <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 20, background: '#ef444415', color: '#b91c1c', border: '1px solid #ef444430' }}>
-      {children}
-    </span>
-  );
-}
-
-function WarnBadge({ children }) {
-  return (
-    <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 20, background: '#f59e0b10', color: '#92400e', border: '1px solid #f59e0b30' }}>
-      {children}
-    </span>
   );
 }
 
@@ -1022,13 +752,5 @@ function selStyle(active) {
   };
 }
 
-const labelStyle = {
-  fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: '#16a34a',
-  textTransform: 'uppercase', marginBottom: 4,
-};
-
-const miniInp = {
-  width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: 8,
-  border: '1px solid #bbf7d0', background: '#fff', fontSize: 12,
-  color: '#0f172a', outline: 'none', display: 'block',
-};
+const labelStyle = { fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: '#16a34a', textTransform: 'uppercase', marginBottom: 4 };
+const miniInp = { width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: 8, border: '1px solid #bbf7d0', background: '#fff', fontSize: 12, color: '#0f172a', outline: 'none', display: 'block' };

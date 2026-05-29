@@ -1,49 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import L from 'leaflet';
-
-function ensureGpsStyles() {
-  if (document.getElementById('rf-gps-styles')) return;
-  const s = document.createElement('style');
-  s.id = 'rf-gps-styles';
-  s.textContent = `@keyframes rfGpsPulse{0%,100%{transform:scale(1);opacity:.45}50%{transform:scale(2.2);opacity:.1}}`;
-  document.head.appendChild(s);
-}
-
-function makeMyLocationIcon(heading) {
-  ensureGpsStyles();
-  // Triangle pointing in the direction of travel (or straight up if no heading)
-  const deg = (heading != null && !isNaN(heading)) ? heading : null;
-  const arrowHtml = deg != null
-    ? `<div style="position:absolute;top:-13px;left:50%;transform:translateX(-50%) rotate(${deg}deg);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:11px solid #1a73e8;filter:drop-shadow(0 1px 2px #0003)"></div>`
-    : '';
-  return L.divIcon({
-    className: '',
-    html: `<div style="position:relative;width:22px;height:22px">
-      <div style="position:absolute;inset:-10px;border-radius:50%;background:#1a73e820;animation:rfGpsPulse 2s ease-in-out infinite;pointer-events:none"></div>
-      <div style="width:22px;height:22px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 2px 10px #1a73e870;position:relative;z-index:1"></div>
-      ${arrowHtml}
-    </div>`,
-    iconSize: [22, 22],
-    iconAnchor: [11, 11]
-  });
-}
-
-function makeDriverTrackerIcon() {
-  return L.divIcon({
-    className: '',
-    html: `<div style="
-      width:38px;height:38px;border-radius:50%;
-      background:linear-gradient(135deg,#0077aa,#005080);
-      border:3px solid #fff;
-      box-shadow:0 3px 14px #0077aa70;
-      display:flex;align-items:center;justify-content:center;
-      font-size:19px;
-    ">🚗</div>`,
-    iconSize: [38, 38],
-    iconAnchor: [19, 19],
-    popupAnchor: [0, -24]
-  });
-}
+import React, { useEffect, useRef, useState } from 'react';
+import { loadGoogleMaps, makeSvgIcon } from '../utils/googleMaps.js';
 
 const ZONE_COLORS = {
   Providencia: '#e8740a',
@@ -61,40 +17,15 @@ function pinColor(pkg) {
   return ZONE_COLORS[pkg.zone] || ZONE_COLORS.default;
 }
 
-function pinLabel(pkg, i) {
-  if (pkg.status === 'entregado') return '✓';
-  if (pkg.status === 'no-entregado') return '✗';
-  if (pkg.status === 'eliminado') return '✕';
-  return String(i + 1);
+function btnStyle(color) {
+  return `display:inline-flex;align-items:center;justify-content:center;gap:4px;
+    padding:7px 6px;border-radius:8px;border:1px solid ${color}30;
+    background:${color}14;color:${color};font-size:11px;font-weight:700;
+    cursor:pointer;text-decoration:none;font-family:'Inter',sans-serif;white-space:nowrap;`;
 }
 
-function makeIcon(pkg, i, hasStart) {
-  const color = pinColor(pkg);
-  const num = pkg.status === 'entregado' ? '✓' : pkg.status === 'no-entregado' ? '✗' : pkg.status === 'eliminado' ? '✕' : String(hasStart ? i + 2 : i + 1);
-  const elim = pkg.status === 'eliminado';
-  const size = 32;
-  return L.divIcon({
-    className: '',
-    html: `<div style="
-      width:${size}px;height:${size}px;
-      border-radius:50%;
-      background:${color};
-      border:2.5px solid rgba(255,255,255,0.92);
-      box-shadow:0 2px 10px rgba(0,0,0,0.38);
-      display:flex;align-items:center;justify-content:center;
-      font-size:${num.length > 2 ? 9 : 12}px;font-weight:800;color:#fff;
-      font-family:'Inter',sans-serif;
-      ${elim ? 'opacity:.35;filter:grayscale(1);' : ''}
-      cursor:pointer;
-    ">${num}</div>`,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-    popupAnchor: [0, -(size / 2 + 6)]
-  });
-}
-
-function makePopup(pkg, i, hasStart, onPkgClick, readOnly) {
-  const displayNum = hasStart ? i + 2 : i + 1;
+function makePopupContent(pkg, idx, hasStart, readOnly) {
+  const displayNum = hasStart ? idx + 2 : idx + 1;
   const color = pinColor(pkg);
   const statusText = { pendiente: '⏳ Pendiente', entregado: '✅ Entregado', 'no-entregado': '❌ No entregado', eliminado: '🗑️ Eliminado' }[pkg.status] || pkg.status;
   const price = pkg.price ? ` · $${Number(pkg.price).toLocaleString('es-CL')}` : '';
@@ -126,217 +57,241 @@ function makePopup(pkg, i, hasStart, onPkgClick, readOnly) {
   </div>`;
 }
 
-function btnStyle(color) {
-  return `display:flex;align-items:center;justify-content:center;gap:4px;
-    padding:7px 6px;border-radius:8px;border:1px solid ${color}30;
-    background:${color}14;color:${color};font-size:11px;font-weight:700;
-    cursor:pointer;text-decoration:none;font-family:'Inter',sans-serif;
-    white-space:nowrap;`;
-}
-
 export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgRestore, onVerifyLoad, readOnly, startPoint, visible = true, myLocation = null, driverLocation = null }) {
-  const mapRef = useRef(null);
-  const instanceRef = useRef(null);
-  const markersRef = useRef({});
-  const lineRef = useRef(null);
-  const startRef = useRef(null);
-  const myLocationRef = useRef(null);
-  const myAccuracyRef = useRef(null);
-  const driverTrackerRef = useRef(null);
+  const mapRef         = useRef(null);
+  const gmRef          = useRef(null);
+  const mapInst        = useRef(null);
+  const markersRef     = useRef({});
+  const lineRef        = useRef(null);
+  const startRef       = useRef(null);
+  const myLocationRef  = useRef(null);
+  const myAccuracyRef  = useRef(null);
+  const driverRef      = useRef(null);
+  const infoWindowRef  = useRef(null);
+  const [mapReady, setMapReady] = useState(false);
 
   // Init map once
   useEffect(() => {
-    if (instanceRef.current) return;
-    const map = L.map(mapRef.current, { zoomControl: true }).setView([-33.45, -70.65], 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a>',
-      maxZoom: 19
-    }).addTo(map);
-    instanceRef.current = map;
+    loadGoogleMaps().then(gm => {
+      if (!mapRef.current || mapInst.current) return;
+      gmRef.current = gm;
+      mapInst.current = new gm.Map(mapRef.current, {
+        center: { lat: -33.45, lng: -70.65 },
+        zoom: 12,
+        gestureHandling: 'cooperative',
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+      });
+      infoWindowRef.current = new gm.InfoWindow();
+      setMapReady(true);
+    });
   }, []);
 
   // Resize when tab becomes visible
   useEffect(() => {
-    if (visible && instanceRef.current) {
-      setTimeout(() => instanceRef.current?.invalidateSize(), 80);
+    if (visible && mapInst.current && gmRef.current) {
+      gmRef.current.event.trigger(mapInst.current, 'resize');
     }
   }, [visible]);
 
-  // Update markers whenever packages or startPoint change
+  // Update markers on packages/startPoint change
   useEffect(() => {
-    const map = instanceRef.current;
-    if (!map) return;
+    if (!mapReady) return;
+    const map = mapInst.current;
+    const gm  = gmRef.current;
+    if (!map || !gm) return;
 
-    // Register global callbacks
-    window.__verifyLoad = () => onVerifyLoad?.();
-    window.__pkgClick = (id) => {
-      const pkg = (packages || []).find(p => p._id === id);
-      if (pkg) onPkgClick?.(pkg);
-    };
-    window.__pkgDelete = (id) => {
-      const pkg = (packages || []).find(p => p._id === id);
-      if (pkg && confirm(`¿Eliminar a ${pkg.customerName}?`)) onPkgDelete?.(pkg);
-    };
-    window.__pkgRestore = (id) => {
-      const pkg = (packages || []).find(p => p._id === id);
-      if (pkg) onPkgRestore?.(pkg);
-    };
+    window.__verifyLoad  = () => onVerifyLoad?.();
+    window.__pkgClick    = id => { const p = (packages || []).find(p => p._id === id); if (p) onPkgClick?.(p); };
+    window.__pkgDelete   = id => { const p = (packages || []).find(p => p._id === id); if (p && confirm(`¿Eliminar a ${p.customerName}?`)) onPkgDelete?.(p); };
+    window.__pkgRestore  = id => { const p = (packages || []).find(p => p._id === id); if (p) onPkgRestore?.(p); };
 
     // Clear existing layers
-    Object.values(markersRef.current).forEach(m => m.remove());
+    Object.values(markersRef.current).forEach(m => m.setMap(null));
     markersRef.current = {};
-    if (lineRef.current) { lineRef.current.remove(); lineRef.current = null; }
-    if (startRef.current) { startRef.current.remove(); startRef.current = null; }
+    if (lineRef.current) { lineRef.current.setMap(null); lineRef.current = null; }
+    if (startRef.current) { startRef.current.setMap(null); startRef.current = null; }
 
     const active = (packages || []).filter(p => p.status !== 'eliminado');
-    const allPkgs = (packages || []);
     const withCoords = active.filter(p => p.lat && p.lng);
     const hasStartCoords = !!(startPoint?.lat && startPoint?.lng);
-    // Full ordered route: start point first, then packages in order
     const routePoints = hasStartCoords
       ? [{ lat: startPoint.lat, lng: startPoint.lng }, ...withCoords]
       : withCoords;
 
-    // Draw straight fallback line immediately, then replace with real road geometry
+    // Straight dashed fallback line
     if (routePoints.length > 1) {
-      lineRef.current = L.polyline(
-        routePoints.map(p => [p.lat, p.lng]),
-        { color: '#0052FF', weight: 2.5, opacity: 0.35, dashArray: '6,10' }
-      ).addTo(map);
+      lineRef.current = new gm.Polyline({
+        path: routePoints.map(p => ({ lat: p.lat, lng: p.lng })),
+        strokeColor: '#0052FF',
+        strokeOpacity: 0,
+        strokeWeight: 3,
+        icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.35, strokeWeight: 2.5, scale: 4, strokeColor: '#0052FF' }, offset: '0', repeat: '16px' }],
+        map,
+      });
 
-      // Fetch actual road route via server proxy (avoids browser CORS on OSRM)
+      // Replace with real road geometry from OSRM proxy
       const base = import.meta.env.VITE_API_URL || '/api';
       const token = localStorage.getItem('rf_token');
       fetch(`${base}/routes/osrm-path`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ coords: routePoints.map(p => [p.lng, p.lat]) }),
-        signal: AbortSignal.timeout(10000)
+        signal: AbortSignal.timeout(10000),
       })
         .then(r => r.json())
         .then(data => {
-          if (data.geometry?.coordinates) {
-            if (lineRef.current) { lineRef.current.remove(); lineRef.current = null; }
-            const latlngs = data.geometry.coordinates.map(c => [c[1], c[0]]);
-            lineRef.current = L.polyline(latlngs, { color: '#0052FF', weight: 3, opacity: 0.65 }).addTo(map);
+          if (data.geometry?.coordinates && lineRef.current) {
+            lineRef.current.setMap(null);
+            lineRef.current = new gm.Polyline({
+              path: data.geometry.coordinates.map(([lng, lat]) => ({ lat, lng })),
+              strokeColor: '#0052FF',
+              strokeWeight: 3,
+              strokeOpacity: 0.65,
+              map,
+            });
           }
         })
-        .catch(() => {}); // Keep straight fallback on error
+        .catch(() => {});
     }
 
-    // Start point — marker #1 (purple square)
-    if (startPoint?.lat && startPoint?.lng) {
-      const icon = L.divIcon({
-        className: '',
-        html: `<div style="
-          width:36px;height:36px;border-radius:9px;
-          background:#5c35cc;
-          border:2.5px solid rgba(255,255,255,.95);
-          box-shadow:0 3px 14px rgba(92,53,204,.6);
-          display:flex;align-items:center;justify-content:center;
-          font-size:16px;font-weight:900;color:#fff;
-          font-family:'Inter',sans-serif;
-          cursor:pointer;
-        ">1</div>`,
-        iconSize: [36, 36], iconAnchor: [18, 18], popupAnchor: [0, -22]
+    // Start point marker
+    if (hasStartCoords) {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36">
+        <rect x="1.5" y="1.5" width="33" height="33" rx="8" fill="#5c35cc" stroke="rgba(255,255,255,.95)" stroke-width="2.5"/>
+        <text x="18" y="24" text-anchor="middle" fill="white" font-family="Inter,Arial,sans-serif" font-size="16" font-weight="900">1</text>
+      </svg>`;
+      startRef.current = new gm.Marker({
+        position: { lat: startPoint.lat, lng: startPoint.lng },
+        icon: { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg), scaledSize: new gm.Size(36, 36), anchor: new gm.Point(18, 18) },
+        map,
+        zIndex: 10,
       });
-      startRef.current = L.marker([startPoint.lat, startPoint.lng], { icon }).addTo(map);
       const verifyBtn = onVerifyLoad
         ? `<button onclick="window.__verifyLoad()" style="${btnStyle('#5c35cc')}">📦 Verificar carga</button>`
         : '';
-      startRef.current.bindPopup(
-        `<div style="font-family:'Inter',sans-serif;min-width:190px">
-          <b style="font-size:13px;color:#5c35cc">📍 Punto de salida</b>
-          <div style="font-size:12px;color:#666;margin-top:4px">${startPoint.address || ''}</div>
-          ${verifyBtn ? `<div style="margin-top:10px">${verifyBtn}</div>` : ''}
-        </div>`,
-        { maxWidth: 240 }
-      );
+      startRef.current.addListener('click', () => {
+        infoWindowRef.current.setContent(
+          `<div style="font-family:'Inter',sans-serif;min-width:190px">
+            <b style="font-size:13px;color:#5c35cc">📍 Punto de salida</b>
+            <div style="font-size:12px;color:#666;margin-top:4px">${startPoint.address || ''}</div>
+            ${verifyBtn ? `<div style="margin-top:10px">${verifyBtn}</div>` : ''}
+          </div>`
+        );
+        infoWindowRef.current.open(map, startRef.current);
+      });
     }
 
-    // Package markers — numbered from 2 if start point exists (start = 1)
+    // Package markers
     const hasStart = hasStartCoords;
     let activeIdx = 0;
-    allPkgs.forEach(pkg => {
+    (packages || []).forEach(pkg => {
       if (!pkg.lat || !pkg.lng) return;
       const idx = pkg.status !== 'eliminado' ? activeIdx++ : -1;
-      if (pkg.status === 'eliminado') return; // skip eliminated
-      const icon = makeIcon(pkg, idx, hasStart);
-      const popup = makePopup(pkg, idx, hasStart, onPkgClick, readOnly);
-      const marker = L.marker([pkg.lat, pkg.lng], { icon }).addTo(map);
-      marker.bindPopup(popup, { maxWidth: 280 });
+      if (pkg.status === 'eliminado') return;
+      const color = pinColor(pkg);
+      const num   = pkg.status === 'entregado' ? '✓' : pkg.status === 'no-entregado' ? '✗' : String(hasStart ? idx + 2 : idx + 1);
+      const icon  = makeSvgIcon(gm, num, color, 32);
+      const marker = new gm.Marker({ position: { lat: pkg.lat, lng: pkg.lng }, icon, map, zIndex: 5 });
+      const content = makePopupContent(pkg, idx, hasStart, readOnly);
+      marker.addListener('click', () => {
+        infoWindowRef.current.setContent(content);
+        infoWindowRef.current.open(map, marker);
+      });
       markersRef.current[pkg._id] = marker;
     });
 
-    // Fit map bounds
+    // Fit bounds
     const allPts = [
-      ...withCoords.map(p => [p.lat, p.lng]),
-      ...(startPoint?.lat && startPoint?.lng ? [[startPoint.lat, startPoint.lng]] : [])
+      ...withCoords.map(p => new gm.LatLng(p.lat, p.lng)),
+      ...(hasStartCoords ? [new gm.LatLng(startPoint.lat, startPoint.lng)] : []),
     ];
     if (allPts.length === 1) {
-      map.setView(allPts[0], 15);
+      map.setCenter(allPts[0]); map.setZoom(15);
     } else if (allPts.length > 1) {
-      map.fitBounds(allPts, { padding: [50, 50], maxZoom: 15 });
+      const bounds = new gm.LatLngBounds();
+      allPts.forEach(p => bounds.extend(p));
+      map.fitBounds(bounds, { top: 50, right: 50, bottom: 50, left: 50 });
     }
-  }, [packages, startPoint, readOnly]);
+  }, [mapReady, packages, startPoint, readOnly]);
 
-  // "You are here" — driver's own GPS position (blue pulsing dot + heading arrow)
+  // My location (driver GPS)
   useEffect(() => {
-    const map = instanceRef.current;
-    if (!map) return;
+    if (!mapReady) return;
+    const map = mapInst.current;
+    const gm  = gmRef.current;
+    if (!map || !gm) return;
 
-    if (myAccuracyRef.current) { myAccuracyRef.current.remove(); myAccuracyRef.current = null; }
-    if (myLocationRef.current) { myLocationRef.current.remove(); myLocationRef.current = null; }
-
+    if (myAccuracyRef.current) { myAccuracyRef.current.setMap(null); myAccuracyRef.current = null; }
+    if (myLocationRef.current) { myLocationRef.current.setMap(null); myLocationRef.current = null; }
     if (!myLocation?.lat || !myLocation?.lng) return;
 
     if (myLocation.accuracy && myLocation.accuracy < 500) {
-      myAccuracyRef.current = L.circle([myLocation.lat, myLocation.lng], {
+      myAccuracyRef.current = new gm.Circle({
+        center: { lat: myLocation.lat, lng: myLocation.lng },
         radius: myLocation.accuracy,
-        color: '#1a73e8', fillColor: '#1a73e8', fillOpacity: 0.08, weight: 1, opacity: 0.3
-      }).addTo(map);
+        strokeColor: '#1a73e8', strokeOpacity: 0.3, strokeWeight: 1,
+        fillColor: '#1a73e8', fillOpacity: 0.08,
+        map,
+      });
     }
 
-    myLocationRef.current = L.marker([myLocation.lat, myLocation.lng], {
-      icon: makeMyLocationIcon(myLocation.heading),
-      zIndexOffset: 1000
-    }).addTo(map);
-  }, [myLocation]);
+    const deg = (myLocation.heading != null && !isNaN(myLocation.heading)) ? myLocation.heading : null;
+    const arrow = deg != null
+      ? `<polygon points="18,3 22,13 14,13" fill="#1a73e8" transform="rotate(${deg},18,18)"/>`
+      : '';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36">
+      ${arrow}
+      <circle cx="18" cy="18" r="9" fill="#1a73e8" stroke="white" stroke-width="3"/>
+    </svg>`;
+    myLocationRef.current = new gm.Marker({
+      position: { lat: myLocation.lat, lng: myLocation.lng },
+      icon: { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg), scaledSize: new gm.Size(36, 36), anchor: new gm.Point(18, 18) },
+      map,
+      zIndex: 20,
+    });
+  }, [mapReady, myLocation]);
 
-  // Driver tracker — admin-only view of the assigned driver's last known position
+  // Driver tracker (admin view)
   useEffect(() => {
-    const map = instanceRef.current;
-    if (!map) return;
+    if (!mapReady) return;
+    const map = mapInst.current;
+    const gm  = gmRef.current;
+    if (!map || !gm) return;
 
-    if (driverTrackerRef.current) { driverTrackerRef.current.remove(); driverTrackerRef.current = null; }
+    if (driverRef.current) { driverRef.current.setMap(null); driverRef.current = null; }
     if (!driverLocation?.lat || !driverLocation?.lng) return;
 
-    const updatedAt = driverLocation.updatedAt ? new Date(driverLocation.updatedAt) : null;
-    const minsAgo = updatedAt ? Math.round((Date.now() - updatedAt.getTime()) / 60000) : null;
-    const freshness = minsAgo == null ? '…' : minsAgo < 1 ? 'hace un momento' : `hace ${minsAgo} min`;
-    const isStale = minsAgo != null && minsAgo > 15;
+    const updatedAt  = driverLocation.updatedAt ? new Date(driverLocation.updatedAt) : null;
+    const minsAgo    = updatedAt ? Math.round((Date.now() - updatedAt.getTime()) / 60000) : null;
+    const freshness  = minsAgo == null ? '…' : minsAgo < 1 ? 'hace un momento' : `hace ${minsAgo} min`;
+    const isStale    = minsAgo != null && minsAgo > 15;
 
-    driverTrackerRef.current = L.marker([driverLocation.lat, driverLocation.lng], {
-      icon: makeDriverTrackerIcon(),
-      zIndexOffset: 1100
-    }).addTo(map);
-
-    driverTrackerRef.current.bindPopup(
-      `<div style="font-family:'Inter',sans-serif;min-width:170px">
-        <div style="font-size:13px;font-weight:700;color:#0077aa;margin-bottom:4px">
-          🚗 ${driverLocation.driverName || 'Driver'}
-        </div>
-        <div style="font-size:11px;color:${isStale ? '#cc2244' : '#666'}">
-          ${isStale ? '⚠ ' : '📡 '}Ubicación ${freshness}
-        </div>
-        ${driverLocation.speed != null ? `<div style="font-size:11px;color:#666;margin-top:2px">⚡ ${Math.round((driverLocation.speed || 0) * 3.6)} km/h</div>` : ''}
-      </div>`,
-      { maxWidth: 200 }
-    );
-  }, [driverLocation]);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="38" height="38">
+      <circle cx="19" cy="19" r="17" fill="#0077aa" stroke="white" stroke-width="3"/>
+      <text x="19" y="25" text-anchor="middle" font-size="18" font-family="Arial">🚗</text>
+    </svg>`;
+    driverRef.current = new gm.Marker({
+      position: { lat: driverLocation.lat, lng: driverLocation.lng },
+      icon: { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg), scaledSize: new gm.Size(38, 38), anchor: new gm.Point(19, 19) },
+      map,
+      zIndex: 25,
+    });
+    driverRef.current.addListener('click', () => {
+      infoWindowRef.current.setContent(
+        `<div style="font-family:'Inter',sans-serif;min-width:170px">
+          <div style="font-size:13px;font-weight:700;color:#0077aa;margin-bottom:4px">🚗 ${driverLocation.driverName || 'Driver'}</div>
+          <div style="font-size:11px;color:${isStale ? '#cc2244' : '#666'}">${isStale ? '⚠ ' : '📡 '}Ubicación ${freshness}</div>
+          ${driverLocation.speed != null ? `<div style="font-size:11px;color:#666;margin-top:2px">⚡ ${Math.round((driverLocation.speed || 0) * 3.6)} km/h</div>` : ''}
+        </div>`
+      );
+      infoWindowRef.current.open(map, driverRef.current);
+    });
+  }, [mapReady, driverLocation]);
 
   const noCoords = (packages || []).filter(p => p.status !== 'eliminado' && (!p.lat || !p.lng)).length;
-  const total = (packages || []).filter(p => p.status !== 'eliminado').length;
+  const total    = (packages || []).filter(p => p.status !== 'eliminado').length;
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -346,8 +301,7 @@ export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgResto
           position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
           background: '#fff8e1', border: '1px solid #f57c0044', borderRadius: 20,
           padding: '6px 14px', fontSize: 11, fontWeight: 700, color: '#f57c00',
-          zIndex: 900, pointerEvents: 'none', boxShadow: '0 2px 8px #0002',
-          whiteSpace: 'nowrap'
+          zIndex: 900, pointerEvents: 'none', boxShadow: '0 2px 8px #0002', whiteSpace: 'nowrap',
         }}>
           ⚠️ {noCoords}/{total} sin coordenadas · usar "Geocodificar ruta" en INFO
         </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import L from 'leaflet';
+import { loadGoogleMaps, geoJsonToLatLngs } from '../../utils/googleMaps.js';
 import { api } from '../../api/index.js';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
 
@@ -26,76 +26,95 @@ function suggestPriceFromZone(zones, commune) {
   return zone?.price || 0;
 }
 
-function pinIcon(n) {
-  return L.divIcon({
-    className: '',
-    html: `<div style="width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#0052FF;border:2px solid #fff;box-shadow:0 2px 6px #0005;display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);color:#fff;font-size:9px;font-weight:800">${n}</span></div>`,
-    iconSize: [26, 26],
-    iconAnchor: [13, 26]
-  });
-}
 
 // ── Zone map component ────────────────────────────────────────────────────────
 function QuoteMap({ zones, items, visible }) {
-  const mapRef  = useRef(null);
-  const mapInst = useRef(null);
-  const zonesGrp = useRef(null);
-  const pinsGrp  = useRef(null);
+  const mapRef   = useRef(null);
+  const mapInst  = useRef(null);
+  const gmRef    = useRef(null);
+  const zonesRef = useRef([]);
+  const pinsRef  = useRef([]);
+  const infoRef  = useRef(null);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
-    if (mapInst.current) return;
-    const map = L.map(mapRef.current, { zoomControl: true }).setView([-33.45, -70.65], 11);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap', maxZoom: 19
-    }).addTo(map);
-    zonesGrp.current = L.layerGroup().addTo(map);
-    pinsGrp.current  = L.layerGroup().addTo(map);
-    mapInst.current  = map;
-    setTimeout(() => map.invalidateSize(), 120);
+    loadGoogleMaps().then(gm => {
+      gmRef.current   = gm;
+      mapInst.current = new gm.Map(mapRef.current, {
+        center: { lat: -33.45, lng: -70.65 },
+        zoom: 11,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+      });
+      infoRef.current = new gm.InfoWindow();
+      setMapReady(true);
+    });
   }, []);
 
-  // Invalidate size when tab becomes visible so tiles render correctly
+  // Trigger resize when tab becomes visible
   useEffect(() => {
-    if (visible && mapInst.current) {
-      setTimeout(() => mapInst.current.invalidateSize(), 50);
+    if (visible && gmRef.current && mapInst.current) {
+      gmRef.current.event.trigger(mapInst.current, 'resize');
     }
   }, [visible]);
 
   // Draw zone polygons
   useEffect(() => {
+    const gm  = gmRef.current;
     const map = mapInst.current;
-    const grp = zonesGrp.current;
-    if (!map || !grp) return;
-    grp.clearLayers();
+    if (!gm || !map) return;
+    zonesRef.current.forEach(p => p.setMap(null));
+    zonesRef.current = [];
     zones.forEach(z => {
       if (!z.polygon?.coordinates?.[0]) return;
-      const latlngs = z.polygon.coordinates[0].map(([lng, lat]) => [lat, lng]);
+      const paths = geoJsonToLatLngs(gm, z.polygon.coordinates[0]);
       const color = z.color || tierColor(z.price || 0);
-      L.polygon(latlngs, {
-        color, fillColor: color, fillOpacity: 0.22, weight: 1.5, opacity: 0.6
-      })
-        .bindTooltip(`${z.name}  $${(z.price || 0).toLocaleString('es-CL')}`, { sticky: true })
-        .addTo(grp);
+      const poly  = new gm.Polygon({
+        paths, strokeColor: color, strokeOpacity: 0.6, strokeWeight: 1.5,
+        fillColor: color, fillOpacity: 0.22, map,
+      });
+      poly.addListener('mouseover', e => {
+        infoRef.current.setContent(`${z.name}  $${(z.price || 0).toLocaleString('es-CL')}`);
+        infoRef.current.setPosition(e.latLng);
+        infoRef.current.open(map);
+      });
+      poly.addListener('mouseout', () => infoRef.current.close());
+      zonesRef.current.push(poly);
     });
-  }, [zones]);
+  }, [mapReady, zones]);
 
   // Draw package pins
   useEffect(() => {
+    const gm  = gmRef.current;
     const map = mapInst.current;
-    const grp = pinsGrp.current;
-    if (!map || !grp) return;
-    grp.clearLayers();
+    if (!gm || !map) return;
+    pinsRef.current.forEach(m => m.setMap(null));
+    pinsRef.current = [];
     const valid = items.filter(i => i.lat && i.lng);
     valid.forEach((item, n) => {
-      L.marker([item.lat, item.lng], { icon: pinIcon(n + 1) })
-        .bindPopup(`<b>${item.customerName || ''} ${item.customerLastName || ''}</b><br>${item.address}<br>${item.commune || ''}`)
-        .addTo(grp);
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="30" viewBox="0 0 26 30"><path d="M13 0C5.82 0 0 5.82 0 13c0 7.18 13 17 13 17s13-9.82 13-17C26 5.82 20.18 0 13 0Z" fill="#0052FF" stroke="white" stroke-width="2"/><text x="13" y="17" text-anchor="middle" fill="white" font-size="9" font-weight="800" font-family="Arial,sans-serif">${n + 1}</text></svg>`;
+      const icon = {
+        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+        scaledSize: new gm.Size(26, 30),
+        anchor: new gm.Point(13, 30),
+      };
+      const marker = new gm.Marker({ position: { lat: item.lat, lng: item.lng }, map, icon });
+      marker.addListener('click', () => {
+        infoRef.current.setContent(
+          `<b>${item.customerName || ''} ${item.customerLastName || ''}</b><br>${item.address}<br>${item.commune || ''}`
+        );
+        infoRef.current.open(map, marker);
+      });
+      pinsRef.current.push(marker);
     });
     if (valid.length) {
-      const bounds = L.latLngBounds(valid.map(i => [i.lat, i.lng]));
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+      const bounds = new gm.LatLngBounds();
+      valid.forEach(i => bounds.extend({ lat: i.lat, lng: i.lng }));
+      map.fitBounds(bounds, { top: 40, right: 40, bottom: 40, left: 40 });
+      if (valid.length === 1) map.setZoom(14);
     }
-  }, [items]);
+  }, [mapReady, items]);
 
   return <div ref={mapRef} style={{ width: '100%', height: '100%' }} />;
 }
