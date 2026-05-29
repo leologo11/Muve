@@ -82,12 +82,17 @@ function popupHtml(pkg) {
   `;
 }
 
-function makeCircleIcon(gm, color, selected, dimmed) {
-  const size    = selected ? 18 : 14;
+function makeCircleIcon(gm, color, selected, dimmed, stackCount = 1) {
+  const stacked = stackCount > 1;
+  const size    = selected ? 18 : stacked ? 20 : 14;
   const stroke  = selected ? 3 : (dimmed ? 1 : 2);
   const opacity = dimmed ? 0.45 : 1;
+  const badge   = stacked
+    ? `<text x="${size/2}" y="${size/2+3.5}" text-anchor="middle" fill="white" font-family="Inter,Arial,sans-serif" font-size="8" font-weight="900" opacity="${opacity}">×${stackCount}</text>`
+    : '';
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
     <circle cx="${size/2}" cy="${size/2}" r="${size/2-1}" fill="${color}" stroke="white" stroke-width="${stroke}" opacity="${opacity}"/>
+    ${badge}
   </svg>`;
   return {
     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
@@ -329,13 +334,23 @@ export default function GeneralMapView() {
     const visiblePackages = hasActiveFilters ? filtered : packages;
     const hasSelection = selectedIds.size > 0;
 
+    // Count how many packages share each coordinate for stacking badges
+    const coordCount = {};
+    visiblePackages.forEach(pkg => {
+      if (!pkg.lat || !pkg.lng) return;
+      const ck = `${Number(pkg.lat).toFixed(4)}_${Number(pkg.lng).toFixed(4)}`;
+      coordCount[ck] = (coordCount[ck] || 0) + 1;
+    });
+
     visiblePackages.forEach(pkg => {
       if (!pkg.lat || !pkg.lng) return;
       const id         = pkgId(pkg);
       const isSelected = selectedIds.has(id);
       const dimmed     = hasSelection ? !isSelected : false;
       const color      = isSelected ? '#0052FF' : (dimmed ? '#94a3b8' : pinColor(pkg));
-      const icon       = makeCircleIcon(gm, color, isSelected, dimmed);
+      const ck         = `${Number(pkg.lat).toFixed(4)}_${Number(pkg.lng).toFixed(4)}`;
+      const stackCount = coordCount[ck] || 1;
+      const icon       = makeCircleIcon(gm, color, isSelected, dimmed, stackCount);
       const marker     = new gm.Marker({ position: { lat: pkg.lat, lng: pkg.lng }, icon, map });
       marker.addListener('click', () => {
         infoWindowRef.current.setContent(popupHtml(pkg));

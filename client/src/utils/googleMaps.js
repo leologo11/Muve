@@ -40,6 +40,45 @@ export function polygonBounds(gm, polygon) {
   return bounds;
 }
 
+// Spread overlapping markers in a circle so stacked pins are all visible.
+// Returns a new array where each package gets _dispLat/_dispLng (offset position)
+// plus _groupSize / _centerLat / _centerLng when it belongs to a cluster.
+export function spreadOverlapping(packages, radiusM = 22) {
+  const R_LAT = radiusM / 111320; // degrees per metre (latitude)
+
+  // Group by coordinates rounded to 4 decimal places (~11 m precision)
+  const groups = {};
+  packages.forEach(pkg => {
+    if (!pkg.lat || !pkg.lng) return;
+    const key = `${Number(pkg.lat).toFixed(4)}_${Number(pkg.lng).toFixed(4)}`;
+    if (!groups[key]) groups[key] = { lat: Number(pkg.lat), lng: Number(pkg.lng), ids: [] };
+    groups[key].ids.push(pkg._id);
+  });
+
+  const offsets = {};
+  Object.values(groups).forEach(g => {
+    if (g.ids.length < 2) return;
+    const n      = g.ids.length;
+    const cosLat = Math.cos(g.lat * Math.PI / 180);
+    g.ids.forEach((id, i) => {
+      const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+      offsets[id] = {
+        lat:       g.lat + R_LAT * Math.cos(angle),
+        lng:       g.lng + (R_LAT / cosLat) * Math.sin(angle),
+        groupSize: n,
+        centerLat: g.lat,
+        centerLng: g.lng,
+      };
+    });
+  });
+
+  return packages.map(pkg => {
+    const o = offsets[pkg._id];
+    if (!o) return pkg;
+    return { ...pkg, _dispLat: o.lat, _dispLng: o.lng, _groupSize: o.groupSize, _centerLat: o.centerLat, _centerLng: o.centerLng };
+  });
+}
+
 // SVG circle marker icon (for package pins)
 export function makeSvgIcon(gm, label, color, size = 32) {
   const fs  = label.length > 2 ? 9 : 12;

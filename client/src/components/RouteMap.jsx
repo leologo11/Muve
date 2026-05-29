@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { loadGoogleMaps, makeSvgIcon } from '../utils/googleMaps.js';
+import { loadGoogleMaps, makeSvgIcon, spreadOverlapping } from '../utils/googleMaps.js';
 
 const ZONE_COLORS = {
   Providencia: '#e8740a',
@@ -183,23 +183,70 @@ export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgResto
       });
     }
 
-    // Package markers
-    const hasStart = hasStartCoords;
+    // Package markers — spread overlapping pins so stacked packages are visible
+    const hasStart  = hasStartCoords;
+    const spread    = spreadOverlapping((packages || []).filter(p => p.status !== 'eliminado'));
+    const groupBadges = {}; // center key → {lat,lng,count}
+
     let activeIdx = 0;
-    (packages || []).forEach(pkg => {
+    spread.forEach(pkg => {
       if (!pkg.lat || !pkg.lng) return;
-      const idx = pkg.status !== 'eliminado' ? activeIdx++ : -1;
-      if (pkg.status === 'eliminado') return;
+      const idx  = activeIdx++;
       const color = pinColor(pkg);
       const num   = pkg.status === 'entregado' ? '✓' : pkg.status === 'no-entregado' ? '✗' : String(hasStart ? idx + 2 : idx + 1);
-      const icon  = makeSvgIcon(gm, num, color, 32);
-      const marker = new gm.Marker({ position: { lat: pkg.lat, lng: pkg.lng }, icon, map, zIndex: 5 });
-      const content = makePopupContent(pkg, idx, hasStart, readOnly);
+
+      // Outer ring for grouped markers so driver notices they're a cluster
+      const size = pkg._groupSize > 1 ? 34 : 32;
+      const ringExtra = pkg._groupSize > 1
+        ? `<circle cx="${size/2}" cy="${size/2}" r="${size/2-0.5}" fill="none" stroke="white" stroke-width="3" stroke-dasharray="4 3" opacity="0.8"/>`
+        : '';
+      const fs  = num.length > 2 ? 9 : 12;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+        <circle cx="${size/2}" cy="${size/2}" r="${size/2-1.5}" fill="${color}" stroke="white" stroke-width="2.5"/>
+        ${ringExtra}
+        <text x="${size/2}" y="${size/2+4}" text-anchor="middle" fill="white" font-family="Inter,Arial,sans-serif" font-size="${fs}" font-weight="800">${num}</text>
+      </svg>`;
+      const icon = {
+        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+        scaledSize: new gm.Size(size, size),
+        anchor: new gm.Point(size / 2, size / 2),
+      };
+      const lat  = pkg._dispLat || pkg.lat;
+      const lng  = pkg._dispLng || pkg.lng;
+      const marker = new gm.Marker({ position: { lat, lng }, icon, map, zIndex: 5 });
+      const origPkg = (packages || []).find(p => p._id === pkg._id) || pkg;
+      const content = makePopupContent(origPkg, idx, hasStart, readOnly);
       marker.addListener('click', () => {
         infoWindowRef.current.setContent(content);
         infoWindowRef.current.open(map, marker);
       });
       markersRef.current[pkg._id] = marker;
+
+      // Track group centers for badges
+      if (pkg._groupSize > 1) {
+        const ck = `${pkg._centerLat.toFixed(5)}_${pkg._centerLng.toFixed(5)}`;
+        groupBadges[ck] = { lat: pkg._centerLat, lng: pkg._centerLng, count: pkg._groupSize };
+      }
+    });
+
+    // Group center badges — small pill showing "×N"
+    Object.values(groupBadges).forEach(g => {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="38" height="20">
+        <rect rx="10" ry="10" width="38" height="20" fill="#1a1a1a" stroke="white" stroke-width="1.5"/>
+        <text x="19" y="14" text-anchor="middle" fill="white" font-size="11" font-weight="900" font-family="Inter,Arial,sans-serif">×${g.count}</text>
+      </svg>`;
+      const badge = new gm.Marker({
+        position: { lat: g.lat, lng: g.lng },
+        icon: {
+          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+          scaledSize: new gm.Size(38, 20),
+          anchor: new gm.Point(19, 10),
+        },
+        map,
+        zIndex: 4,
+        clickable: false,
+      });
+      markersRef.current[`_badge_${g.lat}_${g.lng}`] = badge;
     });
 
     // Fit bounds
