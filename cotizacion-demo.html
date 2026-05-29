@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>MUVE — Demo Cotización</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'Inter',-apple-system,sans-serif;background:#0A1F3D}
+:root{--B:#1B6CF5;--N:#0A1F3D;--C:#3FBEED;--T2:#4A5B7A;--T3:#8A9AB8;--BDR:#E4ECF7;--SUC:#10B981;--GRAD:linear-gradient(135deg,#1B6CF5,#3FBEED)}
+
+/* ── Screens ─────────────────────────────────────────── */
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .35s ease;overflow:hidden}
+.screen.active{opacity:1;pointer-events:all}
+
+/* ── Navigation dots ─────────────────────────────────── */
+.dots{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:7px;z-index:999}
+.dot{width:7px;height:7px;border-radius:99px;background:rgba(255,255,255,.35);transition:all .3s}
+.dot.on{width:22px;background:rgba(255,255,255,.9)}
+
+/* ─────────────────────────────────────────────────────── */
+/* SCREEN 1 — BIENVENIDA                                   */
+/* ─────────────────────────────────────────────────────── */
+#s0{background:linear-gradient(175deg,#E8F3FF 0%,#F0F6FF 55%,#fff 100%)}
+
+.s0-blob1{position:absolute;top:-80px;right:-50px;width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,#3FBEED18,transparent 65%);pointer-events:none}
+.s0-blob2{position:absolute;bottom:20px;left:-70px;width:240px;height:240px;border-radius:50%;background:radial-gradient(circle,#1B6CF510,transparent 68%);pointer-events:none}
+
+.s0-logo{padding:18px 22px 0;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;position:relative;z-index:2}
+.s0-logo-text{font-size:26px;font-weight:900;color:var(--B);letter-spacing:-1px;display:flex;align-items:center;gap:6px}
+.s0-logo-icon{font-size:22px}
+.s0-wa{width:38px;height:38px;border-radius:10px;background:rgba(37,211,102,.12);border:1px solid rgba(37,211,102,.28);display:grid;place-items:center;text-decoration:none;font-size:18px}
+
+.s0-hero{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;padding:12px 26px 0;position:relative;z-index:2}
+.s0-tag{font-size:10px;font-weight:800;color:var(--B);text-transform:uppercase;letter-spacing:1.8px;margin-bottom:10px}
+.s0-h1{font-size:36px;font-weight:900;letter-spacing:-1.5px;color:var(--N);line-height:1.08;margin-bottom:10px}
+.s0-grad{background:linear-gradient(135deg,#1B6CF5,#3FBEED);-webkit-background-clip:text;background-clip:text;color:transparent}
+.s0-sub{font-size:14px;color:var(--T2);line-height:1.55;margin-bottom:16px;max-width:280px}
+
+.s0-steps{display:flex;align-items:center;width:100%;max-width:290px;margin-bottom:18px}
+.s0-step{display:flex;flex-direction:column;align-items:center;gap:4px}
+.s0-step-circle{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#1B6CF5,#3FBEED);display:grid;place-items:center;color:#fff;font-size:17px;font-weight:900;box-shadow:0 4px 14px #1B6CF540}
+.s0-step-label{font-size:10px;font-weight:700;color:var(--T2)}
+.s0-step-line{flex:1;height:2px;background:linear-gradient(90deg,#1B6CF555,#3FBEED55);border-radius:99px}
+
+.s0-btn{width:100%;max-width:340px;padding:18px 20px;border-radius:18px;border:none;color:#fff;font-size:19px;font-weight:900;cursor:pointer;letter-spacing:-.4px;display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:14px;box-shadow:0 14px 36px #1B6CF555,0 4px 12px #1B6CF530;background:linear-gradient(90deg,#0A46C0,#1B6CF5 28%,#3FBEED 52%,#1B6CF5 72%,#0A46C0);background-size:260% auto;animation:shimmer 3s linear infinite;font-family:inherit}
+@keyframes shimmer{0%{background-position:-220% center}100%{background-position:220% center}}
+
+.s0-chips{display:flex;gap:0;background:rgba(255,255,255,.75);border-radius:14px;border:1px solid var(--BDR);overflow:hidden;max-width:300px;width:100%;margin-bottom:10px;backdrop-filter:blur(8px)}
+.s0-chip{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px}
+.s0-chip+.s0-chip{border-left:1px solid var(--BDR)}
+.s0-chip-icon{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:14px}
+.s0-chip-label{font-size:10px;font-weight:700;color:var(--T2);text-align:center;line-height:1.2}
+
+.s0-ticker{border-top:1px solid var(--BDR);padding:10px 0 14px;position:relative;z-index:2}
+.s0-ticker-label{font-size:9px;font-weight:800;color:var(--T3);text-transform:uppercase;letter-spacing:1.2px;text-align:center;margin-bottom:8px}
+.s0-ticker-row{overflow:hidden;mask-image:linear-gradient(90deg,transparent,black 8%,black 92%,transparent);-webkit-mask-image:linear-gradient(90deg,transparent,black 8%,black 92%,transparent)}
+.s0-ticker-inner{display:flex;gap:8px;animation:ticker 30s linear infinite;width:max-content}
+@keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.s0-item{flex-shrink:0;display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:10px;background:rgba(255,255,255,.9);border:1.5px solid rgba(27,108,245,.10);font-size:12px;font-weight:700;color:var(--T2)}
+
+/* ─────────────────────────────────────────────────────── */
+/* SCREEN 2 — RUTA                                         */
+/* ─────────────────────────────────────────────────────── */
+#s1{background:#F5F8FF}
+
+.hdr{display:flex;align-items:center;gap:10px;padding:12px 14px 10px;background:#fff;border-bottom:1px solid var(--BDR);flex-shrink:0}
+.hdr-back{width:34px;height:34px;border-radius:10px;border:1px solid var(--BDR);display:grid;place-items:center;font-size:16px;color:var(--B);flex-shrink:0;background:#fff}
+.hdr-title{flex:1;font-size:15px;font-weight:800;color:var(--N)}
+.hdr-step{font-size:11px;font-weight:700;color:var(--T3)}
+
+.s1-map{flex-shrink:0;height:160px;margin:10px 14px 0;border-radius:16px;overflow:hidden;border:1.5px solid var(--BDR);box-shadow:0 2px 12px rgba(27,108,245,.08)}
+
+.s1-body{flex:1;padding:10px 14px;display:flex;flex-direction:column;gap:8px}
+
+.addr-card{background:#fff;border-radius:16px;border:1px solid var(--BDR);padding:4px 14px;box-shadow:0 1px 6px rgba(0,0,0,.04)}
+.addr-row{display:flex;align-items:center;gap:10px;padding:11px 0}
+.addr-row+.addr-row{border-top:1px dashed var(--BDR)}
+.addr-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.addr-col{flex:1;min-width:0}
+.addr-label{font-size:9px;font-weight:700;color:var(--T3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+.addr-val{font-size:13px;font-weight:700;color:var(--N);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.addr-check{font-size:14px;color:var(--SUC)}
+
+.dist-badge{background:#f0fdf4;border:1.5px solid #10B98130;border-radius:12px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between}
+.dist-num{font-size:24px;font-weight:900;color:var(--B);letter-spacing:-.5px}
+.dist-sub{font-size:12px;color:var(--T2);margin-left:8px}
+.dist-ok{font-size:12px;font-weight:700;color:var(--SUC);display:flex;align-items:center;gap:4px}
+
+.tip-box{background:#EEF5FF;border:1px solid #1B6CF520;border-radius:11px;padding:10px 13px;font-size:12px;color:var(--T2);line-height:1.45}
+.tip-box strong{color:var(--N)}
+
+.cta{width:100%;padding:16px;border-radius:16px;border:none;background:var(--B);color:#fff;font-size:17px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 8px 24px #1B6CF545;font-family:inherit}
+
+/* ─────────────────────────────────────────────────────── */
+/* SCREEN 3 — ARTÍCULOS                                    */
+/* ─────────────────────────────────────────────────────── */
+#s2{background:#F5F8FF}
+
+.s2-tabs{display:flex;gap:8px;padding:12px 14px 0;flex-shrink:0}
+.tab{flex:1;padding:9px 0;border-radius:12px;border:1.5px solid var(--BDR);font-size:13px;font-weight:800;text-align:center;cursor:pointer;background:#fff;color:var(--T2)}
+.tab.on{background:var(--B);color:#fff;border-color:var(--B);box-shadow:0 4px 14px #1B6CF535}
+
+.s2-body{flex:1;padding:10px 14px;display:flex;flex-direction:column;gap:7px;overflow:hidden}
+
+.items-card{background:#fff;border-radius:16px;border:1px solid var(--BDR);padding:4px 14px;box-shadow:0 1px 6px rgba(0,0,0,.04)}
+.item-row{display:flex;align-items:center;gap:12px;padding:8px 0}
+.item-row+.item-row{border-top:1px solid var(--BDR)}
+.item-icon{font-size:22px;flex-shrink:0}
+.item-name{flex:1;font-size:13px;font-weight:700;color:var(--N)}
+.item-qty{display:flex;align-items:center;gap:0}
+.qty-btn{width:26px;height:26px;border-radius:8px;border:1.5px solid var(--BDR);background:#fff;font-size:15px;font-weight:700;color:var(--B);display:grid;place-items:center;cursor:pointer}
+.qty-val{width:28px;text-align:center;font-size:14px;font-weight:800;color:var(--N)}
+
+.vehicle-card{background:linear-gradient(135deg,#1B6CF508,#3FBEED05);border:1.5px solid #1B6CF525;border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px}
+.vehicle-icon-box{width:44px;height:44px;border-radius:12px;background:var(--GRAD);display:grid;place-items:center;font-size:22px;flex-shrink:0;box-shadow:0 4px 12px #1B6CF535}
+.vehicle-name{font-size:14px;font-weight:800;color:var(--N)}
+.vehicle-sub{font-size:11px;color:var(--T2);margin-top:2px}
+.vehicle-badge{margin-left:auto;background:#1B6CF512;border:1px solid #1B6CF530;border-radius:8px;padding:3px 9px;font-size:11px;font-weight:700;color:var(--B)}
+
+/* ─────────────────────────────────────────────────────── */
+/* SCREEN 4 — PRECIO                                       */
+/* ─────────────────────────────────────────────────────── */
+#s3{background:#F5F8FF}
+
+.s3-body{flex:1;padding:8px 14px;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+
+.success-tag{display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 0 0}
+.success-tag span{font-size:12px;font-weight:800;color:var(--SUC)}
+
+.price-box{background:linear-gradient(135deg,#1B6CF5,#3FBEED);border-radius:18px;padding:16px;text-align:center;box-shadow:0 8px 24px #1B6CF545}
+.price-label{font-size:10px;font-weight:800;color:rgba(255,255,255,.75);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:3px}
+.price-val{font-size:34px;font-weight:900;color:#fff;letter-spacing:-1.5px;line-height:1}
+.price-note{font-size:10px;color:rgba(255,255,255,.75);margin-top:4px}
+
+.summary-card{background:#fff;border-radius:14px;border:1px solid var(--BDR);padding:8px 12px;box-shadow:0 1px 6px rgba(0,0,0,.04)}
+.summary-row{display:flex;align-items:center;justify-content:space-between;padding:4px 0}
+.summary-row+.summary-row{border-top:1px solid var(--BDR)}
+.summary-lbl{font-size:12px;color:var(--T2);display:flex;align-items:center;gap:7px}
+.summary-val{font-size:12px;font-weight:700;color:var(--N)}
+
+.breakdown-card{background:#fff;border-radius:14px;border:1px solid var(--BDR);padding:8px 12px;box-shadow:0 1px 6px rgba(0,0,0,.04)}
+.bk-title{font-size:9px;font-weight:800;color:var(--T3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
+.bk-row{display:flex;justify-content:space-between;font-size:12px;padding:3px 0}
+.bk-row+.bk-row{border-top:1px solid var(--BDR)}
+.bk-lbl{color:var(--T2)}
+.bk-val{font-weight:700;color:var(--N)}
+.bk-total{display:flex;justify-content:space-between;padding:8px 0 0;margin-top:4px;border-top:2px solid #1B6CF520}
+.bk-total-lbl{font-size:13px;font-weight:800;color:var(--N)}
+.bk-total-val{font-size:16px;font-weight:900;color:var(--B)}
+
+.contact-area{display:flex;flex-direction:column;gap:8px}
+.wa-btn{width:100%;padding:14px;border-radius:14px;border:none;background:#25D366;color:#fff;font-size:16px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 6px 20px #25D36640;font-family:inherit}
+.wa-sub{text-align:center;font-size:11px;color:var(--T3)}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- SCREEN 1 — BIENVENIDA                                -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="screen active" id="s0">
+  <div class="s0-blob1"></div>
+  <div class="s0-blob2"></div>
+
+  <!-- Logo -->
+  <div class="s0-logo">
+    <div class="s0-logo-text">
+      <span class="s0-logo-icon">≡</span>MUVE
+    </div>
+    <a class="s0-wa" href="#">💬</a>
+  </div>
+
+  <!-- Hero -->
+  <div class="s0-hero">
+    <div class="s0-tag">Fletes · Mudanzas · Santiago</div>
+    <h1 class="s0-h1">
+      Tu precio de traslado,<br>
+      <span class="s0-grad">en 30 segundos</span>
+    </h1>
+    <p class="s0-sub">Sin registro ni llamadas. Ingresa origen, destino y artículos — precio al instante.</p>
+
+    <!-- Steps -->
+    <div class="s0-steps">
+      <div class="s0-step">
+        <div class="s0-step-circle">1</div>
+        <div class="s0-step-label">Ruta</div>
+      </div>
+      <div class="s0-step-line"></div>
+      <div class="s0-step">
+        <div class="s0-step-circle">2</div>
+        <div class="s0-step-label">Artículos</div>
+      </div>
+      <div class="s0-step-line"></div>
+      <div class="s0-step">
+        <div class="s0-step-circle">3</div>
+        <div class="s0-step-label">Precio</div>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <button class="s0-btn" onclick="go(1)">Cotizar mi traslado <span style="font-size:20px">→</span></button>
+
+    <!-- Trust chips -->
+    <div class="s0-chips">
+      <div class="s0-chip">
+        <div class="s0-chip-icon" style="background:#F59E0B15">⚡</div>
+        <div class="s0-chip-label">Menos de 1 min</div>
+      </div>
+      <div class="s0-chip">
+        <div class="s0-chip-icon" style="background:#10B98115">🔒</div>
+        <div class="s0-chip-label">Sin registro</div>
+      </div>
+      <div class="s0-chip">
+        <div class="s0-chip-icon" style="background:#1B6CF515">💎</div>
+        <div class="s0-chip-label">Precio real</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ticker -->
+  <div class="s0-ticker">
+    <div class="s0-ticker-label">Movemos lo que importa</div>
+    <div class="s0-ticker-row">
+      <div class="s0-ticker-inner">
+        <div class="s0-item">🛋️ Sillones</div>
+        <div class="s0-item">📦 Cajas</div>
+        <div class="s0-item">🧊 Refrigerador</div>
+        <div class="s0-item">🛏️ Camas</div>
+        <div class="s0-item">🍽️ Comedor</div>
+        <div class="s0-item">📺 Televisores</div>
+        <div class="s0-item">🪞 Clóset</div>
+        <div class="s0-item">🫧 Lavadora</div>
+        <!-- repeat -->
+        <div class="s0-item">🛋️ Sillones</div>
+        <div class="s0-item">📦 Cajas</div>
+        <div class="s0-item">🧊 Refrigerador</div>
+        <div class="s0-item">🛏️ Camas</div>
+        <div class="s0-item">🍽️ Comedor</div>
+        <div class="s0-item">📺 Televisores</div>
+        <div class="s0-item">🪞 Clóset</div>
+        <div class="s0-item">🫧 Lavadora</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- SCREEN 2 — RUTA                                      -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="screen" id="s1">
+  <!-- Header -->
+  <div class="hdr">
+    <div class="hdr-back" onclick="go(0)">←</div>
+    <div class="hdr-title">¿Desde dónde?</div>
+    <div class="hdr-step">Paso 1 / 3</div>
+  </div>
+
+  <!-- Fake map -->
+  <div class="s1-map">
+    <svg width="100%" height="185" viewBox="0 0 360 185" xmlns="http://www.w3.org/2000/svg">
+      <rect width="360" height="185" fill="#EBF1FA"/>
+      <!-- Street grid -->
+      <rect x="0" y="75" width="360" height="12" fill="#D4DFF0" rx="1"/>
+      <rect x="0" y="38" width="360" height="6" fill="#E0E9F5"/>
+      <rect x="0" y="130" width="360" height="7" fill="#E0E9F5"/>
+      <rect x="0" y="158" width="360" height="5" fill="#E8EFF8"/>
+      <rect x="55" y="0" width="7" height="185" fill="#D8E4F0"/>
+      <rect x="130" y="0" width="5" height="185" fill="#E2ECF8"/>
+      <rect x="200" y="0" width="8" height="185" fill="#D8E4F0"/>
+      <rect x="278" y="0" width="7" height="185" fill="#D8E4F0"/>
+      <rect x="330" y="0" width="4" height="185" fill="#E5EDF8"/>
+      <!-- Blocks (buildings simulation) -->
+      <rect x="62" y="15" width="62" height="22" rx="3" fill="#DDEAF8"/>
+      <rect x="140" y="87" width="54" height="22" rx="3" fill="#DDEAF8"/>
+      <rect x="210" y="15" width="62" height="22" rx="3" fill="#DDEAF8"/>
+      <rect x="62" y="87" width="62" height="38" rx="3" fill="#E2EDF9"/>
+      <rect x="210" y="87" width="62" height="38" rx="3" fill="#E2EDF9"/>
+      <rect x="285" y="87" width="40" height="28" rx="3" fill="#DDEAF8"/>
+      <!-- Route glow -->
+      <path d="M 42 148 C 80 130, 150 81, 220 81 C 270 81, 308 55, 332 30" stroke="#1B6CF525" stroke-width="14" fill="none" stroke-linecap="round"/>
+      <!-- Route line -->
+      <path d="M 42 148 C 80 130, 150 81, 220 81 C 270 81, 308 55, 332 30" stroke="#1B6CF5" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- Dots on route -->
+      <circle cx="110" cy="107" r="2.5" fill="#1B6CF5" opacity=".5"/>
+      <circle cx="180" cy="86" r="2.5" fill="#1B6CF5" opacity=".5"/>
+      <circle cx="265" cy="67" r="2.5" fill="#1B6CF5" opacity=".5"/>
+      <!-- Origin marker -->
+      <circle cx="42" cy="148" r="12" fill="#1B6CF520"/>
+      <circle cx="42" cy="148" r="8" fill="#1B6CF5"/>
+      <circle cx="42" cy="148" r="3.5" fill="white"/>
+      <!-- Destination marker -->
+      <circle cx="332" cy="30" r="12" fill="#10B98125"/>
+      <circle cx="332" cy="30" r="8" fill="#10B981"/>
+      <circle cx="332" cy="30" r="3.5" fill="white"/>
+      <!-- Labels -->
+      <rect x="54" y="134" width="82" height="18" rx="4" fill="#1B6CF5"/>
+      <text x="95" y="147" text-anchor="middle" fill="white" font-size="8.5" font-weight="700" font-family="Inter,sans-serif">📍 Providencia</text>
+      <rect x="240" y="18" width="80" height="18" rx="4" fill="#10B981"/>
+      <text x="280" y="31" text-anchor="middle" fill="white" font-size="8.5" font-weight="700" font-family="Inter,sans-serif">📍 Las Condes</text>
+    </svg>
+  </div>
+
+  <div class="s1-body">
+    <!-- Address card -->
+    <div class="addr-card">
+      <div class="addr-row">
+        <div class="addr-dot" style="background:var(--B)"></div>
+        <div class="addr-col">
+          <div class="addr-label">Retiro</div>
+          <div class="addr-val">Av. Providencia 1250, Providencia</div>
+        </div>
+        <div class="addr-check">✓</div>
+      </div>
+      <div class="addr-row">
+        <div class="addr-dot" style="background:var(--SUC)"></div>
+        <div class="addr-col">
+          <div class="addr-label">Entrega</div>
+          <div class="addr-val">Av. Apoquindo 4500, Las Condes</div>
+        </div>
+        <div class="addr-check">✓</div>
+      </div>
+    </div>
+
+    <!-- Distance badge -->
+    <div class="dist-badge">
+      <div>
+        <span class="dist-num">13 km</span>
+        <span class="dist-sub">· ~22 min</span>
+      </div>
+      <div class="dist-ok">✓ Calculada</div>
+    </div>
+
+    <!-- Tip -->
+    <div class="tip-box">
+      <strong>💡 Tip:</strong> Selecciona la sugerencia al escribir para calcular la distancia exacta.
+    </div>
+
+    <!-- CTA -->
+    <button class="cta" onclick="go(2)" style="margin-top:auto">Continuar <span style="font-size:18px">→</span></button>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- SCREEN 3 — ARTÍCULOS                                 -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="screen" id="s2">
+  <div class="hdr">
+    <div class="hdr-back" onclick="go(1)">←</div>
+    <div class="hdr-title">¿Qué llevas?</div>
+    <div class="hdr-step">Paso 2 / 3</div>
+  </div>
+
+  <!-- Type tabs -->
+  <div class="s2-tabs">
+    <div class="tab on" style="flex:none;padding:9px 22px">🚚 Flete</div>
+  </div>
+
+  <div class="s2-body">
+    <!-- Items -->
+    <div class="items-card">
+      <div class="item-row">
+        <div class="item-icon">🛋️</div>
+        <div class="item-name">Sofá 2 plazas</div>
+        <div class="item-qty">
+          <div class="qty-btn">−</div>
+          <div class="qty-val">1</div>
+          <div class="qty-btn">+</div>
+        </div>
+      </div>
+      <div class="item-row">
+        <div class="item-icon">🍽️</div>
+        <div class="item-name">Mesa comedor</div>
+        <div class="item-qty">
+          <div class="qty-btn">−</div>
+          <div class="qty-val">1</div>
+          <div class="qty-btn">+</div>
+        </div>
+      </div>
+      <div class="item-row">
+        <div class="item-icon">🪑</div>
+        <div class="item-name">Sillas</div>
+        <div class="item-qty">
+          <div class="qty-btn">−</div>
+          <div class="qty-val">4</div>
+          <div class="qty-btn">+</div>
+        </div>
+      </div>
+      <div class="item-row">
+        <div class="item-icon">📺</div>
+        <div class="item-name">TV hasta 50"</div>
+        <div class="item-qty">
+          <div class="qty-btn">−</div>
+          <div class="qty-val">1</div>
+          <div class="qty-btn">+</div>
+        </div>
+      </div>
+      <div class="item-row">
+        <div class="item-icon">📦</div>
+        <div class="item-name">Cajas medianas</div>
+        <div class="item-qty">
+          <div class="qty-btn">−</div>
+          <div class="qty-val">4</div>
+          <div class="qty-btn">+</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vehicle recommendation -->
+    <div class="vehicle-card">
+      <div class="vehicle-icon-box">🚚</div>
+      <div>
+        <div class="vehicle-name">Camión 3/4</div>
+        <div class="vehicle-sub">8 m³ · Recomendado para tu carga</div>
+      </div>
+      <div class="vehicle-badge">✓ Recomendado</div>
+    </div>
+
+    <!-- CTA -->
+    <button class="cta" onclick="go(3)" style="background:linear-gradient(135deg,#1B6CF5,#3FBEED);margin-top:auto">
+      Ver mi precio <span style="font-size:18px">→</span>
+    </button>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- SCREEN 4 — PRECIO                                    -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="screen" id="s3">
+  <div class="hdr">
+    <div class="hdr-back" onclick="go(2)">←</div>
+    <div class="hdr-title">Tu cotización</div>
+    <div class="hdr-step">Paso 3 / 3</div>
+  </div>
+
+  <div class="s3-body">
+    <!-- Success -->
+    <div class="success-tag">
+      <span>✅ ¡Tu precio está listo!</span>
+    </div>
+
+    <!-- Price box -->
+    <div class="price-box">
+      <div class="price-label">Precio estimado</div>
+      <div class="price-val">$59.990</div>
+      <div class="price-note">Estimado sujeto a confirmación de detalles finales</div>
+    </div>
+
+    <!-- Summary -->
+    <div class="summary-card">
+      <div class="summary-row">
+        <div class="summary-lbl"><span>🚚</span> Vehículo</div>
+        <div class="summary-val">Camión 3/4</div>
+      </div>
+      <div class="summary-row">
+        <div class="summary-lbl"><span>📍</span> Ruta</div>
+        <div class="summary-val">Providencia → Las Condes</div>
+      </div>
+      <div class="summary-row">
+        <div class="summary-lbl"><span>📏</span> Distancia</div>
+        <div class="summary-val">13 km · ~22 min</div>
+      </div>
+      <div class="summary-row">
+        <div class="summary-lbl"><span>🚗</span> Carga</div>
+        <div class="summary-val">Solo traslado</div>
+      </div>
+    </div>
+
+    <!-- Breakdown -->
+    <div class="breakdown-card">
+      <div class="bk-title">Detalle del precio</div>
+      <div class="bk-row">
+        <div class="bk-lbl">Precio base (Camión 3/4)</div>
+        <div class="bk-val">$35.000</div>
+      </div>
+      <div class="bk-row">
+        <div class="bk-lbl">Distancia 13 km × $1.000/km</div>
+        <div class="bk-val">$13.000</div>
+      </div>
+      <div class="bk-row">
+        <div class="bk-lbl">Ayudante incluido</div>
+        <div class="bk-val">$11.990</div>
+      </div>
+      <div class="bk-total">
+        <div class="bk-total-lbl">Total</div>
+        <div class="bk-total-val">$59.990</div>
+      </div>
+    </div>
+
+    <!-- Contact -->
+    <div class="contact-area">
+      <a class="wa-btn" href="https://wa.me/56998765432?text=Hola%2C%20quiero%20confirmar%20mi%20cotizaci%C3%B3n%20de%20flete%3A%20Providencia%20%E2%86%92%20Las%20Condes%2C%2013%20km%2C%20Cami%C3%B3n%203%2F4.%20Precio%3A%20%2459.990" target="_blank" style="text-decoration:none">
+        <span style="font-size:20px">💬</span> Enviar cotización
+      </a>
+      <div class="wa-sub">Respuesta en menos de 5 minutos · Sin compromiso</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Navigation dots -->
+<div class="dots">
+  <div class="dot on" id="d0"></div>
+  <div class="dot" id="d1"></div>
+  <div class="dot" id="d2"></div>
+  <div class="dot" id="d3"></div>
+</div>
+
+
+<script>
+let cur = 0;
+const screens = [s0,s1,s2,s3];
+const dots    = [d0,d1,d2,d3];
+
+function go(i) {
+  screens[cur].classList.remove('active');
+  dots[cur].classList.remove('on');
+  cur = ((i % 4) + 4) % 4;
+  screens[cur].classList.add('active');
+  dots[cur].classList.add('on');
+}
+
+// Arrow keys
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') go(cur + 1);
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   go(cur - 1);
+});
+
+// Swipe — preventDefault evita que dispare también el click
+let sx = 0, sy = 0;
+document.addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+document.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - sx;
+  const dy = e.changedTouches[0].clientY - sy;
+  if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy)) {
+    e.preventDefault();
+    go(dx < 0 ? cur + 1 : cur - 1);
+  }
+});
+</script>
+
+</body>
+</html>

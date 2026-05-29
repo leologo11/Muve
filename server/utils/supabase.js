@@ -68,6 +68,7 @@ export function normalizeUser(row) {
     vehicles,
     companyName: row.company_name,
     rut: row.rut,
+    photoUrl: row.photo_url || null,
     location: row.location || {},
     createdAt: row.created_at,
     updatedAt: row.updated_at,

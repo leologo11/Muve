@@ -69,4 +69,51 @@ router.get('/me', requireAuth, (req, res) => {
   res.json({ user: req.user });
 });
 
+router.put('/change-password', requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword)
+      return res.status(400).json({ error: 'Contraseña actual y nueva son requeridas' });
+    if (newPassword.length < 6)
+      return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' });
+
+    const userId = req.user._id || req.user.id;
+    const rows   = await supabaseRequest(`/app_users?id=eq.${userId}&select=*`);
+    const row    = rows?.[0];
+    if (!row) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    const ok = await bcrypt.compare(currentPassword, row.password_hash);
+    if (!ok) return res.status(401).json({ error: 'Contraseña actual incorrecta' });
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await supabaseRequest(`/app_users?id=eq.${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ password_hash: newHash }),
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/profile', requireAuth, async (req, res) => {
+  try {
+    const { name, phone } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Nombre requerido' });
+
+    const userId  = req.user._id || req.user.id;
+    const updates = { name: name.trim() };
+    if (phone !== undefined) updates.phone = phone;
+
+    const rows = await supabaseRequest(`/app_users?id=eq.${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+    const user = normalizeUser(rows?.[0]);
+    res.json({ user: user || { ...req.user, name: name.trim() } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

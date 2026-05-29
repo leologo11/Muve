@@ -15,7 +15,7 @@ export default function Header({ title, stats, onBack, extra }) {
     <div style={{
       background: 'var(--card)',
       flexShrink: 0,
-      paddingTop: 'max(10px, env(safe-area-inset-top))',
+      paddingTop: 'var(--app-safe-top, max(10px, env(safe-area-inset-top)))',
       boxShadow: 'var(--shadow-sm)',
       borderBottom: '1px solid var(--border)',
       position: 'relative',

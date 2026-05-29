@@ -57,7 +57,7 @@ function makePopupContent(pkg, idx, hasStart, readOnly) {
   </div>`;
 }
 
-export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgRestore, onVerifyLoad, readOnly, startPoint, visible = true, myLocation = null, driverLocation = null }) {
+export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgRestore, onVerifyLoad, onNearbyRequest, readOnly, startPoint, visible = true, myLocation = null, driverLocation = null }) {
   const mapRef         = useRef(null);
   const gmRef          = useRef(null);
   const mapInst        = useRef(null);
@@ -82,6 +82,7 @@ export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgResto
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: false,
+        zoomControlOptions: { position: gm.ControlPosition.LEFT_BOTTOM },
       });
       infoWindowRef.current = new gm.InfoWindow();
       setMapReady(true);
@@ -272,16 +273,30 @@ export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgResto
     }
 
     const deg = (myLocation.heading != null && !isNaN(myLocation.heading)) ? myLocation.heading : null;
-    const arrow = deg != null
-      ? `<polygon points="18,3 22,13 14,13" fill="#1a73e8" transform="rotate(${deg},18,18)"/>`
-      : '';
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36">
-      ${arrow}
-      <circle cx="18" cy="18" r="9" fill="#1a73e8" stroke="white" stroke-width="3"/>
-    </svg>`;
+    // With heading: large navigation cone + position dot. Without: pulsing dot only.
+    const svg = deg != null
+      ? `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+          <!-- Accuracy halo -->
+          <circle cx="32" cy="32" r="30" fill="rgba(26,115,232,.12)" stroke="none"/>
+          <!-- Direction cone, rotated to heading -->
+          <g transform="rotate(${deg},32,32)">
+            <path d="M32,4 L46,40 L32,30 L18,40 Z"
+                  fill="#1a73e8" stroke="white" stroke-width="2.5"
+                  stroke-linejoin="round" opacity=".95"/>
+          </g>
+          <!-- Position circle -->
+          <circle cx="32" cy="32" r="12" fill="#1a73e8" stroke="white" stroke-width="3.5"/>
+          <circle cx="32" cy="32" r="5"  fill="white"/>
+        </svg>`
+      : `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48">
+          <circle cx="24" cy="24" r="22" fill="rgba(26,115,232,.14)" stroke="none"/>
+          <circle cx="24" cy="24" r="12" fill="#1a73e8" stroke="white" stroke-width="3.5"/>
+          <circle cx="24" cy="24" r="5"  fill="white"/>
+        </svg>`;
+    const sz = deg != null ? 64 : 48;
     myLocationRef.current = new gm.Marker({
       position: { lat: myLocation.lat, lng: myLocation.lng },
-      icon: { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg), scaledSize: new gm.Size(36, 36), anchor: new gm.Point(18, 18) },
+      icon: { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg), scaledSize: new gm.Size(sz, sz), anchor: new gm.Point(sz/2, sz/2) },
       map,
       zIndex: 20,
     });
@@ -327,9 +342,57 @@ export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgResto
   const noCoords = (packages || []).filter(p => p.status !== 'eliminado' && (!p.lat || !p.lng)).length;
   const total    = (packages || []).filter(p => p.status !== 'eliminado').length;
 
+  const handleLocateMe = () => {
+    if (!mapInst.current || !myLocation?.lat) return;
+    mapInst.current.panTo({ lat: myLocation.lat, lng: myLocation.lng });
+    mapInst.current.setZoom(17);
+  };
+
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <div ref={mapRef} style={{ width: '100%', height: '100%', background: '#e8e8e0' }} />
+
+      {/* Map action buttons — right side, above Google branding */}
+      <div style={{
+        position: 'absolute', bottom: noCoords > 0 ? 54 : 22, right: 12,
+        display: 'flex', flexDirection: 'column', gap: 10, zIndex: 10,
+      }}>
+        {/* Nearby packages */}
+        {onNearbyRequest && (
+          <button
+            onClick={() => onNearbyRequest(myLocation)}
+            disabled={!myLocation?.lat}
+            style={{
+              width: 46, height: 46, borderRadius: '50%',
+              background: myLocation?.lat ? '#0052FF' : 'rgba(0,82,255,.35)',
+              border: '2px solid rgba(255,255,255,.9)',
+              boxShadow: '0 3px 10px rgba(0,82,255,.45)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 20, cursor: myLocation?.lat ? 'pointer' : 'default',
+            }}
+            title="Paquetes cercanos"
+          >
+            🎯
+          </button>
+        )}
+        {/* Locate me */}
+        <button
+          onClick={handleLocateMe}
+          disabled={!myLocation?.lat}
+          style={{
+            width: 46, height: 46, borderRadius: '50%',
+            background: '#fff',
+            border: `2px solid ${myLocation?.lat ? '#0052FF' : '#ccc'}`,
+            boxShadow: '0 3px 10px rgba(0,0,0,.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 20, cursor: myLocation?.lat ? 'pointer' : 'default',
+          }}
+          title="Centrar en mi ubicación"
+        >
+          📍
+        </button>
+      </div>
+
       {noCoords > 0 && (
         <div style={{
           position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',

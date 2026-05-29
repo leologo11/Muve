@@ -1,0 +1,25 @@
+CONFIGURACIÓN DNS PARA MUVEAPP.CL (RAILWAY)
+===========================================
+
+Estos son los datos que debes ingresar en tu proveedor de dominio (NIC.cl o tu zona DNS).
+
+1. REGISTRO DE VERIFICACIÓN (Tipo TXT)
+------------------------------------
+Tipo: TXT
+Nombre/Host: @ (o dejar vacío)
+Valor: railway-verify=bc6f459c6d72c56352947df10d05c131b417e34f8345a21bf5a493f0e965162f
+
+2. REGISTRO DE TRÁFICO (Tipo CNAME)
+----------------------------------
+Tipo: CNAME
+Nombre/Host: www
+Valor: larknw30.up.railway.app
+
+Nota: Una vez guardado, los cambios pueden tardar desde unos minutos hasta un par de horas en activarse.
+
+VARIABLE DE ENTORNO RAILWAY (IMPORTANTE)
+----------------------------------------
+Para que el mapa de Google Maps funcione en producción, agregar en Railway:
+  VITE_GOOGLE_MAPS_KEY=AIzaSyAZ86X28Coe8kWqaE1N8TEugCo6lW9VeWc
+
+Railway → Proyecto → Variables → New Variable → Nombre: VITE_GOOGLE_MAPS_KEY

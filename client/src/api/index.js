@@ -30,6 +30,8 @@ export const api = {
   login: (email, password) => request('POST', '/auth/login', { email, password }),
   me: () => request('GET', '/auth/me'),
   seedAdmin: (email, password) => request('POST', '/auth/seed-admin', { email, password }),
+  changePassword: (currentPassword, newPassword) => request('PUT', '/auth/change-password', { currentPassword, newPassword }),
+  updateProfile: (data) => request('PATCH', '/auth/profile', data),
 
   // Routes
   getRoutes: () => request('GET', '/routes'),

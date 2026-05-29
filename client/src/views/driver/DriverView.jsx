@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../api/index.js';
 import { watchGeoPosition, clearGeoWatch } from '../../utils/geo.js';
 import Header from '../../components/Header.jsx';
@@ -7,7 +7,7 @@ import PackageCard from '../../components/PackageCard.jsx';
 import DeliveryModal from '../../components/DeliveryModal.jsx';
 import Toast, { toast } from '../../components/Toast.jsx';
 
-export default function DriverView({ onLogout, nativeApp = false }) {
+export default function DriverView({ routeId, onBack, onLogout, nativeApp = false }) {
   const [routes, setRoutes] = useState([]);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [packages, setPackages] = useState([]);
@@ -16,6 +16,7 @@ export default function DriverView({ onLogout, nativeApp = false }) {
   const [search, setSearch] = useState('');
   const [editPkg, setEditPkg] = useState(null);
   const [showLoadCheck, setShowLoadCheck] = useState(false);
+  const [nearbyLocation, setNearbyLocation] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // GPS tracking — uses native Capacitor GPS on Android, browser fallback on web
@@ -25,12 +26,17 @@ export default function DriverView({ onLogout, nativeApp = false }) {
   const lastSentRef    = useRef(0);
 
   useEffect(() => {
-    api.getRoutes().then(r => {
-      setRoutes(r);
-      const active = r.find(x => x.status === 'active') || r[0];
-      if (active) loadRoute(active._id);
-    }).catch(e => toast('❌ ' + e.message)).finally(() => setLoading(false));
-  }, []);
+    if (routeId) {
+      // Direct route load when coming from RoutePicker
+      loadRoute(routeId).finally(() => setLoading(false));
+    } else {
+      api.getRoutes().then(r => {
+        setRoutes(r);
+        const active = r.find(x => x.status === 'active') || r[0];
+        if (active) loadRoute(active._id);
+      }).catch(e => toast('❌ ' + e.message)).finally(() => setLoading(false));
+    }
+  }, [routeId]);
 
   // Start GPS — native Capacitor on Android, browser fallback on web. Updates every 8s.
   useEffect(() => {
@@ -155,20 +161,8 @@ export default function DriverView({ onLogout, nativeApp = false }) {
       <Header
         title={selectedRoute ? `🚗 ${selectedRoute.routeCode}` : '🚚 MUVE'}
         stats={selectedRoute ? stats : null}
+        onBack={onBack}
       />
-
-      {/* Native app top bar with logout */}
-      {nativeApp && (
-        <div style={{ background: '#0052FF', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 900, color: '#fff', letterSpacing: -0.5 }}>🚗 MUVE Driver</div>
-          <button
-            onClick={onLogout}
-            style={{ background: 'rgba(255,255,255,.2)', border: 'none', borderRadius: 20, padding: '6px 13px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-          >
-            Cerrar sesión
-          </button>
-        </div>
-      )}
 
       {/* GPS status indicator */}
       {gpsState === 'denied' && (
@@ -335,6 +329,7 @@ export default function DriverView({ onLogout, nativeApp = false }) {
             onPkgClick={setEditPkg}
             startPoint={selectedRoute?.startPoint}
             onVerifyLoad={() => setShowLoadCheck(true)}
+            onNearbyRequest={loc => setNearbyLocation(loc)}
             visible={tab === 'm'}
             myLocation={myLocation}
           />
@@ -378,6 +373,15 @@ export default function DriverView({ onLogout, nativeApp = false }) {
           }
           onClose={() => setEditPkg(null)}
           onSaved={handleModalSaved}
+        />
+      )}
+
+      {nearbyLocation && (
+        <NearbyModal
+          location={nearbyLocation}
+          packages={packages}
+          onClose={() => setNearbyLocation(null)}
+          onSelect={pkg => { setNearbyLocation(null); setEditPkg(pkg); }}
         />
       )}
 
@@ -674,6 +678,73 @@ function LoadCheckModal({ packages, onClose, onUpdated }) {
           <button onClick={onClose} style={{ width: '100%', padding: 11, borderRadius: 12, border: '1px solid var(--border)', background: 'transparent', fontSize: 13, color: 'var(--muted)', fontWeight: 600, cursor: 'pointer' }}>
             Cancelar
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ── Haversine ──────────────────────────────────────────────────────────────
+function haversine(lat1, lng1, lat2, lng2) {
+  const R=6371e3, f1=lat1*Math.PI/180, f2=lat2*Math.PI/180;
+  const df=(lat2-lat1)*Math.PI/180, dl=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(df/2)**2+Math.cos(f1)*Math.cos(f2)*Math.sin(dl/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function fmtDist(m){return m<1000?`${Math.round(m)} m`:`${(m/1000).toFixed(1)} km`;}
+
+// ── NearbyModal ────────────────────────────────────────────────────────────
+function NearbyModal({location,packages,onClose,onSelect}){
+  const nearby=packages
+    .filter(p=>p.status==='pendiente'&&p.lat&&p.lng)
+    .map(p=>({...p,dist:haversine(location.lat,location.lng,p.lat,p.lng)}))
+    .filter(p=>p.dist<=2000)
+    .sort((a,b)=>a.dist-b.dist);
+
+  const colDist=m=>m<300?'#0052FF':m<800?'#0077aa':'#64748b';
+
+  return(
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.55)',zIndex:960,display:'flex',alignItems:'flex-end'}} onClick={onClose}>
+      <div style={{background:'#fff',borderRadius:'20px 20px 0 0',width:'100%',maxHeight:'80dvh',display:'flex',flexDirection:'column',boxShadow:'0 -4px 30px rgba(0,0,0,.2)'}} onClick={e=>e.stopPropagation()}>
+        <div style={{padding:'14px 16px 10px',borderBottom:'1px solid var(--border)',flexShrink:0}}>
+          <div style={{width:38,height:4,background:'var(--border)',borderRadius:2,margin:'0 auto 12px'}}/>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <div>
+              <div style={{fontSize:16,fontWeight:800}}>🎯 Cerca de ti</div>
+              <div style={{fontSize:12,color:'#64748b',marginTop:2}}>Pendientes en radio de 2 km</div>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <span style={{fontSize:12,fontWeight:700,color:nearby.length>0?'#0052FF':'#94a3b8',background:nearby.length>0?'#eff6ff':'#f1f5f9',padding:'4px 10px',borderRadius:20}}>{nearby.length} encontrados</span>
+              <button onClick={onClose} style={{background:'none',border:'none',fontSize:22,color:'#94a3b8',cursor:'pointer',lineHeight:1}}>x</button>
+            </div>
+          </div>
+          {location.accuracy&&<div style={{fontSize:11,color:'#94a3b8',marginTop:6}}>GPS: ±{Math.round(location.accuracy)} m</div>}
+        </div>
+        <div style={{overflowY:'auto',flex:1,padding:'8px 12px',WebkitOverflowScrolling:'touch'}}>
+          {nearby.length===0?(
+            <div style={{textAlign:'center',padding:'40px 20px',color:'#94a3b8'}}>
+              <div style={{fontSize:40,marginBottom:10}}>📭</div>
+              <div style={{fontSize:14,fontWeight:700,color:'#64748b'}}>Sin pendientes cerca</div>
+              <div style={{fontSize:12,marginTop:4}}>No hay paquetes pendientes en 2 km</div>
+            </div>
+          ):nearby.map((pkg,i)=>(
+            <div key={pkg._id} onClick={()=>onSelect(pkg)}
+              style={{display:'flex',alignItems:'center',gap:12,background:'#fff',borderRadius:14,marginBottom:8,padding:'12px 14px',border:`1.5px solid ${pkg.dist<300?'#0052FF30':'#e2e8f0'}`,cursor:'pointer',WebkitTapHighlightColor:'transparent'}}>
+              <div style={{flexShrink:0,minWidth:58,textAlign:'center',background:colDist(pkg.dist),color:'#fff',borderRadius:10,padding:'7px 4px'}}>
+                <div style={{fontSize:13,fontWeight:900,lineHeight:1}}>{fmtDist(pkg.dist)}</div>
+                {i===0&&<div style={{fontSize:9,marginTop:2,opacity:.8}}>MAS CERCA</div>}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{pkg.customerName} {pkg.customerLastName||''}</div>
+                <div style={{fontSize:12,color:'#64748b',marginTop:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>📍 {pkg.address}{pkg.commune?', '+pkg.commune:''}</div>
+                {pkg.aptFloor&&<div style={{fontSize:11,color:'#d4650a',fontWeight:700,marginTop:1}}>🚪 {pkg.aptFloor}</div>}
+                {pkg.customerPhone&&<div style={{fontSize:11,color:'#64748b',marginTop:1}}>📞 {pkg.customerPhone}</div>}
+              </div>
+              <div style={{color:'#0052FF',fontSize:22,flexShrink:0}}>›</div>
+            </div>
+          ))}
+          <div style={{height:16}}/>
         </div>
       </div>
     </div>
