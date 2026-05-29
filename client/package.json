@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "build:driver": "vite build --config vite.driver.config.js",
+    "build:driver": "cross-env VITE_API_URL=https://muveapp.cl/api vite build --config vite.driver.config.js",
     "cap:sync": "npm run build:driver && npx cap sync android",
     "cap:open": "npx cap open android"
   },
@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "cross-env": "^10.1.0",
     "vite": "^6.0.7"
   }
 }

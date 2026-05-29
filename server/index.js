@@ -36,6 +36,10 @@ function productionOrigins() {
   return [
     'https://muveapp.cl',
     'https://www.muveapp.cl',
+    // Capacitor Android WebView origins (MUVE Driver native app)
+    'https://localhost',
+    'capacitor://localhost',
+    'http://localhost',
     process.env.FRONTEND_URL,
     process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null,
     ...(process.env.PUBLIC_ALLOWED_ORIGINS || '').split(','),
