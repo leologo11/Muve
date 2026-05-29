@@ -184,35 +184,48 @@ export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgResto
     }
 
     // Package markers — spread overlapping pins so stacked packages are visible
-    const hasStart  = hasStartCoords;
-    const spread    = spreadOverlapping((packages || []).filter(p => p.status !== 'eliminado'));
-    const groupBadges = {}; // center key → {lat,lng,count}
+    const hasStart = hasStartCoords;
+    const spread   = spreadOverlapping((packages || []).filter(p => p.status !== 'eliminado'), 45);
 
     let activeIdx = 0;
     spread.forEach(pkg => {
       if (!pkg.lat || !pkg.lng) return;
-      const idx  = activeIdx++;
-      const color = pinColor(pkg);
-      const num   = pkg.status === 'entregado' ? '✓' : pkg.status === 'no-entregado' ? '✗' : String(hasStart ? idx + 2 : idx + 1);
+      const idx       = activeIdx++;
+      const color     = pinColor(pkg);
+      const num       = pkg.status === 'entregado' ? '✓' : pkg.status === 'no-entregado' ? '✗' : String(hasStart ? idx + 2 : idx + 1);
+      const isGrouped = (pkg._groupSize || 1) > 1;
+      const cs        = 32; // circle diameter
+      const fs        = num.length > 2 ? 9 : 12;
+      const lat       = pkg._dispLat || pkg.lat;
+      const lng       = pkg._dispLng || pkg.lng;
 
-      // Outer ring for grouped markers so driver notices they're a cluster
-      const size = pkg._groupSize > 1 ? 34 : 32;
-      const ringExtra = pkg._groupSize > 1
-        ? `<circle cx="${size/2}" cy="${size/2}" r="${size/2-0.5}" fill="none" stroke="white" stroke-width="3" stroke-dasharray="4 3" opacity="0.8"/>`
-        : '';
-      const fs  = num.length > 2 ? 9 : 12;
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
-        <circle cx="${size/2}" cy="${size/2}" r="${size/2-1.5}" fill="${color}" stroke="white" stroke-width="2.5"/>
-        ${ringExtra}
-        <text x="${size/2}" y="${size/2+4}" text-anchor="middle" fill="white" font-family="Inter,Arial,sans-serif" font-size="${fs}" font-weight="800">${num}</text>
-      </svg>`;
+      let svg, iconW, iconH, anchorX, anchorY;
+      if (isGrouped) {
+        // Badge pill above + connector line + circle below
+        iconW  = cs;
+        iconH  = cs + 22;           // 22px for pill+gap above circle
+        anchorX = cs / 2;
+        anchorY = 22 + cs / 2;      // anchor = center of circle
+        svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${iconW}" height="${iconH}">
+          <rect x="2" y="0" width="${iconW-4}" height="16" rx="8" fill="#111" stroke="white" stroke-width="1.5"/>
+          <text x="${iconW/2}" y="11" text-anchor="middle" fill="white" font-family="Inter,Arial,sans-serif" font-size="9" font-weight="900">×${pkg._groupSize}</text>
+          <line x1="${iconW/2}" y1="16" x2="${iconW/2}" y2="22" stroke="#111" stroke-width="2"/>
+          <circle cx="${iconW/2}" cy="${22+cs/2}" r="${cs/2-1.5}" fill="${color}" stroke="white" stroke-width="2.5"/>
+          <text x="${iconW/2}" y="${22+cs/2+4}" text-anchor="middle" fill="white" font-family="Inter,Arial,sans-serif" font-size="${fs}" font-weight="800">${num}</text>
+        </svg>`;
+      } else {
+        iconW  = cs; iconH = cs; anchorX = cs / 2; anchorY = cs / 2;
+        svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cs}" height="${cs}">
+          <circle cx="${cs/2}" cy="${cs/2}" r="${cs/2-1.5}" fill="${color}" stroke="white" stroke-width="2.5"/>
+          <text x="${cs/2}" y="${cs/2+4}" text-anchor="middle" fill="white" font-family="Inter,Arial,sans-serif" font-size="${fs}" font-weight="800">${num}</text>
+        </svg>`;
+      }
+
       const icon = {
         url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-        scaledSize: new gm.Size(size, size),
-        anchor: new gm.Point(size / 2, size / 2),
+        scaledSize: new gm.Size(iconW, iconH),
+        anchor: new gm.Point(anchorX, anchorY),
       };
-      const lat  = pkg._dispLat || pkg.lat;
-      const lng  = pkg._dispLng || pkg.lng;
       const marker = new gm.Marker({ position: { lat, lng }, icon, map, zIndex: 5 });
       const origPkg = (packages || []).find(p => p._id === pkg._id) || pkg;
       const content = makePopupContent(origPkg, idx, hasStart, readOnly);
@@ -221,32 +234,6 @@ export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgResto
         infoWindowRef.current.open(map, marker);
       });
       markersRef.current[pkg._id] = marker;
-
-      // Track group centers for badges
-      if (pkg._groupSize > 1) {
-        const ck = `${pkg._centerLat.toFixed(5)}_${pkg._centerLng.toFixed(5)}`;
-        groupBadges[ck] = { lat: pkg._centerLat, lng: pkg._centerLng, count: pkg._groupSize };
-      }
-    });
-
-    // Group center badges — small pill showing "×N"
-    Object.values(groupBadges).forEach(g => {
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="38" height="20">
-        <rect rx="10" ry="10" width="38" height="20" fill="#1a1a1a" stroke="white" stroke-width="1.5"/>
-        <text x="19" y="14" text-anchor="middle" fill="white" font-size="11" font-weight="900" font-family="Inter,Arial,sans-serif">×${g.count}</text>
-      </svg>`;
-      const badge = new gm.Marker({
-        position: { lat: g.lat, lng: g.lng },
-        icon: {
-          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-          scaledSize: new gm.Size(38, 20),
-          anchor: new gm.Point(19, 10),
-        },
-        map,
-        zIndex: 4,
-        clickable: false,
-      });
-      markersRef.current[`_badge_${g.lat}_${g.lng}`] = badge;
     });
 
     // Fit bounds
