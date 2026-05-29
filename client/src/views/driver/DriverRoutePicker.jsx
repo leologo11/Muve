@@ -12,26 +12,40 @@ const STATUS = {
   cancelled: { label: '✗ Cancelada',     color: '#cc2244', bg: '#fff0f2', border: '#cc224440' },
 };
 
+// Safe date parsing — handles TIMESTAMPTZ, DATE strings, and null
+function routeDateISO(route) {
+  const raw = route?.date;
+  if (raw) {
+    const s = String(raw).slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  }
+  const m = String(route?.routeCode || '').match(/^RT-(\d{4})(\d{2})(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return null;
+}
+
 // Week earnings helper (Tuesday to Monday)
 function currentWeekEarnings(routes) {
   const today = new Date();
-  const dow = today.getDay();
+  const dow  = today.getDay();
   const back = (dow - 2 + 7) % 7;
-  const tueSt = new Date(today); tueSt.setDate(today.getDate() - back); tueSt.setHours(0,0,0,0);
-  const fmt = n => '$' + Math.round(n||0).toLocaleString('es-CL');
+  const tueSt = new Date(today);
+  tueSt.setDate(today.getDate() - back);
+  tueSt.setHours(0, 0, 0, 0);
+  const fmtN = n => '$' + Math.round(n || 0).toLocaleString('es-CL');
   let earned = 0;
   routes.forEach(r => {
-    if (!r.date) return;
-    const rd = new Date(r.date + 'T12:00');
-    if (rd >= tueSt) {
-      const base = Number(r.driverPayout || 0);
-      const total = Number(r.stats?.total || 1);
-      const delivered = Number(r.stats?.delivered || 0);
-      const failed = Number(r.stats?.failed || 0);
-      earned += Math.round(base / total * (delivered + failed));
-    }
+    const iso = routeDateISO(r);
+    if (!iso) return;
+    const rd = new Date(iso + 'T12:00');
+    if (isNaN(rd.getTime()) || rd < tueSt) return;
+    const base      = Number(r.driverPayout || 0);
+    const total     = Number(r.stats?.total || 1);
+    const delivered = Number(r.stats?.delivered || 0);
+    const failed    = Number(r.stats?.failed || 0);
+    earned += Math.round(base / total * (delivered + failed));
   });
-  return fmt(earned);
+  return fmtN(earned);
 }
 
 export default function DriverRoutePicker({ onSelect }) {
@@ -162,7 +176,8 @@ export default function DriverRoutePicker({ onSelect }) {
 
 function RouteCard({ route, onSelect, dimmed = false }) {
   const meta     = STATUS[route.status] || STATUS.draft;
-  const dateStr  = new Date(route.date + 'T12:00').toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' });
+  const iso      = routeDateISO(route);
+  const dateStr  = iso ? new Date(iso + 'T12:00').toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' }) : '—';
   const pkgs     = route.stats?.total ?? route.packageCount ?? '—';
   const delivered = route.stats?.delivered ?? 0;
   const pct      = pkgs > 0 ? Math.round(delivered / pkgs * 100) : 0;

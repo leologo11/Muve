@@ -3,10 +3,31 @@ import { api } from '../../api/index.js';
 
 const fmt = n => '$' + Math.round(n || 0).toLocaleString('es-CL');
 
-// Returns the Tuesday that starts the week containing the given date
-function weekStart(dateStr) {
-  const d = new Date(dateStr + 'T12:00');
-  const dow = d.getDay(); // 0=Sun,1=Mon,2=Tue,...
+// Safely extract YYYY-MM-DD from any date format (DATE, TIMESTAMPTZ, null)
+// Falls back to parsing routeCode RT-YYYYMMDD-XXXX when date field is missing
+function routeDateISO(route) {
+  const raw = route?.date;
+  if (raw) {
+    const s = String(raw).slice(0, 10); // "2026-05-27" from any timestamp format
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  }
+  // Fallback: extract from routeCode format RT-YYYYMMDD-XXXX
+  const m = String(route?.routeCode || '').match(/^RT-(\d{4})(\d{2})(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return null;
+}
+
+function parseDate(iso) {
+  if (!iso) return null;
+  const d = new Date(iso + 'T12:00');
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// Returns the Tuesday that starts the week containing the given ISO date string
+function weekStart(iso) {
+  const d = parseDate(iso);
+  if (!d) return new Date(0);
+  const dow  = d.getDay();
   const back = (dow - 2 + 7) % 7;
   d.setDate(d.getDate() - back);
   d.setHours(0, 0, 0, 0);
@@ -20,8 +41,8 @@ function weekLabel(tue) {
   return `${tue.toLocaleDateString('es-CL', opts)} – ${mon.toLocaleDateString('es-CL', opts)}`;
 }
 
-function isSameWeek(dateStr, tuesdayDate) {
-  const ws = weekStart(dateStr);
+function isSameWeek(iso, tuesdayDate) {
+  const ws = weekStart(iso);
   return ws.getTime() === tuesdayDate.getTime();
 }
 
@@ -47,13 +68,15 @@ function routeEarnings(route) {
 function groupByWeek(routes) {
   const weeks = {};
   routes.forEach(r => {
-    if (!r.date) return;
-    const ws  = weekStart(r.date);
+    const iso = routeDateISO(r);
+    const ws  = weekStart(iso);
     const key = ws.getTime();
     if (!weeks[key]) weeks[key] = { tuesday: ws, routes: [] };
     weeks[key].routes.push(r);
   });
-  return Object.values(weeks).sort((a, b) => b.tuesday - a.tuesday);
+  return Object.values(weeks)
+    .filter(w => w.tuesday.getTime() > 0)
+    .sort((a, b) => b.tuesday - a.tuesday);
 }
 
 // ── Week card ────────────────────────────────────────────────────────────────
@@ -96,7 +119,7 @@ function WeekCard({ week, isCurrentWeek }) {
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{route.routeCode}</div>
                   <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
-                    {new Date(route.date + 'T12:00').toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' })}
+                    {parseDate(routeDateISO(route))?.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' }) ?? '—'}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
@@ -144,14 +167,15 @@ export default function DriverPaymentsView({ onBack }) {
 
   const weeks   = groupByWeek(routes);
   const today   = new Date();
-  const curWeekTs = weekStart(today.toISOString().slice(0,10)).getTime();
+  const todayISO  = today.toISOString().slice(0, 10);
+  const curWeekTs = weekStart(todayISO).getTime();
 
   // Summary totals
   const allEarnings = routes.map(routeEarnings);
   const totalEarned = allEarnings.reduce((s, e) => s + e.earned, 0);
   const totalPaid   = allEarnings.filter(e => e.status === 'paid').reduce((s, e) => s + e.earned, 0);
   const curWeekEarned = routes
-    .filter(r => weekStart(r.date).getTime() === curWeekTs)
+    .filter(r => weekStart(routeDateISO(r)).getTime() === curWeekTs)
     .reduce((s, r) => s + routeEarnings(r).earned, 0);
 
   return (
