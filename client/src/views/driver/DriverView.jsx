@@ -17,6 +17,9 @@ export default function DriverView({ routeId, onBack, onLogout, nativeApp = fals
   const [editPkg, setEditPkg] = useState(null);
   const [showLoadCheck, setShowLoadCheck] = useState(false);
   const [nearbyLocation, setNearbyLocation] = useState(null);
+  const [navMode, setNavMode] = useState(false);
+  const [navSelected, setNavSelected] = useState(new Set());
+  const [showNavModal, setShowNavModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // GPS tracking — uses native Capacitor GPS on Android, browser fallback on web
@@ -323,7 +326,7 @@ export default function DriverView({ routeId, onBack, onLogout, nativeApp = fals
       {/* Body */}
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
         {/* Map */}
-        <div style={{ display: tab === 'm' ? 'block' : 'none', height: '100%' }}>
+        <div style={{ display: tab === 'm' ? 'block' : 'none', height: '100%', position: 'relative' }}>
           <RouteMap
             packages={packages}
             onPkgClick={setEditPkg}
@@ -333,28 +336,100 @@ export default function DriverView({ routeId, onBack, onLogout, nativeApp = fals
             visible={tab === 'm'}
             myLocation={myLocation}
           />
+          {/* Google Maps multi-stop button — bottom left so it doesn't overlap map buttons */}
+          {active.filter(p => p.status === 'pendiente' && p.lat && p.lng).length > 0 && (
+            <button
+              onClick={() => {
+                const url = buildMapsUrl(active.filter(p => p.status === 'pendiente'), myLocation, 'gmaps');
+                if (url) window.open(url, '_blank');
+              }}
+              style={{
+                position: 'absolute', bottom: 22, left: 12, zIndex: 10,
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: '#fff', border: '1.5px solid #0052FF40',
+                borderRadius: 22, padding: '9px 14px',
+                boxShadow: '0 3px 10px rgba(0,0,0,.18)',
+                fontSize: 12, fontWeight: 800, color: '#0052FF', cursor: 'pointer',
+              }}
+            >
+              🗺 Abrir ruta en Maps
+            </button>
+          )}
         </div>
 
-        {/* List */}
+        {/* List — with nav-select mode */}
         {tab === 'l' && (
-          <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 'calc(80px + env(safe-area-inset-bottom))' }}>
-            {visible.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)', fontSize: 14 }}>🔍 Sin resultados</div>
-            ) : (
-              visible.map((pkg, i) => (
-                <PackageCard
-                  key={pkg._id}
-                  pkg={pkg}
-                  index={i}
-                  onEdit={setEditPkg}
-                  onStatusChange={handleStatusChange}
-                  hidePrice
-                  lockDelivered
-                  readOnly={['completed', 'paused'].includes(selectedRoute?.status)}
-                  sameAddressCount={addrCountMap[(pkg.address || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ')] || 1}
-                />
-              ))
-            )}
+          <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {/* Nav mode toolbar */}
+            <div style={{ background: navMode ? '#0052FF' : '#fff', borderBottom: '1px solid var(--border)', padding: '8px 12px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              {navMode ? (
+                <>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>
+                    {navSelected.size > 0 ? `${navSelected.size} seleccionados` : 'Toca para seleccionar'}
+                  </span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {navSelected.size > 0 && (
+                      <button onClick={() => setShowNavModal(true)} style={{ background: '#fff', border: 'none', borderRadius: 20, padding: '6px 14px', fontSize: 12, fontWeight: 800, color: '#0052FF', cursor: 'pointer' }}>
+                        🧭 Navegar ({navSelected.size})
+                      </button>
+                    )}
+                    <button onClick={() => { setNavMode(false); setNavSelected(new Set()); }} style={{ background: 'rgba(255,255,255,.25)', border: 'none', borderRadius: 20, padding: '6px 12px', fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer' }}>
+                      Cancelar
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>
+                    {visible.length} paquete{visible.length !== 1 ? 's' : ''}
+                  </span>
+                  <button onClick={() => setNavMode(true)} style={{ background: 'var(--accent)', border: 'none', borderRadius: 20, padding: '6px 13px', fontSize: 12, fontWeight: 800, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    🧭 Seleccionar paradas
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 'calc(20px + env(safe-area-inset-bottom))' }}>
+              {visible.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)', fontSize: 14 }}>🔍 Sin resultados</div>
+              ) : (
+                visible.map((pkg, i) => (
+                  <div key={pkg._id} style={{ position: 'relative' }} onClick={navMode ? () => {
+                    setNavSelected(prev => {
+                      const next = new Set(prev);
+                      if (next.has(pkg._id)) next.delete(pkg._id); else next.add(pkg._id);
+                      return next;
+                    });
+                  } : undefined}>
+                    {navMode && (
+                      <div style={{
+                        position: 'absolute', top: 10, left: 10, zIndex: 5,
+                        width: 24, height: 24, borderRadius: '50%',
+                        background: navSelected.has(pkg._id) ? '#0052FF' : '#fff',
+                        border: `2.5px solid ${navSelected.has(pkg._id) ? '#0052FF' : '#ccc'}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 1px 4px rgba(0,0,0,.2)',
+                      }}>
+                        {navSelected.has(pkg._id) && <span style={{ color: '#fff', fontSize: 14, lineHeight: 1 }}>✓</span>}
+                      </div>
+                    )}
+                    <div style={{ opacity: navMode && !navSelected.has(pkg._id) ? 0.6 : 1, pointerEvents: navMode ? 'none' : 'auto' }}>
+                      <PackageCard
+                        pkg={pkg}
+                        index={i}
+                        onEdit={setEditPkg}
+                        onStatusChange={handleStatusChange}
+                        hidePrice
+                        lockDelivered
+                        readOnly={['completed', 'paused'].includes(selectedRoute?.status)}
+                        sameAddressCount={addrCountMap[(pkg.address || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ')] || 1}
+                      />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
 
@@ -373,6 +448,15 @@ export default function DriverView({ routeId, onBack, onLogout, nativeApp = fals
           }
           onClose={() => setEditPkg(null)}
           onSaved={handleModalSaved}
+        />
+      )}
+
+      {/* Navigation modal */}
+      {showNavModal && (
+        <NavModal
+          packages={active.filter(p => navSelected.has(p._id))}
+          myLocation={myLocation}
+          onClose={() => setShowNavModal(false)}
         />
       )}
 
@@ -745,6 +829,137 @@ function NearbyModal({location,packages,onClose,onSelect}){
             </div>
           ))}
           <div style={{height:16}}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Navigation helpers ────────────────────────────────────────────────────
+function buildMapsUrl(packages, myLocation, app = 'gmaps') {
+  const withCoords = packages
+    .filter(p => p.lat && p.lng)
+    .sort((a, b) => {
+      // Sort nearest-first when GPS is available, otherwise use stop order
+      if (myLocation?.lat) {
+        const da = haversine(myLocation.lat, myLocation.lng, a.lat, a.lng);
+        const db = haversine(myLocation.lat, myLocation.lng, b.lat, b.lng);
+        return da - db;
+      }
+      return (a.order ?? 99) - (b.order ?? 99);
+    });
+
+  if (withCoords.length === 0) return null;
+
+  if (app === 'waze') {
+    // Waze only supports single destination — open the closest one
+    const p = withCoords[0];
+    return `https://waze.com/ul?ll=${p.lat},${p.lng}&navigate=yes`;
+  }
+
+  // Google Maps — supports origin + up to 9 waypoints + destination
+  const MAX = 9;
+  const stops = withCoords.slice(0, MAX + 1);
+  const dest  = stops[stops.length - 1];
+  const wps   = stops.slice(0, -1);
+
+  let url = `https://www.google.com/maps/dir/?api=1&travelmode=driving`;
+  if (myLocation?.lat) url += `&origin=${myLocation.lat},${myLocation.lng}`;
+  url += `&destination=${dest.lat},${dest.lng}`;
+  if (wps.length > 0) {
+    url += `&waypoints=${encodeURIComponent(wps.map(p => `${p.lat},${p.lng}`).join('|'))}`;
+  }
+  return url;
+}
+
+// ── Navigation modal ──────────────────────────────────────────────────────
+function NavModal({ packages, myLocation, onClose }) {
+  const sorted = [...packages]
+    .filter(p => p.lat && p.lng)
+    .sort((a, b) => {
+      if (myLocation?.lat) {
+        return haversine(myLocation.lat, myLocation.lng, a.lat, a.lng)
+             - haversine(myLocation.lat, myLocation.lng, b.lat, b.lng);
+      }
+      return (a.order ?? 99) - (b.order ?? 99);
+    });
+
+  const wazeIdx = { current: 0 };
+  const [wazeStep, setWazeStep] = React.useState(0);
+
+  const openGmaps = () => {
+    const url = buildMapsUrl(sorted, myLocation, 'gmaps');
+    if (url) window.open(url, '_blank');
+    onClose();
+  };
+
+  const openWaze = (idx) => {
+    const p = sorted[idx];
+    if (!p) return;
+    window.open(`https://waze.com/ul?ll=${p.lat},${p.lng}&navigate=yes`, '_blank');
+    if (idx + 1 < sorted.length) setWazeStep(idx + 1);
+    else onClose();
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 970, display: 'flex', alignItems: 'flex-end' }}
+      onClick={onClose}>
+      <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', boxShadow: '0 -4px 30px rgba(0,0,0,.2)' }}
+        onClick={e => e.stopPropagation()}>
+
+        <div style={{ padding: '14px 18px 10px', borderBottom: '1px solid #e2e8f0' }}>
+          <div style={{ width: 40, height: 4, background: '#e2e8f0', borderRadius: 2, margin: '0 auto 14px' }} />
+          <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>🧭 Navegar a {sorted.length} parada{sorted.length !== 1 ? 's' : ''}</div>
+          <div style={{ fontSize: 12, color: '#64748b' }}>Ordenadas de más cercana a más lejana</div>
+        </div>
+
+        {/* Stop list preview */}
+        <div style={{ maxHeight: '35vh', overflowY: 'auto', padding: '8px 14px' }}>
+          {sorted.map((p, i) => (
+            <div key={p._id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
+              <div style={{ width: 26, height: 26, borderRadius: '50%', background: i === wazeStep && wazeStep > 0 ? '#f57c00' : '#0052FF', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 900, flexShrink: 0 }}>
+                {i + 1}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {p.customerName} {p.customerLastName || ''}
+                </div>
+                <div style={{ fontSize: 11, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {p.address}{p.commune ? ', ' + p.commune : ''}
+                </div>
+              </div>
+              {myLocation?.lat && (
+                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 700, flexShrink: 0 }}>
+                  {fmtDist(haversine(myLocation.lat, myLocation.lng, p.lat, p.lng))}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Action buttons */}
+        <div style={{ padding: '14px 16px calc(20px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+          {/* Google Maps — all stops */}
+          <button onClick={openGmaps} style={{ width: '100%', padding: '14px', borderRadius: 14, border: 'none', background: 'linear-gradient(90deg,#0052FF,#0070FF)', color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <span style={{ fontSize: 18 }}>🗺</span>
+            Abrir todas en Google Maps
+            {sorted.length > 9 && <span style={{ fontSize: 11, opacity: .8 }}>(9 max)</span>}
+          </button>
+
+          {/* Waze — sequential */}
+          <button onClick={() => openWaze(wazeStep)} style={{ width: '100%', padding: '14px', borderRadius: 14, border: '2px solid #33ccff40', background: '#e8f4ff', color: '#005fcc', fontSize: 15, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <span style={{ fontSize: 18 }}>🔵</span>
+            {wazeStep === 0
+              ? `Waze → parada más cercana`
+              : `Waze → parada ${wazeStep + 1} (siguiente)`}
+          </button>
+
+          {wazeStep > 0 && (
+            <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>
+              Waze: {wazeStep}/{sorted.length} completadas · abre una parada a la vez
+            </div>
+          )}
         </div>
       </div>
     </div>
