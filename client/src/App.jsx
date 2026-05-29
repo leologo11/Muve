@@ -1,9 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx';
 import Login from './views/Login.jsx';
 import AdminView from './views/admin/AdminView.jsx';
 import DriverView from './views/driver/DriverView.jsx';
+import DriverRoutePicker from './views/driver/DriverRoutePicker.jsx';
 import CompanyView from './views/company/CompanyView.jsx';
 import CustomerView from './views/customer/CustomerView.jsx';
 import PublicRouteView from './views/PublicRouteView.jsx';
@@ -21,6 +22,21 @@ function MetaPixelPageView() {
   }, [location.pathname, location.search]);
 
   return null;
+}
+
+// Driver web shell — same flow as the native app but without Capacitor
+function DriverWebShell() {
+  const [selectedRouteId, setSelectedRouteId] = useState(null);
+
+  if (!selectedRouteId) {
+    return <DriverRoutePicker onSelect={setSelectedRouteId} />;
+  }
+
+  return (
+    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <DriverView routeId={selectedRouteId} onBack={() => setSelectedRouteId(null)} />
+    </div>
+  );
 }
 
 function RoleRouter() {
@@ -46,7 +62,7 @@ function RoleRouter() {
   if (!user) return <Navigate to="/login" replace />;
 
   if (user.role === 'admin') return <AdminView />;
-  if (user.role === 'driver') return <DriverView />;
+  if (user.role === 'driver') return <DriverWebShell />;
   if (user.role === 'company') return <CompanyView />;
 
   return <Navigate to="/login" replace />;
