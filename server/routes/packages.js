@@ -138,12 +138,44 @@ router.get('/map', requireRole('admin'), async (req, res) => {
 // GET /api/packages/all — admin: all packages across all routes
 router.get('/all', requireRole('admin'), async (req, res) => {
   try {
-    const { page = 1, limit = 60, status, routeId, companyId } = req.query;
+    const { page = 1, limit = 60, status, routeId, companyId, search, driverId } = req.query;
     const params = { select: '*', order: 'created_at.desc', limit, offset: (Number(page) - 1) * Number(limit) };
     if (status && status !== 'todos') params.status = `eq.${status}`;
-    if (routeId) params.route_id = `eq.${routeId}`;
     if (companyId) params.company_id = `eq.${companyId}`;
-    const rows = await supabaseRequest(`/packages${qs(params)}`);
+
+    // driverId filter: resolve to route IDs for that driver first
+    let resolvedRouteId = routeId || null;
+    if (driverId && !routeId) {
+      const driverRoutes = await supabaseRequest(`/routes${qs({ driver_id: `eq.${driverId}`, select: 'id' })}`).catch(() => []);
+      const ids = driverRoutes.map(r => r.id).filter(Boolean);
+      resolvedRouteId = ids.length ? `route_ids:${ids.join(',')}` : 'none';
+    }
+    if (resolvedRouteId === 'none') {
+      return res.json({ packages: [], total: 0, page: Number(page), limit: Number(limit) });
+    }
+    if (resolvedRouteId && !resolvedRouteId.startsWith('route_ids:')) {
+      params.route_id = `eq.${resolvedRouteId}`;
+    } else if (resolvedRouteId?.startsWith('route_ids:')) {
+      params.route_id = `in.(${resolvedRouteId.slice('route_ids:'.length)})`;
+    }
+
+    let path = `/packages${qs(params)}`;
+
+    // Full-text search across name, address, tracking ID, commune
+    if (search && search.trim()) {
+      const s = search.trim().replace(/[*()]/g, ''); // strip PostgREST reserved chars
+      const orClause = [
+        `customer_name.ilike.*${s}*`,
+        `customer_last_name.ilike.*${s}*`,
+        `address.ilike.*${s}*`,
+        `tracking_id.ilike.*${s}*`,
+        `commune.ilike.*${s}*`,
+        `customer_phone.ilike.*${s}*`,
+      ].join(',');
+      path += `${path.includes('?') ? '&' : '?'}or=(${orClause})`;
+    }
+
+    const rows = await supabaseRequest(path);
     return res.json({ packages: rows.map(normalizePackage), total: rows.length, page: Number(page), limit: Number(limit) });
   } catch (err) {
     res.status(500).json({ error: err.message });
