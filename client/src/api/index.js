@@ -71,6 +71,7 @@ export const api = {
   updatePackage: (id, data) => request('PATCH', `/packages/${id}`, data),
   deletePackage: (id) => request('DELETE', `/packages/${id}`),
   bulkDeletePackages: (ids) => request('POST', '/packages/bulk-delete', { ids }),
+  geocodeBatch: () => request('POST', '/packages/geocode-batch'),
   restorePackage: (id) => request('PATCH', `/packages/${id}/restore`),
   reorderPackages: (order) => request('PATCH', '/packages/reorder/batch', { order }),
 

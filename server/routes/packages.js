@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { upload, uploadToCloudinary, deletePhoto } from '../utils/cloudinary.js';
 import { syncRouteStats } from './deliveryRoutes.js';
-import { geocodeAddress } from '../utils/geocode.js';
+import { geocodeAddress, sleep } from '../utils/geocode.js';
 import { qs, supabaseRequest } from '../utils/supabase.js';
 
 const router = Router();
@@ -117,7 +117,8 @@ router.get('/map', requireRole('admin'), async (req, res) => {
       _id: p.id, id: p.id,
       trackingId: p.tracking_id,
       address: p.address, commune: p.commune,
-      lat: Number(p.lat), lng: Number(p.lng),
+      lat: p.lat != null ? Number(p.lat) : null,
+      lng: p.lng != null ? Number(p.lng) : null,
       status: p.status, failReason: p.fail_reason,
       customerName: [p.customer_name, p.customer_last_name].filter(Boolean).join(' '),
       deliveredAt: p.delivered_at,
@@ -296,6 +297,39 @@ router.post('/bulk-delete', requireRole('admin'), async (req, res) => {
       });
     }));
     return res.json({ ok: true, count: ids.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/packages/geocode-batch — re-geocode all packages that have address but no lat/lng
+router.post('/geocode-batch', requireRole('admin'), async (req, res) => {
+  try {
+    const rows = await supabaseRequest(`/packages${qs({
+      lat: 'is.null',
+      status: 'neq.eliminado',
+      select: 'id,address,commune',
+      limit: 200,
+    })}`);
+    const toGeocode = (rows || []).filter(p => (p.address || '').trim().length > 0);
+    let geocoded = 0;
+    const errors = [];
+    for (const pkg of toGeocode) {
+      try {
+        const geo = await geocodeAddress(pkg.address, pkg.commune);
+        if (geo) {
+          await supabaseRequest(`/packages${qs({ id: `eq.${pkg.id}` })}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ lat: geo.lat, lng: geo.lng, updated_at: new Date().toISOString() }),
+          });
+          geocoded++;
+        }
+      } catch (e) {
+        errors.push(pkg.id);
+      }
+      await sleep(300);
+    }
+    return res.json({ total: toGeocode.length, geocoded, errors: errors.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -145,6 +145,7 @@ export default function GeneralMapView() {
   const [showNoGeoPanel,   setShowNoGeoPanel]   = useState(false);
   const [editingNoGeo,     setEditingNoGeo]     = useState(null);
   const [savingNoGeo,      setSavingNoGeo]      = useState(false);
+  const [geocodingBatch,   setGeocodingBatch]   = useState(false);
 
   const [showCreateForm,   setShowCreateForm]   = useState(false);
   const [newRouteName,     setNewRouteName]     = useState('');
@@ -178,7 +179,8 @@ export default function GeneralMapView() {
   }, [packages]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const q = norm(search.trim());
     return packages.filter(p => {
       const isActive = p.routeStatus === 'active' && p.status === 'pendiente';
       const passStatus =
@@ -191,7 +193,7 @@ export default function GeneralMapView() {
       const passCompany = !companyFilter || p.companyName === companyFilter;
       const passDriver  = !driverFilter  || p.driverName  === driverFilter;
       const passSearch  = !q || [p.trackingId, p.customerName, p.address, p.commune, p.companyName, p.driverName, p.routeCode]
-        .filter(Boolean).join(' ').toLowerCase().includes(q);
+        .filter(Boolean).map(norm).join(' ').includes(q);
       return passStatus && passCompany && passDriver && passSearch;
     });
   }, [packages, search, statusFilter, companyFilter, driverFilter]);
@@ -360,6 +362,22 @@ export default function GeneralMapView() {
     });
   }, [mapReady, packages, filtered, selectedIds, lassoMode, hasActiveFilters]);
 
+  const handleGeocodeBatch = async () => {
+    setGeocodingBatch(true);
+    try {
+      const result = await api.geocodeBatch();
+      toast(`✅ ${result.geocoded} de ${result.total} paquetes geocodificados`);
+      if (result.geocoded > 0) {
+        const fresh = await api.getMapPackages({ from: dateFrom, to: dateTo });
+        setPackages(fresh);
+      }
+    } catch (err) {
+      toast('❌ ' + err.message);
+    } finally {
+      setGeocodingBatch(false);
+    }
+  };
+
   const clearSelection = () => {
     setSelectedIds(new Set());
     setShowAssignPanel(false);
@@ -500,6 +518,24 @@ export default function GeneralMapView() {
         </div>
       </div>
 
+      {/* Warning: filtered packages without coordinates */}
+      {hasActiveFilters && (() => {
+        const withoutCoords = filtered.filter(p => !p.lat || !p.lng).length;
+        if (withoutCoords === 0) return null;
+        return (
+          <div style={{ background: '#fffbeb', borderBottom: '1px solid #fde68a', padding: '5px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
+            <span>⚠️</span>
+            <span style={{ color: '#92400e', fontWeight: 600 }}>
+              <b>{withoutCoords}</b> de <b>{filtered.length}</b> paquetes filtrados no tienen ubicación y no se muestran en el mapa
+            </span>
+            <button
+              onClick={() => setShowNoGeoPanel(true)}
+              style={{ marginLeft: 4, padding: '2px 10px', borderRadius: 10, border: '1px solid #f59e0b', background: '#fff', color: '#b45309', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+            >Ver sin ubicar →</button>
+          </div>
+        );
+      })()}
+
       {/* Map area */}
       <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
         {loading && (
@@ -562,10 +598,15 @@ export default function GeneralMapView() {
             boxShadow: '0 -6px 24px #ef444420',
             display: 'flex', flexDirection: 'column', maxHeight: '60%',
           }}>
-            <div style={{ padding: '10px 16px 8px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <div style={{ padding: '10px 16px 8px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 16 }}>⛔</span>
               <span style={{ fontWeight: 800, fontSize: 13, color: '#0f172a' }}>{noGeoPackages.length} paquete{noGeoPackages.length !== 1 ? 's' : ''} sin geolocalizar</span>
-              <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>— no aparecen en el mapa</span>
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>— no aparecen en el mapa</span>
+              <button
+                onClick={handleGeocodeBatch}
+                disabled={geocodingBatch}
+                style={{ marginLeft: 'auto', padding: '5px 12px', borderRadius: 8, border: 'none', background: geocodingBatch ? '#e2e8f0' : '#0052FF', color: geocodingBatch ? '#94a3b8' : '#fff', fontSize: 11, fontWeight: 800, cursor: geocodingBatch ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}
+              >{geocodingBatch ? '⏳ Geocodificando…' : '📍 Geocodificar todos'}</button>
               <button onClick={() => { setShowNoGeoPanel(false); setEditingNoGeo(null); }} style={{ background: 'none', border: 'none', fontSize: 18, color: 'var(--muted)', cursor: 'pointer', lineHeight: 1, padding: '2px 6px' }}>✕</button>
             </div>
             <div style={{ overflowY: 'auto', flex: 1 }}>
