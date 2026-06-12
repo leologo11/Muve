@@ -728,9 +728,39 @@ function ScreenWelcome({ onStart }) {
         .czCta {
           background: linear-gradient(90deg,#0A46C0,#1B6CF5 28%,#3FBEED 52%,#1B6CF5 72%,#0A46C0);
           background-size: 260% auto;
-          animation: czBtnShimmer 3s linear infinite;
+          animation: czBtnShimmer 3s linear infinite, czCtaNudge 5s ease-in-out 2s infinite;
         }
         .czCta:active { transform: scale(0.97) !important; transition: transform .1s ease !important; }
+        @keyframes czCtaNudge {
+          0%, 86%, 100% { transform: scale(1) rotate(0deg); }
+          88%  { transform: scale(1.04) rotate(-1.2deg); }
+          90%  { transform: scale(1.04) rotate(1.2deg); }
+          92%  { transform: scale(1.05) rotate(-0.8deg); }
+          94%  { transform: scale(1.02) rotate(0.5deg); }
+          96%  { transform: scale(1) rotate(0deg); }
+        }
+        @keyframes czCtaRing {
+          0%   { transform: scale(0.94); opacity: .55; }
+          70%  { transform: scale(1.18); opacity: 0; }
+          100% { transform: scale(1.18); opacity: 0; }
+        }
+        .czCtaWrap { position: relative; width: 100%; max-width: 380px; }
+        .czCtaWrap::before, .czCtaWrap::after {
+          content: ''; position: absolute; inset: 0; border-radius: 18px;
+          border: 2.5px solid #1B6CF5; pointer-events: none;
+          animation: czCtaRing 2.6s ease-out infinite;
+        }
+        .czCtaWrap::after { animation-delay: 1.3s; }
+        @keyframes czArrowGo {
+          0%, 100% { transform: translateX(0); }
+          50%      { transform: translateX(6px); }
+        }
+        .czCtaArrow { display: flex; animation: czArrowGo 1.1s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .czCta { animation: none; }
+          .czCtaWrap::before, .czCtaWrap::after { animation: none; opacity: 0; }
+          .czCtaArrow { animation: none; }
+        }
         @media (min-width: 640px) {
           .czContent { flex: 1 !important; padding: 0 40px !important; flex-direction: row !important; align-items: center; gap: 36px; }
           .czHeroInner { align-items: flex-start !important; text-align: left !important; }
@@ -790,22 +820,24 @@ function ScreenWelcome({ onStart }) {
           </div>
 
           {/* CTA */}
-          <button
-            type="button"
-            onClick={onStart}
-            onMouseDown={addRipple}
-            className="czCta czHeroCta"
-            style={{
-              width:'100%', maxWidth:380, padding:'18px 20px', borderRadius:18, border:'none',
-              color:'#fff', fontSize:19, fontWeight:900, cursor:'pointer', letterSpacing:'-0.4px',
-              boxShadow:`0 14px 36px rgba(27,108,245,.50), 0 4px 12px rgba(27,108,245,.28)`,
-              display:'flex', alignItems:'center', justifyContent:'center', gap:12,
-              marginBottom:12, position:'relative', overflow:'hidden',
-            }}
-          >
-            <span>Cotizar mi traslado</span>
-            <ArrowRight size={21} color="#fff" strokeWidth={2.7}/>
-          </button>
+          <div className="czCtaWrap czHeroCta" style={{ marginBottom:12 }}>
+            <button
+              type="button"
+              onClick={onStart}
+              onMouseDown={addRipple}
+              className="czCta"
+              style={{
+                width:'100%', padding:'18px 20px', borderRadius:18, border:'none',
+                color:'#fff', fontSize:19, fontWeight:900, cursor:'pointer', letterSpacing:'-0.4px',
+                boxShadow:`0 14px 36px rgba(27,108,245,.50), 0 4px 12px rgba(27,108,245,.28)`,
+                display:'flex', alignItems:'center', justifyContent:'center', gap:12,
+                position:'relative', overflow:'hidden',
+              }}
+            >
+              <span>Cotizar mi traslado</span>
+              <span className="czCtaArrow"><ArrowRight size={21} color="#fff" strokeWidth={2.7}/></span>
+            </button>
+          </div>
 
           {/* Trust chips */}
           <div className="czTrustChips" style={{ display:'flex', gap:0, justifyContent:'center', marginBottom:10, background:'rgba(255,255,255,.7)', borderRadius:14, border:`1px solid ${BDR}`, overflow:'hidden', backdropFilter:'blur(8px)' }}>

@@ -76,8 +76,14 @@ export default function AllPackagesView() {
   const [newRouteDriverId, setNewRouteDriverId] = useState('');
   const [newRouteStart, setNewRouteStart]     = useState({ address: '', lat: null, lng: null });
   const [creatingRoute, setCreatingRoute]     = useState(false);
+  // Pool dispatch board: pending-to-assign counts grouped by company
+  const [poolSummary, setPoolSummary]         = useState(null);
 
   const LIMIT = 50;
+
+  const refreshPoolSummary = useCallback(() => {
+    api.getPoolSummary().then(setPoolSummary).catch(() => {});
+  }, []);
 
   const load = useCallback(async (p = 1) => {
     setLoading(true);
@@ -107,7 +113,7 @@ export default function AllPackagesView() {
     api.getCompanies().then(setCompanies).catch(() => {});
   }, []);
 
-  useEffect(() => { load(1); }, [load]);
+  useEffect(() => { load(1); refreshPoolSummary(); }, [load, refreshPoolSummary]);
 
   // Close route panel when selection is cleared
   useEffect(() => {
@@ -209,11 +215,12 @@ export default function AllPackagesView() {
     if (!bulkRouteId || selectedIds.size === 0) return;
     setBulkAssigning(true);
     try {
-      await Promise.all([...selectedIds].map(id => api.updatePackage(id, { routeId: bulkRouteId })));
+      await api.bulkAssignPackages([...selectedIds], bulkRouteId);
       toast(`✅ ${selectedIds.size} paquete${selectedIds.size !== 1 ? 's' : ''} asignados a la ruta`);
       setSelectedIds(new Set());
       closeBulkPanel();
       load(page);
+      refreshPoolSummary();
     } catch (err) { toast('❌ ' + err.message); }
     finally { setBulkAssigning(false); }
   };
@@ -229,11 +236,13 @@ export default function AllPackagesView() {
         status:   'draft',
         startPoint: newRouteStart.lat ? newRouteStart : undefined,
       });
-      await Promise.all([...selectedIds].map(id => api.updatePackage(id, { routeId: route._id || route.id })));
+      await api.bulkAssignPackages([...selectedIds], route._id || route.id);
       toast(`✅ Ruta ${route.routeCode} creada con ${selectedIds.size} paquete${selectedIds.size !== 1 ? 's' : ''}`);
       setSelectedIds(new Set());
       closeBulkPanel();
       load(page);
+      refreshPoolSummary();
+      api.getRoutes().then(setRoutes).catch(() => {});
     } catch (err) { toast('❌ ' + err.message); }
     finally { setCreatingRoute(false); }
   };
@@ -242,6 +251,59 @@ export default function AllPackagesView() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+
+      {/* Dispatch board: pool pending by company */}
+      {poolSummary && poolSummary.total > 0 && (
+        <div style={{ background: 'linear-gradient(90deg, #eef4ff, #f6f9ff)', borderBottom: '1px solid #0052FF20', padding: '7px 10px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', overflowX: 'auto', scrollbarWidth: 'none' }}>
+            <button
+              onClick={() => { setRouteF(routeF === 'pool' && !companyF ? '' : 'pool'); setCompanyF(''); setStatusF('todos'); }}
+              style={{
+                flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20,
+                border: routeF === 'pool' && !companyF ? '2px solid #0052FF' : '1.5px solid #0052FF50',
+                background: routeF === 'pool' && !companyF ? '#0052FF' : '#fff',
+                color: routeF === 'pool' && !companyF ? '#fff' : '#0052FF',
+                fontSize: 11, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              📭 Por asignar
+              <span style={{ background: routeF === 'pool' && !companyF ? 'rgba(255,255,255,.25)' : '#0052FF15', borderRadius: 10, padding: '1px 7px', fontSize: 11, fontWeight: 900 }}>
+                {poolSummary.total}
+              </span>
+            </button>
+            <div style={{ width: 1, height: 16, background: '#0052FF25', flexShrink: 0 }} />
+            {poolSummary.companies.map(c => {
+              const active = routeF === 'pool' && companyF === (c.companyId || '');
+              return (
+                <button
+                  key={c.companyId || 'none'}
+                  onClick={() => {
+                    if (active) { setRouteF(''); setCompanyF(''); }
+                    else { setRouteF('pool'); setCompanyF(c.companyId || ''); setStatusF('todos'); }
+                  }}
+                  style={{
+                    flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 20,
+                    border: active ? '2px solid #7c3aed' : '1px solid var(--border)',
+                    background: active ? '#7c3aed' : '#fff',
+                    color: active ? '#fff' : '#475569',
+                    fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+                  }}
+                >
+                  🏢 {c.companyName}
+                  <span style={{ background: active ? 'rgba(255,255,255,.25)' : '#7c3aed12', color: active ? '#fff' : '#7c3aed', borderRadius: 10, padding: '1px 7px', fontSize: 11, fontWeight: 900 }}>
+                    {c.count}
+                  </span>
+                </button>
+              );
+            })}
+            {poolSummary.noGeo > 0 && (
+              <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 20, padding: '4px 10px', whiteSpace: 'nowrap' }}>
+                ⚠ {poolSummary.noGeo} sin ubicar
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div style={{ background: '#fff', borderBottom: '1px solid var(--border)', padding: '8px 10px 6px', flexShrink: 0 }}>
@@ -288,6 +350,7 @@ export default function AllPackagesView() {
           )}
           <select value={routeF} onChange={e => setRouteF(e.target.value)} style={selStyle(!!routeF)}>
             <option value="">Todas las rutas</option>
+            <option value="pool">📭 Sin ruta (pool)</option>
             {routes.map(r => (
               <option key={r._id} value={r._id}>
                 {r.routeCode}{r.name ? ` · ${r.name}` : ''} — {new Date(r.date).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}
@@ -486,7 +549,7 @@ export default function AllPackagesView() {
         <SinglePackageModal
           companies={companies}
           onClose={() => setShowSingle(false)}
-          onDone={() => { setShowSingle(false); load(1); }}
+          onDone={() => { setShowSingle(false); load(1); refreshPoolSummary(); }}
         />
       )}
 
@@ -494,7 +557,7 @@ export default function AllPackagesView() {
         <BulkImportModal
           companies={companies}
           onClose={() => setShowImport(false)}
-          onDone={() => { setShowImport(false); load(1); }}
+          onDone={() => { setShowImport(false); load(1); refreshPoolSummary(); }}
         />
       )}
 

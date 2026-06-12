@@ -39,6 +39,30 @@ export async function supabaseRequest(path, options = {}) {
   return data;
 }
 
+// Like supabaseRequest but also returns the exact total row count (ignoring limit/offset)
+// via PostgREST's Content-Range header. Use for paginated listings.
+export async function supabaseRequestWithCount(path) {
+  assertSupabase();
+  const res = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'count=exact',
+    },
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) {
+    const message = data?.message || data?.error || `Supabase HTTP ${res.status}`;
+    throw new Error(message);
+  }
+  // Content-Range: "0-49/132" → total 132
+  const range = res.headers.get('content-range') || '';
+  const total = Number(range.split('/')[1]);
+  return { rows: data || [], total: Number.isFinite(total) ? total : (data?.length || 0) };
+}
+
 export function qs(params = {}) {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {

@@ -417,7 +417,7 @@ export default function GeneralMapView() {
     }
     setAssigning(true);
     try {
-      await Promise.all([...selectedIds].map(id => api.updatePackage(id, { routeId: targetRouteId })));
+      await api.bulkAssignPackages([...selectedIds], targetRouteId);
       toast(`✅ ${selectedIds.size} paquete${selectedIds.size !== 1 ? 's' : ''} asignado${selectedIds.size !== 1 ? 's' : ''}`);
       const fresh = await api.getMapPackages();
       setPackages(fresh);
@@ -440,7 +440,7 @@ export default function GeneralMapView() {
         driverId: newRouteDriverId || undefined,
         startPoint: newRouteStart.lat ? newRouteStart : undefined,
       });
-      await Promise.all(selectedPackageIds.map(id => api.updatePackage(id, { routeId: route._id || route.id })));
+      await api.bulkAssignPackages(selectedPackageIds, route._id || route.id);
       toast(`✅ Ruta ${route.routeCode} creada con ${selectedPackageIds.length} paquete${selectedPackageIds.length !== 1 ? 's' : ''}`);
       const [fresh, freshRoutes] = await Promise.all([api.getMapPackages(), api.getRoutes()]);
       setPackages(fresh);

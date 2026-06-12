@@ -42,7 +42,7 @@ export default function PoolAssignModal({ route, onClose, onAssigned }) {
     setAssigning(true);
     const ids = [...selected];
     try {
-      await Promise.all(ids.map(id => api.updatePackage(id, { routeId: route._id })));
+      await api.bulkAssignPackages(ids, route._id);
       toast(`✅ ${ids.length} paquete${ids.length !== 1 ? 's' : ''} asignado${ids.length !== 1 ? 's' : ''} a ${route.routeCode}`);
       onAssigned();
     } catch (err) {

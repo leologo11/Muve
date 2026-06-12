@@ -156,15 +156,6 @@ export default function AdminView() {
       await api.updatePackage(pkg._id, { routeId: null });
       setPackages(prev => prev.filter(p => p._id !== pkg._id));
       toast('Paquete quitado de la ruta');
-      return;
-    } catch (err) { toast('âŒ ' + err.message); return; }
-    if (!confirm(`¿Eliminar a ${pkg.customerName}?`)) return;
-    try {
-      await api.updatePackage(pkg._id, { routeId: null });
-      setPackages(prev => prev.filter(p => p._id !== pkg._id));
-      toast('Paquete quitado de la ruta');
-      return;
-      toast('🗑️ Eliminado');
     } catch (err) { toast('❌ ' + err.message); }
   };
 
@@ -177,7 +168,7 @@ export default function AdminView() {
       setPackages(prev => prev.filter(p => p._id !== pkg._id));
       toast('Paquete movido a otra ruta');
       loadRoutes();
-    } catch (err) { toast('âŒ ' + err.message); }
+    } catch (err) { toast('❌ ' + err.message); }
   };
 
   const handleRestore = async (pkg) => {
@@ -807,6 +798,7 @@ function AdminMainMenu({ setView, onResetDone }) {
     { label: 'Empresas', desc: 'Clientes, proveedores y contactos', view: 'companies', color: '#005078', bg: '#0050780e' },
     { label: 'Usuarios', desc: 'Admin, drivers y empresas', view: 'users', color: 'var(--muted)', bg: 'var(--card2)' },
     { label: 'Precios', desc: 'Fletes, mudanzas e items', view: 'movePricing', color: 'var(--accent)', bg: '#0052FF12' },
+    { label: 'Precios comuna', desc: 'Tarifas de paquetería por comuna', view: 'prices', color: '#0e7490', bg: '#0e749012' },
     { label: 'API Keys',   desc: 'Credenciales de integracion',             view: 'credentials', color: '#fff', bg: 'linear-gradient(135deg, #0052FF 0%, #00DAFF 100%)' },
     { label: 'Analytics',    desc: 'Funnel de visitas del cotizador público',  view: 'analytics',   color: '#7C3AED', bg: '#7c3aed10' },
     { label: 'Presupuestos', desc: 'Generar presupuesto PDF con ítems y precios', view: 'presupuesto', color: '#0369a1', bg: '#e0f2fe' },

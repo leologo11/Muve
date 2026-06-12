@@ -4,7 +4,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { upload, uploadToCloudinary, deletePhoto } from '../utils/cloudinary.js';
 import { syncRouteStats } from './deliveryRoutes.js';
 import { geocodeAddress, sleep } from '../utils/geocode.js';
-import { qs, supabaseRequest } from '../utils/supabase.js';
+import { qs, supabaseRequest, supabaseRequestWithCount } from '../utils/supabase.js';
 
 const router = Router();
 
@@ -75,7 +75,7 @@ router.get('/map', requireRole('admin'), async (req, res) => {
   try {
     const { from, to } = req.query;
     const params = {
-      select: '*',
+      select: 'id,tracking_id,address,commune,lat,lng,status,fail_reason,customer_name,customer_last_name,delivered_at,created_at,route_id,company_id',
       status: 'neq.eliminado',
       order: 'created_at.desc',
       limit: 10000,
@@ -143,6 +143,24 @@ router.get('/all', requireRole('admin'), async (req, res) => {
     if (status && status !== 'todos') params.status = `eq.${status}`;
     if (companyId) params.company_id = `eq.${companyId}`;
 
+    // routeId='pool' → packages without route (the dispatch pool)
+    if (routeId === 'pool') {
+      params.route_id = 'is.null';
+      if (!status || status === 'todos') params.status = 'neq.eliminado';
+      let poolPath = `/packages${qs(params)}`;
+      if (search && search.trim()) {
+        const s = search.trim().replace(/[*()]/g, '');
+        const orClause = [
+          `customer_name.ilike.*${s}*`, `customer_last_name.ilike.*${s}*`,
+          `address.ilike.*${s}*`, `tracking_id.ilike.*${s}*`,
+          `commune.ilike.*${s}*`, `customer_phone.ilike.*${s}*`,
+        ].join(',');
+        poolPath += `&or=(${orClause})`;
+      }
+      const { rows: poolRows, total: poolTotal } = await supabaseRequestWithCount(poolPath);
+      return res.json({ packages: poolRows.map(normalizePackage), total: poolTotal, page: Number(page), limit: Number(limit) });
+    }
+
     // driverId filter: resolve to route IDs for that driver first
     let resolvedRouteId = routeId || null;
     if (driverId && !routeId) {
@@ -175,8 +193,83 @@ router.get('/all', requireRole('admin'), async (req, res) => {
       path += `${path.includes('?') ? '&' : '?'}or=(${orClause})`;
     }
 
-    const rows = await supabaseRequest(path);
-    return res.json({ packages: rows.map(normalizePackage), total: rows.length, page: Number(page), limit: Number(limit) });
+    const { rows, total } = await supabaseRequestWithCount(path);
+    return res.json({ packages: rows.map(normalizePackage), total, page: Number(page), limit: Number(limit) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/packages/pool-summary — pool counts grouped by company (dispatch board)
+router.get('/pool-summary', requireRole('admin'), async (req, res) => {
+  try {
+    const rows = await supabaseRequest(`/packages${qs({
+      route_id: 'is.null',
+      status: 'neq.eliminado',
+      select: 'company_id,lat',
+      limit: 10000,
+    })}`);
+    const byCompany = {};
+    let noGeo = 0;
+    rows.forEach(p => {
+      const key = p.company_id || 'none';
+      byCompany[key] = (byCompany[key] || 0) + 1;
+      if (p.lat == null) noGeo++;
+    });
+    const companyIds = Object.keys(byCompany).filter(k => k !== 'none');
+    const companyMap = new Map();
+    if (companyIds.length) {
+      const companies = await supabaseRequest(`/companies${qs({ id: `in.(${companyIds.join(',')})`, select: 'id,name' })}`);
+      companies.forEach(c => companyMap.set(c.id, c.name));
+    }
+    const summary = Object.entries(byCompany)
+      .map(([companyId, count]) => ({
+        companyId: companyId === 'none' ? null : companyId,
+        companyName: companyId === 'none' ? 'Sin empresa' : (companyMap.get(companyId) || 'Empresa'),
+        count,
+      }))
+      .sort((a, b) => b.count - a.count);
+    return res.json({ total: rows.length, noGeo, companies: summary });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/packages/bulk-assign — move many packages to a route (or to pool with routeId=null) in one shot
+router.post('/bulk-assign', requireRole('admin'), async (req, res) => {
+  try {
+    const { ids, routeId = null } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids requeridos' });
+
+    if (routeId) {
+      const routes = await supabaseRequest(`/routes${qs({ id: `eq.${routeId}`, select: 'id,status' })}`);
+      if (!routes?.[0]) return res.status(404).json({ error: 'Ruta no encontrada' });
+    }
+
+    // Capture previous routes so their stats can be refreshed after the move
+    const prev = await supabaseRequest(`/packages${qs({ id: `in.(${ids.join(',')})`, select: 'id,route_id' })}`);
+    const prevRouteIds = [...new Set(prev.map(p => p.route_id).filter(Boolean))];
+
+    // Append at the end of the target route's stop order
+    let nextOrder = 0;
+    if (routeId) {
+      const existing = await supabaseRequest(`/packages${qs({ route_id: `eq.${routeId}`, select: 'stop_order', order: 'stop_order.desc', limit: 1 })}`);
+      nextOrder = (existing?.[0]?.stop_order ?? -1) + 1;
+    }
+
+    await supabaseRequest(`/packages${qs({ id: `in.(${ids.join(',')})` })}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        route_id: routeId,
+        ...(routeId ? { stop_order: nextOrder } : {}),
+        updated_at: new Date().toISOString(),
+      }),
+    });
+
+    const affected = [...new Set([...prevRouteIds, ...(routeId ? [routeId] : [])])];
+    await Promise.all(affected.map(id => syncRouteStats(id)));
+
+    return res.json({ ok: true, count: ids.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
