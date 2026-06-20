@@ -166,6 +166,19 @@ const WaIcon = ({ size = 20, color = WA }) => (
   </svg>
 );
 
+// ─── Flat mono icons (Fontawesome-style) ─────────────────────
+const IcoBolt   = ({ size=16 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
+const IcoLock   = ({ size=16 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+const IcoDiamond= ({ size=16 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 3 6 18L6 3zm0 0h12M6 3 2 9l10 12L2 9zm20 0-4 6-10 12 4-6 10-12zm-20 0h20"/><path d="m2 9h20"/></svg>;
+const IcoSofa   = ({ size=15 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v3"/><path d="M2 11a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4z"/><path d="M4 17v2"/><path d="M20 17v2"/></svg>;
+const IcoBox    = ({ size=15 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>;
+const IcoFridge = ({ size=15 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M4 10h16"/><path d="M8 6v2"/><path d="M8 14v4"/></svg>;
+const IcoBed    = ({ size=15 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>;
+const IcoTable  = ({ size=15 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="6" rx="1"/><path d="M3 9h18"/><path d="M7 9v12"/><path d="M17 9v12"/></svg>;
+const IcoTv     = ({ size=15 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 20h8"/><path d="M12 18v2"/></svg>;
+const IcoChair  = ({ size=15 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M19 9V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v3"/><path d="M3 11h2a2 2 0 0 1 2 2v2h10v-2a2 2 0 0 1 2-2h2"/><path d="M7 15v4"/><path d="M17 15v4"/><path d="M3 11v4"/><path d="M21 11v4"/></svg>;
+const IcoDesk   = ({ size=15 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9h18"/><path d="M3 9v10a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V9"/><path d="M3 9V5a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v4"/><path d="M8 19v2"/><path d="M16 19v2"/></svg>;
+
 // ─── Progress header ──────────────────────────────────────────
 function Header({ step, total, title, onBack }) {
   const pct = (step / total) * 100;
@@ -655,16 +668,6 @@ function FloatingWA() {
 }
 
 // ─── SCREEN 0 — WELCOME ──────────────────────────────────────
-const MOVE_ROW1 = [
-  { icon: '🛋️', label: 'Sillones'    }, { icon: '📦', label: 'Cajas'       },
-  { icon: '🧊', label: 'Refrigerador'}, { icon: '🛏️', label: 'Camas'       },
-  { icon: '🍽️', label: 'Comedor'    }, { icon: '📺', label: 'Televisores'  },
-];
-const MOVE_ROW2 = [
-  { icon: '🌿', label: 'Plantas'     }, { icon: '🪑', label: 'Muebles'     },
-  { icon: '💻', label: 'Oficina'    }, { icon: '📚', label: 'Estantes'     },
-  { icon: '🚿', label: 'Lavadora'   }, { icon: '🎨', label: 'Arte y deco'  },
-];
 
 const CASES = [
   {
@@ -716,8 +719,6 @@ function ScreenWelcome({ onStart }) {
           0%   { background-position: -220% center; }
           100% { background-position: 220% center; }
         }
-        @keyframes czTicker  { from { transform: translateX(0)    } to { transform: translateX(-50%) } }
-        @keyframes czTickerR { from { transform: translateX(-50%) } to { transform: translateX(0)    } }
         @keyframes czStepPop {
           0%,100% { transform: scale(1);    box-shadow: 0 3px 10px rgba(27,108,245,.3); }
           50%      { transform: scale(1.10); box-shadow: 0 5px 22px rgba(27,108,245,.65), 0 0 0 6px rgba(27,108,245,.10); }
@@ -769,7 +770,6 @@ function ScreenWelcome({ onStart }) {
           .czHeroCta { max-width: 300px !important; }
           .czTrustChips { justify-content: flex-start !important; }
           .czSideCards { display: flex !important; flex-direction: column; width: 296px; flex-shrink: 0; }
-          .czTickerArea { flex: 0 0 auto !important; }
         }
       `}</style>
 
@@ -807,11 +807,15 @@ function ScreenWelcome({ onStart }) {
 
           {/* Step bar */}
           <div style={{ display:'flex', alignItems:'center', width:'100%', maxWidth:300, marginBottom:14 }}>
-            {[{n:'1',t:'Ruta',cls:'czStep1'},{n:'2',t:'Artículos',cls:'czStep2'},{n:'3',t:'Precio',cls:'czStep3'}].map((s,i) => (
+            {[
+              { n:'1', t:'Ruta',      cls:'czStep1', icon:<MapPin size={17} strokeWidth={2.2}/> },
+              { n:'2', t:'Artículos', cls:'czStep2', icon:<IcoBox size={16}/> },
+              { n:'3', t:'Precio',    cls:'czStep3', icon:<IcoBolt size={16}/> },
+            ].map((s,i) => (
               <React.Fragment key={s.n}>
                 {i > 0 && <div style={{ flex:1, height:2, background:`linear-gradient(90deg,${B}55,${C}55)`, borderRadius:99 }}/>}
                 <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-                  <div className={s.cls} style={{ width:40, height:40, borderRadius:'50%', background:GRAD, display:'grid', placeItems:'center', color:'#fff', fontSize:17, fontWeight:900, flexShrink:0, boxShadow:`0 3px 10px ${B}35` }}>{s.n}</div>
+                  <div className={s.cls} style={{ width:40, height:40, borderRadius:'50%', background:GRAD, display:'grid', placeItems:'center', color:'#fff', flexShrink:0, boxShadow:`0 3px 10px ${B}35` }}>{s.icon}</div>
                   <div style={{ fontSize:10, fontWeight:700, color:T2 }}>{s.t}</div>
                 </div>
                 {i < 2 && <div style={{ flex:1, height:2, background:`linear-gradient(90deg,${B}55,${C}55)`, borderRadius:99 }}/>}
@@ -841,9 +845,13 @@ function ScreenWelcome({ onStart }) {
 
           {/* Trust chips */}
           <div className="czTrustChips" style={{ display:'flex', gap:0, justifyContent:'center', marginBottom:10, background:'rgba(255,255,255,.7)', borderRadius:14, border:`1px solid ${BDR}`, overflow:'hidden', backdropFilter:'blur(8px)' }}>
-            {[{e:'⚡',t:'Menos de 1 min',c:'#F59E0B'},{e:'🔒',t:'Sin registro',c:'#10B981'},{e:'💎',t:'Precio real',c:B}].map((b,i) => (
+            {[
+              { icon:<IcoBolt size={15}/>,    t:'Menos de 1 min', c:'#F59E0B' },
+              { icon:<IcoLock size={15}/>,    t:'Sin registro',   c:'#10B981' },
+              { icon:<IcoDiamond size={15}/>, t:'Precio real',    c:B         },
+            ].map((b,i) => (
               <div key={b.t} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, padding:'10px 6px', borderRight: i < 2 ? `1px solid ${BDR}` : 'none' }}>
-                <div style={{ width:28, height:28, borderRadius:8, background:`${b.c}15`, display:'grid', placeItems:'center', fontSize:14 }}>{b.e}</div>
+                <div style={{ width:28, height:28, borderRadius:8, background:`${b.c}15`, display:'grid', placeItems:'center', color:b.c }}>{b.icon}</div>
                 <span style={{ fontSize:10, fontWeight:700, color:T2, textAlign:'center', lineHeight:1.2 }}>{b.t}</span>
               </div>
             ))}
@@ -917,38 +925,31 @@ function ScreenWelcome({ onStart }) {
         </div>
       </div>
 
-      {/* ── Ticker — ocupa el espacio restante ───────────────────── */}
-      <div className="czTickerArea" style={{ flex:1, display:'flex', flexDirection:'column', justifyContent:'center', gap:8, paddingBottom:'max(16px,env(safe-area-inset-bottom,16px))', position:'relative', zIndex:2, minHeight:0 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'0 20px', marginBottom:2 }}>
+      {/* ── What we move — flat icon grid ───────────────────────── */}
+      <div style={{ flex:1, display:'flex', flexDirection:'column', justifyContent:'flex-end', paddingBottom:'max(20px,env(safe-area-inset-bottom,20px))', position:'relative', zIndex:2, padding:'0 22px max(20px,env(safe-area-inset-bottom,20px))' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
           <div style={{ flex:1, height:1, background:BDR }}/>
-          <span style={{ fontSize:9, fontWeight:800, color:T3, textTransform:'uppercase', letterSpacing:1.2, whiteSpace:'nowrap' }}>
-            Movemos lo que importa
+          <span style={{ fontSize:9, fontWeight:800, color:T3, textTransform:'uppercase', letterSpacing:1.4, whiteSpace:'nowrap' }}>
+            Lo que movemos
           </span>
           <div style={{ flex:1, height:1, background:BDR }}/>
         </div>
-
-        {/* Row 1 — izquierda */}
-        <div style={{ overflow:'hidden', maskImage:'linear-gradient(90deg,transparent,black 6%,black 94%,transparent)', WebkitMaskImage:'linear-gradient(90deg,transparent,black 6%,black 94%,transparent)' }}>
-          <div style={{ display:'flex', gap:8, width:'max-content', animation:'czTicker 38s linear infinite' }}>
-            {[...MOVE_ROW1, ...MOVE_ROW1].map(({ icon, label }, i) => (
-              <div key={i} style={{ flexShrink:0, display:'flex', alignItems:'center', gap:6, padding:'7px 13px', borderRadius:11, background:'rgba(255,255,255,.9)', border:'1.5px solid rgba(27,108,245,.10)', boxShadow:'0 1px 6px rgba(27,108,245,.07)' }}>
-                <span style={{ fontSize:16 }}>{icon}</span>
-                <span style={{ fontSize:12, fontWeight:700, color:T2 }}>{label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Row 2 — derecha */}
-        <div style={{ overflow:'hidden', maskImage:'linear-gradient(90deg,transparent,black 6%,black 94%,transparent)', WebkitMaskImage:'linear-gradient(90deg,transparent,black 6%,black 94%,transparent)' }}>
-          <div style={{ display:'flex', gap:8, width:'max-content', animation:'czTickerR 44s linear infinite' }}>
-            {[...MOVE_ROW2, ...MOVE_ROW2].map(({ icon, label }, i) => (
-              <div key={i} style={{ flexShrink:0, display:'flex', alignItems:'center', gap:6, padding:'7px 13px', borderRadius:11, background:'rgba(255,255,255,.9)', border:'1.5px solid rgba(27,108,245,.10)', boxShadow:'0 1px 6px rgba(27,108,245,.07)' }}>
-                <span style={{ fontSize:16 }}>{icon}</span>
-                <span style={{ fontSize:12, fontWeight:700, color:T2 }}>{label}</span>
-              </div>
-            ))}
-          </div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6, justifyContent:'center' }}>
+          {[
+            { icon: <IcoSofa size={15}/>,   label: 'Sillones'    },
+            { icon: <IcoBox size={15}/>,    label: 'Cajas'       },
+            { icon: <IcoFridge size={15}/>, label: 'Refrigerador'},
+            { icon: <IcoBed size={15}/>,    label: 'Camas'       },
+            { icon: <IcoTable size={15}/>,  label: 'Comedor'     },
+            { icon: <IcoTv size={15}/>,     label: 'Televisores' },
+            { icon: <IcoChair size={15}/>,  label: 'Muebles'     },
+            { icon: <IcoDesk size={15}/>,   label: 'Oficina'     },
+          ].map(({ icon, label }) => (
+            <div key={label} style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 11px', borderRadius:9, background:'rgba(255,255,255,.85)', border:`1px solid ${BDR}`, boxShadow:'0 1px 4px rgba(27,108,245,.06)' }}>
+              <span style={{ color:T3 }}>{icon}</span>
+              <span style={{ fontSize:11, fontWeight:700, color:T2 }}>{label}</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
