@@ -667,111 +667,38 @@ function FloatingWA() {
   );
 }
 
-// ─── Truck icon (flat SVG) ─────────────────────────────────────
-const IcoTruck = ({ size=16, color='currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
-  </svg>
-);
-const IcoHome = ({ size=16, color='currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
-  </svg>
-);
-
 // ─── SCREEN 0 — WELCOME ──────────────────────────────────────
 
 const CASES = [
   {
-    type:'Mini flete — 1 cama', iconEl: <IcoTruck size={18} color="#fff"/>,
-    items:['Cama 1 plaza','Colchón','2 cajas'],
+    type:'Mini flete — 1 cama', icon:'🛏️',
+    items:['🛏️ Cama 1 plaza','🛌 Colchón','📦 2 cajas'],
     km:5, price:32000,
     name:'Valentina S.',
     comment:'En menos de una hora tenía la cama instalada en mi nuevo depto. ¡Súper rápido y cuidadoso!',
   },
   {
-    type:'Flete camión 3/4', iconEl: <IcoTruck size={18} color="#fff"/>,
-    items:['Cama 2 plazas','Clóset','Refrigerador'],
+    type:'Flete camión 3/4', icon:'🚚',
+    items:['🛏️ Cama 2 plazas','🪞 Clóset','🧊 Refrigerador'],
     km:8, price:58000,
     name:'Felipe A.',
     comment:'Llegaron con el equipo correcto para los muebles pesados. Sin rasguños y exactamente a la hora.',
   },
   {
-    type:'Mudanza mediana', iconEl: <IcoHome size={18} color="#fff"/>,
-    items:['Cama 2 plazas','Clóset','Sofá 2 plazas','Refrigerador','Lavadora','Mesa comedor','Escritorio','8 cajas'],
+    type:'Mudanza mediana', icon:'🏘️',
+    items:['🛏️ Cama 2 plazas','🪞 Clóset','🛋️ Sofá 2 plazas','🧊 Refrigerador','🫧 Lavadora','🍽️ Mesa comedor','💻 Escritorio','📦 8 cajas'],
     km:14, price:79990,
     name:'Ana M.',
     comment:'Todo organizado y sin contratiempos. Los muebles llegaron perfectos. ¡Los recomiendo al 100%!',
   },
   {
-    type:'Mudanza grande', iconEl: <IcoHome size={18} color="#fff"/>,
-    items:['Cama Queen','Cama 1 plaza','Clóset doble','Sofá 3 plazas','Refrigerador','Lavadora','Secadora','Mesa comedor','6 sillas','Cómoda','Escritorio','TV 65"','15 cajas'],
+    type:'Mudanza grande', icon:'🏡',
+    items:['🛏️ Cama Queen','🛏️ Cama 1 plaza','🪞 Clóset doble','🛋️ Sofá 3 plazas','🧊 Refrigerador','🫧 Lavadora','🌀 Secadora','🍳 Cocina','🍽️ Mesa comedor','🪑 6 sillas','🗄️ Cómoda','💻 Escritorio','📚 Librero','📺 TV 65"','🎨 Cuadros','📦 15 cajas','🌿 Plantas'],
     km:25, price:169990,
     name:'Jorge & Claudia R.',
     comment:'Mudanza completa de 3 dormitorios, impecables. Cuidaron cada mueble como si fuera de ellos.',
   },
 ];
-
-// ─── Animated truck scene ─────────────────────────────────────
-function TruckScene() {
-  return (
-    <div style={{ position:'relative', height:56, overflow:'hidden', marginBottom:10, flexShrink:0 }}>
-      <style>{`
-        @keyframes czDrive { from { transform: translateX(105vw); } to { transform: translateX(-260px); } }
-        @keyframes czWheelSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes czBoxFloat { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-3px); } }
-        @keyframes czSpeedLine { from { opacity:.5; transform: translateX(0); } to { opacity:0; transform: translateX(-28px); } }
-      `}</style>
-      {/* Road */}
-      <div style={{ position:'absolute', bottom:10, left:0, right:0, height:2, background:`linear-gradient(90deg,transparent,${BDR} 8%,${BDR} 92%,transparent)` }}/>
-      <div style={{ position:'absolute', bottom:9, left:0, right:0, height:1,
-        background:`repeating-linear-gradient(90deg,${B}28 0,${B}28 14px,transparent 14px,transparent 26px)` }}/>
-
-      {/* Truck container */}
-      <div style={{ position:'absolute', bottom:12, animation:'czDrive 7s linear infinite', display:'flex', alignItems:'flex-end' }}>
-        {/* Floating box */}
-        <div style={{ position:'absolute', top:-14, left:4, animation:'czBoxFloat 1.2s ease-in-out infinite' }}>
-          <IcoBox size={13} style={{ color:B }}/>
-        </div>
-        {/* Truck body SVG */}
-        <svg width="80" height="38" viewBox="0 0 80 38" fill="none" xmlns="http://www.w3.org/2000/svg">
-          {/* Cargo box */}
-          <rect x="2" y="6" width="42" height="24" rx="2.5" fill={B}/>
-          <rect x="4" y="8" width="38" height="20" rx="1.5" fill={`${B}CC`}/>
-          {/* MUVE text on box */}
-          <text x="12" y="22" fontSize="8" fontWeight="800" fill="white" fontFamily="system-ui,sans-serif" letterSpacing="1">MUVE</text>
-          {/* Cab */}
-          <path d="M44 12 L44 30 L74 30 L74 20 L64 12 Z" fill={B}/>
-          {/* Windshield */}
-          <path d="M46 14 L58 14 L62 20 L46 20 Z" fill="rgba(255,255,255,.32)"/>
-          {/* Cab door */}
-          <rect x="48" y="21" width="12" height="9" rx="1" fill="rgba(0,0,0,.08)"/>
-          {/* Door handle */}
-          <line x1="53" y1="26" x2="57" y2="26" stroke="rgba(255,255,255,.5)" strokeWidth="1.2" strokeLinecap="round"/>
-          {/* Speed lines */}
-          <line x1="0" y1="14" x2="-10" y2="14" stroke={`${B}50`} strokeWidth="1.5" strokeLinecap="round" style={{ animation:'czSpeedLine .6s linear infinite' }}/>
-          <line x1="0" y1="19" x2="-16" y2="19" stroke={`${B}35`} strokeWidth="1" strokeLinecap="round" style={{ animation:'czSpeedLine .6s linear .15s infinite' }}/>
-          <line x1="0" y1="24" x2="-8" y2="24" stroke={`${B}40`} strokeWidth="1" strokeLinecap="round" style={{ animation:'czSpeedLine .6s linear .3s infinite' }}/>
-        </svg>
-        {/* Wheels (separate for spin animation) */}
-        <svg width="80" height="16" viewBox="0 0 80 16" fill="none" style={{ position:'absolute', bottom:-4, left:0 }}>
-          <g style={{ transformOrigin:'15px 8px', animation:'czWheelSpin .5s linear infinite' }}>
-            <circle cx="15" cy="8" r="7" fill={N}/>
-            <circle cx="15" cy="8" r="3.5" fill="#2a3a55"/>
-            <line x1="15" y1="1" x2="15" y2="15" stroke={BDR} strokeWidth="1" opacity=".6"/>
-            <line x1="8" y1="8" x2="22" y2="8" stroke={BDR} strokeWidth="1" opacity=".6"/>
-          </g>
-          <g style={{ transformOrigin:'63px 8px', animation:'czWheelSpin .5s linear infinite' }}>
-            <circle cx="63" cy="8" r="7" fill={N}/>
-            <circle cx="63" cy="8" r="3.5" fill="#2a3a55"/>
-            <line x1="63" y1="1" x2="63" y2="15" stroke={BDR} strokeWidth="1" opacity=".6"/>
-            <line x1="56" y1="8" x2="70" y2="8" stroke={BDR} strokeWidth="1" opacity=".6"/>
-          </g>
-        </svg>
-      </div>
-    </div>
-  );
-}
 
 function ScreenWelcome({ onStart }) {
   const [activeCase, setActiveCase] = useState(0);
@@ -794,29 +721,45 @@ function ScreenWelcome({ onStart }) {
         }
         @keyframes czStepPop {
           0%,100% { transform: scale(1);    box-shadow: 0 3px 10px rgba(27,108,245,.3); }
-          50%      { transform: scale(1.08); box-shadow: 0 5px 18px rgba(27,108,245,.55); }
+          50%      { transform: scale(1.10); box-shadow: 0 5px 22px rgba(27,108,245,.65), 0 0 0 6px rgba(27,108,245,.10); }
         }
         .czStep1 { animation: czStepPop 2.4s ease-in-out 0.1s  infinite; }
         .czStep2 { animation: czStepPop 2.4s ease-in-out 0.75s infinite; }
         .czStep3 { animation: czStepPop 2.4s ease-in-out 1.4s  infinite; }
-        @keyframes czCtaGlow {
-          0%,100% { box-shadow: 0 8px 24px rgba(27,108,245,.42), 0 2px 8px rgba(27,108,245,.22); }
-          50%      { box-shadow: 0 12px 40px rgba(27,108,245,.72), 0 0 0 7px rgba(27,108,245,.10); }
-        }
         .czCta {
-          background: linear-gradient(135deg,#0A46C0 0%,#1B6CF5 50%,#3FBEED 100%);
-          animation: czCtaGlow 2.6s ease-in-out infinite;
+          background: linear-gradient(90deg,#0A46C0,#1B6CF5 28%,#3FBEED 52%,#1B6CF5 72%,#0A46C0);
+          background-size: 260% auto;
+          animation: czBtnShimmer 3s linear infinite, czCtaNudge 5s ease-in-out 2s infinite;
         }
-        .czCta:hover { filter: brightness(1.08); transform: translateY(-1px); transition: all .18s ease; }
-        .czCta:active { transform: scale(0.97) translateY(0) !important; transition: transform .1s ease !important; }
-        @keyframes czArrowGo {
-          0%, 100% { transform: translateX(0); }
-          50%      { transform: translateX(5px); }
+        .czCta:active { transform: scale(0.97) !important; transition: transform .1s ease !important; }
+        @keyframes czCtaNudge {
+          0%, 86%, 100% { transform: scale(1) rotate(0deg); }
+          88%  { transform: scale(1.04) rotate(-1.2deg); }
+          90%  { transform: scale(1.04) rotate(1.2deg); }
+          92%  { transform: scale(1.05) rotate(-0.8deg); }
+          94%  { transform: scale(1.02) rotate(0.5deg); }
+          96%  { transform: scale(1) rotate(0deg); }
+        }
+        @keyframes czCtaRing {
+          0%   { transform: scale(0.94); opacity: .55; }
+          70%  { transform: scale(1.18); opacity: 0; }
+          100% { transform: scale(1.18); opacity: 0; }
         }
         .czCtaWrap { position: relative; width: 100%; max-width: 380px; }
-        .czCtaArrow { display: flex; animation: czArrowGo 1.3s ease-in-out infinite; }
+        .czCtaWrap::before, .czCtaWrap::after {
+          content: ''; position: absolute; inset: 0; border-radius: 18px;
+          border: 2.5px solid #1B6CF5; pointer-events: none;
+          animation: czCtaRing 2.6s ease-out infinite;
+        }
+        .czCtaWrap::after { animation-delay: 1.3s; }
+        @keyframes czArrowGo {
+          0%, 100% { transform: translateX(0); }
+          50%      { transform: translateX(6px); }
+        }
+        .czCtaArrow { display: flex; animation: czArrowGo 1.1s ease-in-out infinite; }
         @media (prefers-reduced-motion: reduce) {
-          .czCta, .czStep1, .czStep2, .czStep3 { animation: none; }
+          .czCta { animation: none; }
+          .czCtaWrap::before, .czCtaWrap::after { animation: none; opacity: 0; }
           .czCtaArrow { animation: none; }
         }
         @media (min-width: 640px) {
@@ -923,7 +866,7 @@ function ScreenWelcome({ onStart }) {
             {/* Header */}
             <div style={{ background:GRAD, padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <div style={{ width:40, height:40, borderRadius:10, background:'rgba(255,255,255,.2)', display:'grid', placeItems:'center', flexShrink:0 }}>{c.iconEl}</div>
+                <div style={{ width:40, height:40, borderRadius:10, background:'rgba(255,255,255,.2)', display:'grid', placeItems:'center', fontSize:20, flexShrink:0 }}>{c.icon}</div>
                 <div>
                   <div style={{ fontSize:13, fontWeight:800, color:'#fff', letterSpacing:'-0.2px' }}>{c.type}</div>
                   <div style={{ fontSize:10, color:'rgba(255,255,255,.75)', marginTop:1 }}>{c.km} km recorridos</div>
@@ -982,28 +925,29 @@ function ScreenWelcome({ onStart }) {
         </div>
       </div>
 
-      {/* ── Animated truck + what we move ────────────────────────── */}
-      <div style={{ flex:1, display:'flex', flexDirection:'column', justifyContent:'flex-end', position:'relative', zIndex:2, padding:'0 0 max(16px,env(safe-area-inset-bottom,16px))' }}>
-        <TruckScene />
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8, padding:'0 22px' }}>
+      {/* ── What we move — flat icon grid ───────────────────────── */}
+      <div style={{ flex:1, display:'flex', flexDirection:'column', justifyContent:'flex-end', paddingBottom:'max(20px,env(safe-area-inset-bottom,20px))', position:'relative', zIndex:2, padding:'0 22px max(20px,env(safe-area-inset-bottom,20px))' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
           <div style={{ flex:1, height:1, background:BDR }}/>
-          <span style={{ fontSize:9, fontWeight:800, color:T3, textTransform:'uppercase', letterSpacing:1.4, whiteSpace:'nowrap' }}>Lo que movemos</span>
+          <span style={{ fontSize:9, fontWeight:800, color:T3, textTransform:'uppercase', letterSpacing:1.4, whiteSpace:'nowrap' }}>
+            Lo que movemos
+          </span>
           <div style={{ flex:1, height:1, background:BDR }}/>
         </div>
-        <div style={{ display:'flex', flexWrap:'wrap', gap:5, justifyContent:'center', padding:'0 18px' }}>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6, justifyContent:'center' }}>
           {[
-            { icon:<IcoBed size={13}/>,    label:'Camas'        },
-            { icon:<IcoSofa size={13}/>,   label:'Sillones'     },
-            { icon:<IcoFridge size={13}/>, label:'Refrigerador' },
-            { icon:<IcoTv size={13}/>,     label:'Televisores'  },
-            { icon:<IcoBox size={13}/>,    label:'Cajas'        },
-            { icon:<IcoTable size={13}/>,  label:'Comedor'      },
-            { icon:<IcoDesk size={13}/>,   label:'Oficina'      },
-            { icon:<IcoChair size={13}/>,  label:'Muebles'      },
+            { icon: <IcoSofa size={15}/>,   label: 'Sillones'    },
+            { icon: <IcoBox size={15}/>,    label: 'Cajas'       },
+            { icon: <IcoFridge size={15}/>, label: 'Refrigerador'},
+            { icon: <IcoBed size={15}/>,    label: 'Camas'       },
+            { icon: <IcoTable size={15}/>,  label: 'Comedor'     },
+            { icon: <IcoTv size={15}/>,     label: 'Televisores' },
+            { icon: <IcoChair size={15}/>,  label: 'Muebles'     },
+            { icon: <IcoDesk size={15}/>,   label: 'Oficina'     },
           ].map(({ icon, label }) => (
-            <div key={label} style={{ display:'flex', alignItems:'center', gap:4, padding:'5px 9px', borderRadius:8, background:'rgba(255,255,255,.88)', border:`1px solid ${BDR}`, boxShadow:'0 1px 4px rgba(27,108,245,.05)' }}>
-              <span style={{ color:T3, display:'flex' }}>{icon}</span>
-              <span style={{ fontSize:10, fontWeight:700, color:T2 }}>{label}</span>
+            <div key={label} style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 11px', borderRadius:9, background:'rgba(255,255,255,.85)', border:`1px solid ${BDR}`, boxShadow:'0 1px 4px rgba(27,108,245,.06)' }}>
+              <span style={{ color:T3 }}>{icon}</span>
+              <span style={{ fontSize:11, fontWeight:700, color:T2 }}>{label}</span>
             </div>
           ))}
         </div>
