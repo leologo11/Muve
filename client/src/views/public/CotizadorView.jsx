@@ -3,7 +3,7 @@ import { loadGoogleMaps } from '../../utils/googleMaps.js';
 import {
   ArrowLeft, ArrowRight, Check, X, Sparkles,
   Building2, Shield, PenLine, Phone, Users, Mail,
-  Truck, MapPin, ChevronRight,
+  Truck, MapPin, ChevronRight, Search,
 } from 'lucide-react';
 import { api } from '../../api/index.js';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
@@ -120,7 +120,7 @@ function LeafletRouteMap({ from, to, distanceKm }) {
   }, [mapReady, from.lat, from.lng, to.lat, to.lng]);
 
   return (
-    <div style={{ borderRadius: 14, overflow: 'hidden', height: 160, marginBottom: 14, border: `1px solid ${BDR}`, position: 'relative', background: '#EEF3FF' }}>
+    <div style={{ borderRadius: 14, overflow: 'hidden', height: 130, marginBottom: 10, border: `1px solid ${BDR}`, position: 'relative', background: '#EEF3FF' }}>
       <div ref={divRef} style={{ width: '100%', height: '100%' }}/>
       {distanceKm && from.lat && to.lat && (
         <div style={{
@@ -798,33 +798,32 @@ function ScreenWelcome({ onStart }) {
             Fletes · Mudanzas · Santiago
           </div>
           <h1 className="czHeroTitle" style={{ margin:'0 0 10px', fontSize:34, lineHeight:1.1, fontWeight:900, letterSpacing:'-1.4px', color:N }}>
-            Tu precio de traslado,<br/>
-            <span style={{ background:GRAD, WebkitBackgroundClip:'text', backgroundClip:'text', color:'transparent' }}>en 30 segundos</span>
+            Tu traslado,<br/>
+            <span style={{ background:GRAD, WebkitBackgroundClip:'text', backgroundClip:'text', color:'transparent' }}>precio real al instante</span>
           </h1>
           <p className="czHeroSub" style={{ color:T2, fontSize:14, lineHeight:1.55, margin:'0 0 14px', maxWidth:290 }}>
-            Sin registro ni llamadas. Ingresa origen, destino y artículos — precio al instante.
+            Ingresa tu ruta, artículos y datos de contacto — te damos el precio exacto sin llamadas.
           </p>
 
-          {/* Step bar */}
-          <div style={{ display:'flex', alignItems:'center', width:'100%', maxWidth:300, marginBottom:14 }}>
-            {[
-              { n:'1', t:'Ruta',      cls:'czStep1', icon:<MapPin size={17} strokeWidth={2.2}/> },
-              { n:'2', t:'Artículos', cls:'czStep2', icon:<IcoBox size={16}/> },
-              { n:'3', t:'Precio',    cls:'czStep3', icon:<IcoBolt size={16}/> },
-            ].map((s,i) => (
-              <React.Fragment key={s.n}>
-                {i > 0 && <div style={{ flex:1, height:2, background:`linear-gradient(90deg,${B}55,${C}55)`, borderRadius:99 }}/>}
-                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-                  <div className={s.cls} style={{ width:40, height:40, borderRadius:'50%', background:GRAD, display:'grid', placeItems:'center', color:'#fff', flexShrink:0, boxShadow:`0 3px 10px ${B}35` }}>{s.icon}</div>
-                  <div style={{ fontSize:10, fontWeight:700, color:T2 }}>{s.t}</div>
-                </div>
-                {i < 2 && <div style={{ flex:1, height:2, background:`linear-gradient(90deg,${B}55,${C}55)`, borderRadius:99 }}/>}
-              </React.Fragment>
-            ))}
-          </div>
+          {/* Step bar + CTA en el mismo contenedor y mismo ancho */}
+          <div style={{ width:'100%', maxWidth:340, alignSelf:'center', marginBottom:12 }}>
+            <div style={{ display:'flex', alignItems:'center', width:'100%', marginBottom:14 }}>
+              {[
+                { n:'1', t:'Ruta',      cls:'czStep1', icon:<MapPin size={17} strokeWidth={2.2}/> },
+                { n:'2', t:'Artículos', cls:'czStep2', icon:<IcoBox size={16}/> },
+                { n:'3', t:'Precio',    cls:'czStep3', icon:<IcoBolt size={16}/> },
+              ].map((s,i) => (
+                <React.Fragment key={s.n}>
+                  {i > 0 && <div style={{ flex:1, height:2, background:`linear-gradient(90deg,${B}55,${C}55)`, borderRadius:99 }}/>}
+                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+                    <div className={s.cls} style={{ width:40, height:40, borderRadius:'50%', background:GRAD, display:'grid', placeItems:'center', color:'#fff', flexShrink:0, boxShadow:`0 3px 10px ${B}35` }}>{s.icon}</div>
+                    <div style={{ fontSize:10, fontWeight:700, color:T2 }}>{s.t}</div>
+                  </div>
+                  {i < 2 && <div style={{ flex:1, height:2, background:`linear-gradient(90deg,${B}55,${C}55)`, borderRadius:99 }}/>}
+                </React.Fragment>
+              ))}
+            </div>
 
-          {/* CTA */}
-          <div className="czCtaWrap czHeroCta" style={{ marginBottom:12 }}>
             <button
               type="button"
               onClick={onStart}
@@ -843,18 +842,21 @@ function ScreenWelcome({ onStart }) {
             </button>
           </div>
 
-          {/* Trust chips */}
-          <div className="czTrustChips" style={{ display:'flex', gap:0, justifyContent:'center', marginBottom:10, background:'rgba(255,255,255,.7)', borderRadius:14, border:`1px solid ${BDR}`, overflow:'hidden', backdropFilter:'blur(8px)' }}>
-            {[
-              { icon:<IcoBolt size={15}/>,    t:'Menos de 1 min', c:'#F59E0B' },
-              { icon:<IcoLock size={15}/>,    t:'Sin registro',   c:'#10B981' },
-              { icon:<IcoDiamond size={15}/>, t:'Precio real',    c:B         },
-            ].map((b,i) => (
-              <div key={b.t} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, padding:'10px 6px', borderRight: i < 2 ? `1px solid ${BDR}` : 'none' }}>
-                <div style={{ width:28, height:28, borderRadius:8, background:`${b.c}15`, display:'grid', placeItems:'center', color:b.c }}>{b.icon}</div>
-                <span style={{ fontSize:10, fontWeight:700, color:T2, textAlign:'center', lineHeight:1.2 }}>{b.t}</span>
-              </div>
-            ))}
+          {/* Trust chips — mismo ancho que el botón */}
+          <div style={{ width:'100%', maxWidth:340, alignSelf:'center' }}>
+            <div className="czTrustChips" style={{ display:'flex', gap:0, background:'rgba(255,255,255,.7)', borderRadius:14, border:`1px solid ${BDR}`, overflow:'hidden', backdropFilter:'blur(8px)' }}>
+              {[
+                { icon:<IcoBolt size={15}/>,    t:'Menos de 1 min',   sub:'Precio al instante',   c:'#F59E0B' },
+                { icon:<IcoLock size={15}/>,    t:'Sin compromiso',    sub:'Cancela cuando quieras', c:'#10B981' },
+                { icon:<IcoDiamond size={15}/>, t:'Precio real',       sub:'Sin letra chica',       c:B         },
+              ].map((b,i) => (
+                <div key={b.t} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2, padding:'10px 6px', borderRight: i < 2 ? `1px solid ${BDR}` : 'none' }}>
+                  <div style={{ width:28, height:28, borderRadius:8, background:`${b.c}15`, display:'grid', placeItems:'center', color:b.c }}>{b.icon}</div>
+                  <span style={{ fontSize:10, fontWeight:800, color:N, textAlign:'center', lineHeight:1.2 }}>{b.t}</span>
+                  <span style={{ fontSize:9, fontWeight:500, color:T3, textAlign:'center', lineHeight:1.2 }}>{b.sub}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -958,8 +960,14 @@ function ScreenWelcome({ onStart }) {
 
 // ─── SCREEN 1 — DIRECCIONES ───────────────────────────────────
 function ScreenAddresses({ state, setState, onNext, onBack }) {
-  const { from, to, distanceKm, durationMin } = state;
+  const { from, to, distanceKm } = state;
   const [loadingDist, setLoadingDist] = useState(false);
+  const [name,  setName]  = useState(state.name  || '');
+  const [phone, setPhone] = useState(state.phone || '');
+  const [email, setEmail] = useState(state.email || '');
+
+  const phoneOk = phone.replace(/\D/g, '').length >= 8;
+  const canContinue = from.address && to.address && name.trim().length >= 2 && phoneOk;
 
   useEffect(() => {
     if (!from.lat || !to.lat || distanceKm || loadingDist) return;
@@ -970,69 +978,106 @@ function ScreenAddresses({ state, setState, onNext, onBack }) {
       .finally(() => setLoadingDist(false));
   }, [from.lat, to.lat]);
 
+  const handleNext = () => {
+    setState(s => ({ ...s, name, phone, email }));
+    api.saveLead({ name, phone, from: from.address, to: to.address }).catch(() => {});
+    onNext();
+  };
+
   return (
     <div style={{ height: '100dvh', background: BG, display: 'flex', flexDirection: 'column' }}>
       <Header step={1} total={4} title="¿Desde dónde?" onBack={onBack}/>
 
-      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '16px 16px 0' }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '10px 16px 0' }}>
 
-        {/* Leaflet map */}
+        {/* Mapa compacto */}
         <LeafletRouteMap from={from} to={to} distanceKm={distanceKm}/>
 
-        {/* Address inputs */}
-        <div style={{ background: SURF, borderRadius: 16, border: `1px solid ${BDR}`, padding: '4px 14px', marginBottom: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0', borderBottom: `1px dashed ${BDR}` }}>
-            <div style={{ width: 10, height: 10, borderRadius: 99, background: B, flexShrink: 0 }}/>
+        {/* Direcciones */}
+        <div style={{ background: SURF, borderRadius: 16, border: `1px solid ${BDR}`, padding: '4px 14px', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: `1px dashed ${BDR}` }}>
+            <div style={{ width: 9, height: 9, borderRadius: 99, background: B, flexShrink: 0 }}/>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Retiro</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1 }}>Retiro</div>
               <AddressAutocomplete
                 value={from.address}
                 onChange={v => setState(s => ({ ...s, from: { address: v, lat: null, lng: null }, distanceKm: null, durationMin: null }))}
                 onSelect={({ address, lat, lng }) => setState(s => ({ ...s, from: { address, lat, lng } }))}
                 placeholder="Dirección de retiro…"
-                style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 14, fontWeight: 600, color: N, width: '100%', padding: 0, fontFamily: 'Inter,system-ui,sans-serif' }}
+                style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, fontWeight: 600, color: N, width: '100%', padding: 0, fontFamily: 'Inter,system-ui,sans-serif' }}
               />
             </div>
-            {from.lat && <Check size={16} color={SUC} strokeWidth={2.5}/>}
+            {from.lat && <Check size={15} color={SUC} strokeWidth={2.5}/>}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0' }}>
-            <div style={{ width: 10, height: 10, borderRadius: 99, background: SUC, flexShrink: 0 }}/>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0' }}>
+            <div style={{ width: 9, height: 9, borderRadius: 99, background: SUC, flexShrink: 0 }}/>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Entrega</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1 }}>Entrega</div>
               <AddressAutocomplete
                 value={to.address}
                 onChange={v => setState(s => ({ ...s, to: { address: v, lat: null, lng: null }, distanceKm: null, durationMin: null }))}
                 onSelect={({ address, lat, lng }) => setState(s => ({ ...s, to: { address, lat, lng } }))}
                 placeholder="Dirección de entrega…"
-                style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 14, fontWeight: 600, color: N, width: '100%', padding: 0, fontFamily: 'Inter,system-ui,sans-serif' }}
+                style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, fontWeight: 600, color: N, width: '100%', padding: 0, fontFamily: 'Inter,system-ui,sans-serif' }}
               />
             </div>
-            {to.lat && <Check size={16} color={SUC} strokeWidth={2.5}/>}
+            {to.lat && <Check size={15} color={SUC} strokeWidth={2.5}/>}
           </div>
         </div>
 
-        {/* Distance badge */}
-        {distanceKm && !loadingDist && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: 12, background: '#f0fdf4', border: `1.5px solid ${SUC}30`, marginBottom: 14 }}>
-            <div>
-              <span style={{ fontSize: 22, fontWeight: 900, color: B, letterSpacing: '-0.5px' }}>{distanceKm} km</span>
-              {durationMin && <span style={{ fontSize: 13, color: T2, marginLeft: 10 }}>· ~{durationMin} min</span>}
-            </div>
-            <span style={{ fontSize: 12, fontWeight: 700, color: SUC, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Check size={13} color={SUC} strokeWidth={2.5}/> Calculada
-            </span>
+        {/* Distancia inline */}
+        {(distanceKm || loadingDist) && (
+          <div style={{ fontSize: 12, color: loadingDist ? T3 : SUC, fontWeight: 700, marginBottom: 8, display:'flex', alignItems:'center', gap:5 }}>
+            {loadingDist ? '⏳ Calculando…' : <><Check size={13} color={SUC} strokeWidth={2.5}/>{distanceKm} km calculados</>}
           </div>
         )}
-        {loadingDist && <div style={{ fontSize: 12, color: T3, fontWeight: 600, marginBottom: 14 }}>⏳ Calculando distancia…</div>}
 
-        <div style={{ padding: '10px 14px', borderRadius: 12, background: `${C}12`, border: `1px solid ${C}30`, fontSize: 12, color: T2, lineHeight: 1.45, marginBottom: 16 }}>
-          <strong style={{ color: N }}>💡 Tip:</strong> Selecciona la sugerencia al escribir para calcular la distancia exacta.
+        {/* Datos de contacto */}
+        <div style={{ background: SURF, borderRadius: 16, border: `1px solid ${BDR}`, padding: '10px 14px', marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: B, marginBottom: 8, display:'flex', alignItems:'center', gap:5 }}>
+            <Phone size={13} color={B} strokeWidth={2}/> Tus datos de contacto
+          </div>
+
+          {/* Nombre + Teléfono en dos columnas */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: T3, marginBottom: 4 }}>Nombre <span style={{ color:'#EF4444' }}>*</span></div>
+              <div style={{ display:'flex', alignItems:'center', gap:7, padding:'9px 10px', borderRadius:10, border:`1.5px solid ${name.trim().length>=2?B:BDR}`, background:BG, transition:'border-color .15s' }}>
+                <Users size={13} color={B} strokeWidth={1.8}/>
+                <input type="text" value={name} onChange={e=>setName(e.target.value)} autoComplete="name"
+                  placeholder="Juan Pérez"
+                  style={{ border:'none', outline:'none', background:'transparent', fontSize:13, color:N, fontFamily:'Inter,system-ui,sans-serif', width:'100%', padding:0 }}/>
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: T3, marginBottom: 4 }}>WhatsApp <span style={{ color:'#EF4444' }}>*</span></div>
+              <div style={{ display:'flex', alignItems:'center', gap:7, padding:'9px 10px', borderRadius:10, border:`1.5px solid ${phoneOk?B:BDR}`, background:BG, transition:'border-color .15s' }}>
+                <Phone size={13} color={B} strokeWidth={1.8}/>
+                <input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} autoComplete="tel"
+                  placeholder="+56 9…"
+                  style={{ border:'none', outline:'none', background:'transparent', fontSize:13, color:N, fontFamily:'Inter,system-ui,sans-serif', width:'100%', padding:0 }}/>
+              </div>
+            </div>
+          </div>
+
+          {/* Email opcional */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: T3, marginBottom: 4 }}>Email <span style={{ color:T3, fontWeight:500 }}>(opcional)</span></div>
+            <div style={{ display:'flex', alignItems:'center', gap:7, padding:'9px 10px', borderRadius:10, border:`1.5px solid ${BDR}`, background:BG }}>
+              <Mail size={13} color={B} strokeWidth={1.8}/>
+              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email"
+                placeholder="juan@correo.cl"
+                style={{ border:'none', outline:'none', background:'transparent', fontSize:13, color:N, fontFamily:'Inter,system-ui,sans-serif', width:'100%', padding:0 }}/>
+            </div>
+          </div>
         </div>
+
+        <div style={{ fontSize: 11, color: T3, marginBottom: 12 }}>🔒 Datos privados — solo para coordinar tu traslado.</div>
       </div>
 
       <CtaBar>
         <BtnBack onClick={onBack}/>
-        <BtnPrimary onClick={onNext} disabled={!from.address || !to.address}>
+        <BtnPrimary onClick={handleNext} disabled={!canContinue}>
           Continuar <ArrowRight size={18} strokeWidth={2.4}/>
         </BtnPrimary>
       </CtaBar>
@@ -1045,6 +1090,7 @@ function ScreenItems({ state, setState, onNext, onBack }) {
   const { inventory, freeText } = state;
   const [activeTab, setActiveTab] = useState(GROUPED[0].id);
   const [atBottom, setAtBottom]   = useState(false);
+  const [search, setSearch]       = useState('');
   const tabsRef    = useRef(null);
   const contentRef = useRef(null);
 
@@ -1076,6 +1122,9 @@ function ScreenItems({ state, setState, onNext, onBack }) {
   };
 
   const selectedItems = CATALOG.filter(c => (inventory[c.id] || 0) > 0).sort((a, b) => b.vol - a.vol);
+  const searchResults = search.trim()
+    ? CATALOG.filter(c => c.name.toLowerCase().includes(search.trim().toLowerCase()))
+    : null;
 
   return (
     <div style={{ height: '100dvh', background: BG, display: 'flex', flexDirection: 'column' }}>
@@ -1084,15 +1133,26 @@ function ScreenItems({ state, setState, onNext, onBack }) {
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
       <div ref={contentRef} onScroll={onScroll} style={{ overflowY: 'auto', height: '100%', padding: '14px 16px 0' }}>
 
-        {/* Tip banner */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '10px 13px', borderRadius: 12, background: `${B}09`, border: `1px solid ${B}20`, marginBottom: 12 }}>
-          <span style={{ fontSize: 18, flexShrink: 0, lineHeight: 1.3 }}>💡</span>
-          <span style={{ fontSize: 12, color: B, fontWeight: 600, lineHeight: 1.5 }}>
-            Selecciona del catálogo <strong>o escribe abajo</strong> lo que llevas — analizamos todo y calculamos el precio igual.
-          </span>
+        {/* Search bar */}
+        <div style={{ position:'relative', marginBottom:10 }}>
+          <div style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', pointerEvents:'none' }}>
+            <Search size={15} color={search ? B : T3} strokeWidth={2}/>
+          </div>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar artículo — ej: sofá, nevera, cama…"
+            style={{ width:'100%', boxSizing:'border-box', paddingLeft:36, paddingRight: search ? 36 : 12, paddingTop:11, paddingBottom:11, borderRadius:12, border:`1.5px solid ${search ? B : BDR}`, background:SURF, fontSize:14, color:N, fontFamily:'Inter,system-ui,sans-serif', outline:'none' }}
+          />
+          {search && (
+            <button type="button" onClick={() => setSearch('')} style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', padding:4, display:'grid', placeItems:'center' }}>
+              <X size={14} color={T3} strokeWidth={2.5}/>
+            </button>
+          )}
         </div>
 
-        {/* Counter */}
+        {/* Counter + clear */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: T2 }}>
             {totalItems > 0 ? `${totalItems} artículo${totalItems !== 1 ? 's' : ''} seleccionado${totalItems !== 1 ? 's' : ''}` : 'Selecciona tus artículos'}
@@ -1102,66 +1162,70 @@ function ScreenItems({ state, setState, onNext, onBack }) {
           )}
         </div>
 
-        {/* Category tabs — mouse wheel scrolls horizontally on desktop */}
-        <div ref={tabsRef} onWheel={onWheelTabs} style={{ display: 'flex', gap: 6, overflowX: 'auto', margin: '0 -16px', padding: '0 16px 8px', scrollbarWidth: 'thin', scrollbarColor: `${BDR} transparent` }}>
-          {GROUPED.map(g => {
-            const cnt = countCat(g.id);
-            const active = activeTab === g.id;
-            return (
-              <button key={g.id} type="button" onClick={() => setActiveTab(g.id)} style={{
-                flex: '0 0 auto', padding: '7px 13px', borderRadius: 99, cursor: 'pointer',
-                background: active ? N : SURF, color: active ? '#fff' : T2,
-                fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5,
-                border: `1.5px solid ${active ? N : BDR}`, fontFamily: 'Inter,system-ui,sans-serif',
-              }}>
-                <span>{g.emoji}</span>{g.label}
-                {cnt > 0 && <span style={{ background: B, color: '#fff', fontSize: 11, fontWeight: 800, padding: '1px 7px', borderRadius: 99 }}>{cnt}</span>}
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ fontSize: 11, color: T3, textAlign: 'right', marginBottom: 10, marginTop: 1 }}>
-          ← desliza o usa la rueda del ratón →
-        </div>
-
-        {/* Item grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(148px,1fr))', gap: 8, marginBottom: 14 }}>
-          {GROUPED.find(g => g.id === activeTab)?.items.map(item => {
-            const qty = getQty(item.id);
-            return (
-              <div key={item.id} style={{
-                background: SURF, borderRadius: 14, padding: '12px 10px',
-                border: `1.5px solid ${qty > 0 ? B : BDR}`,
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                boxShadow: qty > 0 ? `0 0 0 3px ${B}16` : 'none',
-              }}>
-                <span style={{ fontSize: 28 }}>{item.icon}</span>
-                <div style={{ fontSize: 12, fontWeight: 700, color: N, textAlign: 'center', lineHeight: 1.3 }}>{item.name}</div>
-                <Stepper value={qty} onChange={n => setQty(item.id, n)}/>
+        {searchResults ? (
+          /* ── Resultados de búsqueda ── */
+          <div style={{ marginBottom: 14 }}>
+            {searchResults.length === 0 ? (
+              <div style={{ textAlign:'center', padding:'28px 0', color:T3, fontSize:13 }}>
+                No encontramos "{search}" — escríbelo abajo y lo incluimos igual.
               </div>
-            );
-          })}
-        </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(148px,1fr))', gap: 8 }}>
+                {searchResults.map(item => {
+                  const qty = getQty(item.id);
+                  return (
+                    <div key={item.id} style={{ background:SURF, borderRadius:14, padding:'12px 10px', border:`1.5px solid ${qty>0?B:BDR}`, display:'flex', flexDirection:'column', alignItems:'center', gap:6, boxShadow:qty>0?`0 0 0 3px ${B}16`:'none' }}>
+                      <span style={{ fontSize:28 }}>{item.icon}</span>
+                      <div style={{ fontSize:12, fontWeight:700, color:N, textAlign:'center', lineHeight:1.3 }}>{item.name}</div>
+                      <Stepper value={qty} onChange={n => setQty(item.id, n)}/>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* ── Vista por categorías ── */
+          <>
+            <div ref={tabsRef} onWheel={onWheelTabs} style={{ display:'flex', gap:6, overflowX:'auto', margin:'0 -16px', padding:'0 16px 8px', scrollbarWidth:'none' }}>
+              {GROUPED.map(g => {
+                const cnt = countCat(g.id);
+                const active = activeTab === g.id;
+                return (
+                  <button key={g.id} type="button" onClick={() => setActiveTab(g.id)} style={{ flex:'0 0 auto', padding:'7px 13px', borderRadius:99, cursor:'pointer', background:active?N:SURF, color:active?'#fff':T2, fontSize:13, fontWeight:700, display:'flex', alignItems:'center', gap:5, border:`1.5px solid ${active?N:BDR}`, fontFamily:'Inter,system-ui,sans-serif' }}>
+                    <span>{g.emoji}</span>{g.label}
+                    {cnt > 0 && <span style={{ background:B, color:'#fff', fontSize:11, fontWeight:800, padding:'1px 7px', borderRadius:99 }}>{cnt}</span>}
+                  </button>
+                );
+              })}
+            </div>
 
-        {/* Live selection summary with X buttons */}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(148px,1fr))', gap:8, marginBottom:14, marginTop:8 }}>
+              {GROUPED.find(g => g.id === activeTab)?.items.map(item => {
+                const qty = getQty(item.id);
+                return (
+                  <div key={item.id} style={{ background:SURF, borderRadius:14, padding:'12px 10px', border:`1.5px solid ${qty>0?B:BDR}`, display:'flex', flexDirection:'column', alignItems:'center', gap:6, boxShadow:qty>0?`0 0 0 3px ${B}16`:'none' }}>
+                    <span style={{ fontSize:28 }}>{item.icon}</span>
+                    <div style={{ fontSize:12, fontWeight:700, color:N, textAlign:'center', lineHeight:1.3 }}>{item.name}</div>
+                    <Stepper value={qty} onChange={n => setQty(item.id, n)}/>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {/* Selección activa */}
         {selectedItems.length > 0 && (
-          <div style={{ background: SURF, borderRadius: 14, border: `1.5px solid ${B}22`, padding: '12px 14px', marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 8 }}>Lo que llevas</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div style={{ background:SURF, borderRadius:14, border:`1.5px solid ${B}22`, padding:'10px 14px', marginBottom:10 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:T3, textTransform:'uppercase', letterSpacing:0.7, marginBottom:6 }}>Lo que llevas</div>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
               {selectedItems.map(item => (
-                <span key={item.id} style={{
-                  fontSize: 12, fontWeight: 600, padding: '5px 8px 5px 10px', borderRadius: 99,
-                  background: '#EFF5FF', border: `1.5px solid ${B}28`, color: N,
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                }}>
+                <span key={item.id} style={{ fontSize:12, fontWeight:600, padding:'4px 8px 4px 10px', borderRadius:99, background:'#EFF5FF', border:`1.5px solid ${B}28`, color:N, display:'inline-flex', alignItems:'center', gap:4 }}>
                   <span>{item.icon}</span>
-                  {inventory[item.id] > 1 && <strong style={{ color: B }}>{inventory[item.id]}×</strong>}
+                  {inventory[item.id]>1 && <strong style={{ color:B }}>{inventory[item.id]}×</strong>}
                   <span>{item.name}</span>
-                  <button type="button" onClick={() => removeItem(item.id)} style={{
-                    background: `${B}18`, border: 'none', borderRadius: '50%', cursor: 'pointer',
-                    width: 18, height: 18, display: 'grid', placeItems: 'center', flexShrink: 0,
-                    padding: 0, marginLeft: 2,
-                  }}>
+                  <button type="button" onClick={() => removeItem(item.id)} style={{ background:`${B}18`, border:'none', borderRadius:'50%', cursor:'pointer', width:18, height:18, display:'grid', placeItems:'center', flexShrink:0, padding:0, marginLeft:2 }}>
                     <X size={10} color={B} strokeWidth={2.5}/>
                   </button>
                 </span>
@@ -1170,16 +1234,18 @@ function ScreenItems({ state, setState, onNext, onBack }) {
           </div>
         )}
 
-        {/* Free text */}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 2 }}>¿Llevas algo que no está en el catálogo?</div>
-          <div style={{ fontSize: 11, color: T2, marginBottom: 7 }}>Escríbelo con palabras — lo analizamos y lo incluimos en el precio.</div>
+        {/* Campo libre — siempre visible y destacado */}
+        <div style={{ marginBottom:14, background:`${B}06`, borderRadius:14, border:`1.5px solid ${freeText.trim()?B:`${B}30`}`, padding:'12px 14px' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+            <Sparkles size={14} color={B} strokeWidth={2}/>
+            <span style={{ fontSize:12, fontWeight:800, color:B }}>¿Llevas algo que no está arriba?</span>
+          </div>
           <textarea
             value={freeText}
             onChange={e => setState(s => ({ ...s, freeText: e.target.value }))}
-            placeholder="Ej: bicicleta, piano, caja de herramientas, plantas grandes, moto…"
+            placeholder="Escríbelo aquí — bicicleta, piano, plantas, moto, herramientas… lo incluimos en el precio."
             rows={2}
-            style={{ width: '100%', boxSizing: 'border-box', resize: 'none', borderRadius: 12, border: `1.5px solid ${freeText.trim() ? B : BDR}`, padding: '10px 12px', fontSize: 13, color: N, fontFamily: 'Inter,system-ui,sans-serif', outline: 'none', background: SURF }}
+            style={{ width:'100%', boxSizing:'border-box', resize:'none', border:'none', background:'transparent', padding:0, fontSize:13, color:N, fontFamily:'Inter,system-ui,sans-serif', outline:'none', lineHeight:1.5 }}
           />
         </div>
       </div>
@@ -1472,70 +1538,52 @@ function ScreenContact({ state, onBack, onSubmit, saving }) {
     <div style={{ height: '100dvh', background: BG, display: 'flex', flexDirection: 'column' }}>
       <Header step={4} total={4} title="Tus datos" onBack={onBack}/>
 
-      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '18px 16px 0' }}>
-        <p style={{ fontSize: 14, color: T2, lineHeight: 1.55, margin: '0 0 14px' }}>
+      <div style={{ flex: 1, display:'flex', flexDirection:'column', justifyContent:'center', padding: '12px 16px' }}>
+        <p style={{ fontSize: 13, color: T2, lineHeight: 1.45, margin: '0 0 14px' }}>
           {state.manualReview
             ? 'Completa tus datos y te entregamos el precio exacto para tu traslado.'
-            : 'Déjanos tus datos y te contactamos para confirmar detalles y coordinar el traslado.'
+            : 'Ingresa tus datos para ver tu precio al instante.'
           }
         </p>
 
-        {/* WA direct link */}
-        <a href="https://wa.me/56952023504?text=Hola%20MUVE!%20%F0%9F%91%8B%20Quiero%20consultar%20sobre%20un%20traslado." target="_blank" rel="noreferrer"
-          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 12, background: '#f0fdf4', border: '1.5px solid rgba(37,211,102,.30)', textDecoration: 'none', marginBottom: 18 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 10, background: '#25D366', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-            <svg width={18} height={18} viewBox="0 0 24 24" fill="white"><path d="M20.5 3.5A11 11 0 003.4 17.4L2 22l4.7-1.4A11 11 0 1020.5 3.5z"/></svg>
-          </div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#15803D' }}>¿Preferís coordinar directo?</div>
-            <div style={{ fontSize: 11, color: '#16A34A', fontWeight: 600, marginTop: 1 }}>Escríbenos por WhatsApp →</div>
-          </div>
-        </a>
-
-        {/* Price mini recap — solo si hay precio calculado */}
-        {state.result && !state.manualReview && (
-          <div style={{ background: GRAD_DEEP, borderRadius: 16, padding: '14px 18px', marginBottom: 22, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,.6)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Tu estimado</div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: '#fff', letterSpacing: '-0.7px' }}>{fmt(state.result?.price)}</div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,.6)', marginTop: 2 }}>{state.result?.vehicleName}</div>
-            </div>
-            <span style={{ fontSize: 38 }}>{state.result?.vehicleIcon}</span>
-          </div>
-        )}
-
         {/* Name */}
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: T2, marginBottom: 6 }}>Nombre <span style={{ color: '#EF4444' }}>*</span></div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 14px', borderRadius: 12, border: `1.5px solid ${name.trim().length >= 2 ? B : BDR}`, background: SURF, transition: 'border-color .15s' }}>
-            <Users size={16} color={B} strokeWidth={1.8}/>
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T2, marginBottom: 5 }}>Nombre <span style={{ color: '#EF4444' }}>*</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${name.trim().length >= 2 ? B : BDR}`, background: SURF, transition: 'border-color .15s' }}>
+            <Users size={15} color={B} strokeWidth={1.8}/>
             <input type="text" value={name} onChange={e => setName(e.target.value)}
-              placeholder="Juan Pérez" style={inputStyle}/>
+              placeholder="Juan Pérez" autoComplete="name" style={inputStyle}/>
           </div>
         </div>
 
         {/* Phone */}
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: T2, marginBottom: 6 }}>Teléfono / WhatsApp <span style={{ color: '#EF4444' }}>*</span></div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 14px', borderRadius: 12, border: `1.5px solid ${phoneOk ? B : BDR}`, background: SURF, transition: 'border-color .15s' }}>
-            <Phone size={16} color={B} strokeWidth={1.8}/>
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T2, marginBottom: 5 }}>Teléfono / WhatsApp <span style={{ color: '#EF4444' }}>*</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${phoneOk ? B : BDR}`, background: SURF, transition: 'border-color .15s' }}>
+            <Phone size={15} color={B} strokeWidth={1.8}/>
             <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
-              placeholder="+56 9 1234 5678" style={inputStyle}/>
+              placeholder="+56 9 1234 5678" autoComplete="tel" style={inputStyle}/>
           </div>
         </div>
 
         {/* Email optional */}
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: T2, marginBottom: 6 }}>Email <span style={{ color: T3, fontWeight: 500 }}>(opcional)</span></div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 14px', borderRadius: 12, border: `1.5px solid ${BDR}`, background: SURF }}>
-            <Mail size={16} color={B} strokeWidth={1.8}/>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T2, marginBottom: 5 }}>Email <span style={{ color: T3, fontWeight: 500 }}>(opcional)</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${BDR}`, background: SURF }}>
+            <Mail size={15} color={B} strokeWidth={1.8}/>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-              placeholder="juan@correo.cl" style={inputStyle}/>
+              placeholder="juan@correo.cl" autoComplete="email" style={inputStyle}/>
           </div>
         </div>
 
-        <div style={{ padding: '11px 14px', borderRadius: 12, background: '#f0fdf4', border: '1px solid rgba(24,169,87,.2)', fontSize: 12, color: T2, lineHeight: 1.5, marginBottom: 16 }}>
-          🔒 Tus datos son privados. Te contactamos solo para coordinar tu traslado.
+        {/* Privacy + WA inline */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+          <span style={{ fontSize:11, color:T3, lineHeight:1.4 }}>🔒 Datos privados. Solo te contactamos para tu traslado.</span>
+          <a href="https://wa.me/56952023504" target="_blank" rel="noreferrer"
+            style={{ flexShrink:0, display:'flex', alignItems:'center', gap:5, padding:'6px 10px', borderRadius:99, background:'#f0fdf4', border:'1px solid rgba(37,211,102,.3)', textDecoration:'none', fontSize:11, fontWeight:700, color:'#15803D', whiteSpace:'nowrap' }}>
+            <svg width={13} height={13} viewBox="0 0 24 24" fill="#25D366"><path d="M20.5 3.5A11 11 0 003.4 17.4L2 22l4.7-1.4A11 11 0 1020.5 3.5z"/></svg>
+            WhatsApp
+          </a>
         </div>
       </div>
 
@@ -1543,10 +1591,10 @@ function ScreenContact({ state, onBack, onSubmit, saving }) {
         <BtnBack onClick={onBack}/>
         <BtnPrimary onClick={() => valid && !saving && onSubmit(name.trim(), phone.trim(), email.trim())} disabled={!valid || saving}>
           {saving
-            ? <><span className="czSavingDot">●</span> Enviando…</>
+            ? <><span className="czSavingDot">●</span> Calculando…</>
             : state.manualReview
               ? <>Saber el precio exacto <ArrowRight size={16} strokeWidth={2.4}/></>
-              : <><Check size={16} strokeWidth={2.5}/> Solicitar cotización</>
+              : <>Ver mi precio <ArrowRight size={16} strokeWidth={2.4}/></>
           }
         </BtnPrimary>
       </CtaBar>
@@ -1901,6 +1949,7 @@ const INIT = {
   result: null,
   selectedHelpers: 0,
   manualReview: false,
+  name: '', phone: '', email: '',
 };
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -1959,11 +2008,11 @@ export default function CotizadorView() {
       const isManualReview = res.needsManualReview || res.price > 400000;
       if (isManualReview) {
         setState(s => ({ ...s, result: res, manualReview: true, step: 5 }));
-        trackStep(5);
-        _trackEventDB(7); // llegó al formulario de contacto (revisión manual salta la pantalla de precio)
+        trackStep(6);
+        _trackEventDB(7);
       } else {
         setState(s => ({ ...s, result: res, manualReview: false, step: 4 }));
-        trackStep(4);
+        trackStep(5);
         _trackEventDB(6, res.detectedType);
       }
     } catch {
@@ -2016,9 +2065,9 @@ export default function CotizadorView() {
     }
 
     setSaving(false);
-    setState(s => ({ ...s, step: 6 }));
+    setState(s => ({ ...s, step: 5 }));
     setFrameHidden(false);
-    trackStep(6);
+    trackStep(5);
   };
 
   const restart = () => setState(INIT);
@@ -2051,7 +2100,7 @@ export default function CotizadorView() {
     setTruckPhase('departing');
     await sleep(2000);
     // Mostrar pantalla de éxito
-    setState(s => ({ ...s, step: 6 }));
+    setState(s => ({ ...s, step: 5 }));
     setFrameHidden(false);
   };
 
@@ -2064,10 +2113,11 @@ export default function CotizadorView() {
           const invArr = Object.keys(state.inventory)
             .filter(id => state.inventory[id] > 0)
             .map(id => ({ id, qty: state.inventory[id] }));
-          const vol = totalVol(invArr); // m3 totales seleccionados
+          const vol = totalVol(invArr);
           if (vol > 30) {
-            setState(s => ({ ...s, manualReview: true, step: 5 }));
-            trackStep(5); _trackEventDB(7);
+            setState(s => ({ ...s, manualReview: true }));
+            calculate();
+            trackStep(3); _trackEventDB(7);
             frameRef.current?.scrollTo?.({ top: 0 });
           } else {
             setState(s => ({ ...s, manualReview: false }));
@@ -2075,10 +2125,9 @@ export default function CotizadorView() {
           }
         }}
         onBack={() => go(1)}/>;
-      case 3: return <ScreenExtras state={state} setState={setState} onNext={calculate} onBack={() => go(2)}/>;
-      case 4: return <ScreenResult state={state} onRestart={restart} onBack={() => go(3)} onNext={h => { setState(s => ({...s, selectedHelpers: h})); go(5); }}/>;
-      case 5: return <ScreenContact state={state} onBack={() => go(state.manualReview ? 2 : 4)} onSubmit={submitContact} saving={saving}/>;
-      case 6: return <ScreenSuccess state={state} onRestart={restart}/>;
+      case 3: return <ScreenExtras state={state} setState={setState} onNext={() => calculate()} onBack={() => go(2)}/>;
+      case 4: return <ScreenResult state={state} onRestart={restart} onBack={() => go(3)} onNext={h => { setState(s => ({...s, selectedHelpers: h})); submitContact(state.name, state.phone, state.email); }}/>;
+      case 5: return <ScreenSuccess state={state} onRestart={restart}/>;
       default: return <ScreenWelcome onStart={() => go(1)}/>;
     }
   })();

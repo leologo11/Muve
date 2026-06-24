@@ -893,6 +893,33 @@ async function replaceSupabaseQuoteItems(quoteId, items = []) {
   });
 }
 
+// POST /api/public/lead — captura parcial antes de mostrar precio
+router.post('/lead', publicQuoteLimiter, async (req, res) => {
+  try {
+    const name  = (req.body.name  || '').toString().trim().slice(0, 120);
+    const phone = (req.body.phone || '').toString().trim().slice(0, 40);
+    if (!name || !phone) return res.status(400).json({ error: 'name and phone required' });
+
+    const originAddress      = (req.body.from || '').toString().trim().slice(0, 300);
+    const destinationAddress = (req.body.to   || '').toString().trim().slice(0, 300);
+
+    if (isSupabaseEnabled()) {
+      await supabaseRequest('POST', '/quotes', {
+        service_type: 'flete',
+        contact_person: name,
+        contact_phone: phone,
+        origin_address: originAddress,
+        destination_address: destinationAddress,
+        status: 'draft',
+        client_notes: 'Lead parcial — cotizador web (pre-precio)',
+      });
+    }
+    res.json({ ok: true });
+  } catch {
+    res.json({ ok: true }); // silencioso — no bloquear al usuario
+  }
+});
+
 // POST /api/public/quotes - ingreso desde la landing publica
 router.post('/quotes', publicQuoteLimiter, validatePublicQuotePayload, quoteSpamGuard, async (req, res) => {
   try {

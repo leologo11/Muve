@@ -146,6 +146,7 @@ export const api = {
   deleteTierTemplate: (id) => request('DELETE', `/tier-templates/${id}`),
 
   // Quotes
+  saveLead: (data) => request('POST', '/public/lead', data),
   createPublicQuote: (data) => request('POST', '/public/quotes', data),
   getQuotes: () => request('GET', '/quotes'),
   getQuote: (id) => request('GET', `/quotes/${id}`),
