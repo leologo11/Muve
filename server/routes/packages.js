@@ -10,6 +10,31 @@ const router = Router();
 
 function normStr(s) { return (s || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 
+async function fireDeliveryWebhook(pkg) {
+  if (!pkg.company_id) return;
+  try {
+    const companies = await supabaseRequest(`/companies${qs({ id: `eq.${pkg.company_id}`, select: 'webhook_url,webhook_name,name' })}`);
+    const company = companies?.[0];
+    if (!company?.webhook_url) return;
+    fetch(company.webhook_url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: 'package_delivered',
+        webhookName: company.webhook_name || company.name,
+        trackingId: pkg.tracking_id,
+        customerName: [pkg.customer_name, pkg.customer_last_name].filter(Boolean).join(' '),
+        customerPhone: pkg.customer_phone || null,
+        address: pkg.address || null,
+        commune: pkg.commune || null,
+        deliveredAt: new Date().toISOString(),
+      }),
+    }).catch(() => {});
+  } catch {
+    // no bloquear el flujo si el webhook falla
+  }
+}
+
 async function patchPackageWithSchemaFallback(id, update) {
   try {
     return await supabaseRequest(`/packages${qs({ id: `eq.${id}` })}`, {
@@ -487,6 +512,7 @@ router.patch('/:id', async (req, res) => {
       update.updated_at = new Date().toISOString();
       const rows = await patchPackageWithSchemaFallback(req.params.id, update);
       await syncRouteStats(pkg.route_id);
+      if (status === 'entregado') fireDeliveryWebhook({ ...pkg, ...update });
       return res.json(normalizePackage(rows[0]));
     }
 
@@ -508,6 +534,7 @@ router.patch('/:id', async (req, res) => {
       if (rest.deliveryMeta !== undefined) update.delivery_meta = rest.deliveryMeta || {};
       if (rest.routeId !== undefined) update.route_id = rest.routeId;
       if (rest.aiFlags !== undefined) update.ai_flags = rest.aiFlags;
+      const wasDelivered = pkg.status === 'entregado';
       if (rest.status !== undefined) {
         update.status = rest.status;
         if (rest.status === 'entregado' && !pkg.delivered_at) {
@@ -529,6 +556,7 @@ router.patch('/:id', async (req, res) => {
       const oldRouteId = pkg.route_id || null;
       if (oldRouteId) await syncRouteStats(oldRouteId);
       if (rest.routeId && rest.routeId !== oldRouteId) await syncRouteStats(rest.routeId);
+      if (rest.status === 'entregado' && !wasDelivered) fireDeliveryWebhook({ ...pkg, ...update });
       return res.json(normalizePackage(rows[0]));
     }
 

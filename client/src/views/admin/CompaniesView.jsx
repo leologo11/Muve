@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
 
-const empty = { name: '', rut: '', address: '', contactPerson: '', contactEmail: '', contactPhone: '', notes: '' };
+const empty = { name: '', rut: '', address: '', contactPerson: '', contactEmail: '', contactPhone: '', notes: '', webhookUrl: '', webhookName: '' };
 
 export default function CompaniesView() {
   const [companies, setCompanies] = useState([]);
@@ -34,6 +34,8 @@ export default function CompaniesView() {
       contactEmail:  c.contactEmail  || '',
       contactPhone:  c.contactPhone  || '',
       notes:         c.notes         || '',
+      webhookUrl:    c.webhookUrl    || '',
+      webhookName:   c.webhookName   || '',
     });
     setMode(c);
   };
@@ -154,6 +156,36 @@ export default function CompaniesView() {
               style={{ ...inp, resize: 'vertical', fontFamily: 'inherit' }}
             />
 
+            {/* Webhook */}
+            <div style={{ margin: '16px 0 4px', padding: '10px 12px', borderRadius: 10, background: '#f0f4ff', border: '1px solid #3b82f630' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: '#0052FF', textTransform: 'uppercase', marginBottom: 8 }}>🔗 Webhook — notificación de entrega</div>
+              <div style={{ fontSize: 11, color: '#555', marginBottom: 10, lineHeight: 1.4 }}>
+                Si configuras un webhook, MUVE enviará un POST automático cuando se marque un paquete de esta empresa como <strong>entregado</strong>.
+              </div>
+
+              <Label>Nombre del webhook</Label>
+              <input
+                value={form.webhookName}
+                onChange={e => set('webhookName', e.target.value)}
+                placeholder="Ej: LeadConnector — Notificación entrega"
+                style={inp}
+              />
+
+              <Label>URL del webhook</Label>
+              <input
+                value={form.webhookUrl}
+                onChange={e => set('webhookUrl', e.target.value)}
+                placeholder="https://services.leadconnectorhq.com/hooks/…"
+                style={{ ...inp, fontFamily: 'monospace', fontSize: 12 }}
+                type="url"
+              />
+              {form.webhookUrl && (
+                <div style={{ fontSize: 11, color: '#16a34a', marginTop: 6, fontWeight: 600 }}>
+                  ✅ Webhook activo — se disparará al entregar cada paquete de esta empresa
+                </div>
+              )}
+            </div>
+
             <button
               onClick={handleSave}
               disabled={saving}
@@ -212,6 +244,13 @@ function CompanyCard({ company: c, onEdit, onDelete }) {
             {c.notes && (
               <div style={{ fontSize: 11, color: '#3366cc', background: '#3b82f608', borderRadius: 6, padding: '5px 9px', marginTop: 2 }}>
                 📝 {c.notes}
+              </div>
+            )}
+            {c.webhookUrl && (
+              <div style={{ fontSize: 11, color: '#0052FF', background: '#0052FF0d', borderRadius: 6, padding: '5px 9px', marginTop: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span>🔗</span>
+                <span style={{ fontWeight: 700 }}>Webhook activo:</span>
+                <span style={{ color: '#555' }}>{c.webhookName || 'Sin nombre'}</span>
               </div>
             )}
           </div>
