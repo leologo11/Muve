@@ -16,22 +16,25 @@ async function fireDeliveryWebhook(pkg) {
     const companies = await supabaseRequest(`/companies${qs({ id: `eq.${pkg.company_id}`, select: 'webhook_url,webhook_name,name' })}`);
     const company = companies?.[0];
     if (!company?.webhook_url) return;
-    fetch(company.webhook_url, {
+    const payload = {
+      event: 'package_delivered',
+      webhookName: company.webhook_name || company.name,
+      trackingId: pkg.tracking_id,
+      customerName: [pkg.customer_name, pkg.customer_last_name].filter(Boolean).join(' '),
+      customerPhone: pkg.customer_phone || null,
+      address: pkg.address || null,
+      commune: pkg.commune || null,
+      deliveredAt: new Date().toISOString(),
+    };
+    console.log(`[webhook] Disparando para empresa "${company.name}" → ${company.webhook_url}`);
+    const res = await fetch(company.webhook_url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event: 'package_delivered',
-        webhookName: company.webhook_name || company.name,
-        trackingId: pkg.tracking_id,
-        customerName: [pkg.customer_name, pkg.customer_last_name].filter(Boolean).join(' '),
-        customerPhone: pkg.customer_phone || null,
-        address: pkg.address || null,
-        commune: pkg.commune || null,
-        deliveredAt: new Date().toISOString(),
-      }),
-    }).catch(() => {});
-  } catch {
-    // no bloquear el flujo si el webhook falla
+      body: JSON.stringify(payload),
+    });
+    console.log(`[webhook] Respuesta: ${res.status} ${res.statusText} — tracking: ${pkg.tracking_id}`);
+  } catch (err) {
+    console.error(`[webhook] Error al disparar webhook empresa ${pkg.company_id}:`, err.message);
   }
 }
 
@@ -650,6 +653,35 @@ router.patch('/reorder/batch', requireRole('admin'), async (req, res) => {
       })
     ));
     return res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/packages/webhook-test/:companyId — dispara webhook de prueba (solo admin)
+router.post('/webhook-test/:companyId', requireRole('admin'), async (req, res) => {
+  try {
+    const companies = await supabaseRequest(`/companies${qs({ id: `eq.${req.params.companyId}`, select: 'webhook_url,webhook_name,name' })}`);
+    const company = companies?.[0];
+    if (!company) return res.status(404).json({ error: 'Empresa no encontrada' });
+    if (!company.webhook_url) return res.status(400).json({ error: 'Esta empresa no tiene webhook configurado' });
+    const payload = {
+      event: 'package_delivered',
+      webhookName: company.webhook_name || company.name,
+      trackingId: 'PKG-TEST-0000',
+      customerName: 'Cliente de Prueba',
+      customerPhone: '+56900000000',
+      address: 'Dirección de prueba 123',
+      commune: 'Santiago',
+      deliveredAt: new Date().toISOString(),
+    };
+    const response = await fetch(company.webhook_url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const text = await response.text().catch(() => '');
+    res.json({ ok: response.ok, status: response.status, statusText: response.statusText, response: text.slice(0, 500), payload });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

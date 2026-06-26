@@ -147,6 +147,7 @@ export const api = {
 
   // Quotes
   saveLead: (data) => request('POST', '/public/lead', data),
+  testWebhook: (companyId) => request('POST', `/packages/webhook-test/${companyId}`),
   createPublicQuote: (data) => request('POST', '/public/quotes', data),
   getQuotes: () => request('GET', '/quotes'),
   getQuote: (id) => request('GET', `/quotes/${id}`),

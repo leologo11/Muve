@@ -206,6 +206,23 @@ export default function CompaniesView() {
 
 function CompanyCard({ company: c, onEdit, onDelete }) {
   const [expanded, setExpanded] = useState(false);
+  const [testing, setTesting]   = useState(false);
+
+  const testWebhook = async () => {
+    setTesting(true);
+    try {
+      const res = await api.testWebhook(c._id);
+      if (res.ok) {
+        toast(`✅ Webhook OK (${res.status}) — el receptor respondió correctamente`);
+      } else {
+        toast(`⚠️ Webhook respondió con error ${res.status}: ${res.statusText}`);
+      }
+    } catch (err) {
+      toast('❌ No se pudo conectar al webhook: ' + err.message);
+    } finally {
+      setTesting(false);
+    }
+  };
 
   return (
     <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 14, marginBottom: 10, overflow: 'hidden', boxShadow: '0 1px 4px #0000000a' }}>
@@ -247,10 +264,15 @@ function CompanyCard({ company: c, onEdit, onDelete }) {
               </div>
             )}
             {c.webhookUrl && (
-              <div style={{ fontSize: 11, color: '#0052FF', background: '#0052FF0d', borderRadius: 6, padding: '5px 9px', marginTop: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span>🔗</span>
-                <span style={{ fontWeight: 700 }}>Webhook activo:</span>
-                <span style={{ color: '#555' }}>{c.webhookName || 'Sin nombre'}</span>
+              <div style={{ fontSize: 11, color: '#0052FF', background: '#0052FF0d', borderRadius: 6, padding: '6px 9px', marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 5 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span>🔗</span>
+                  <span style={{ fontWeight: 700 }}>Webhook activo:</span>
+                  <span style={{ color: '#555' }}>{c.webhookName || 'Sin nombre'}</span>
+                </div>
+                <button onClick={testWebhook} disabled={testing} style={{ background: testing ? '#ccc' : '#0052FF', color: '#fff', border: 'none', borderRadius: 8, padding: '3px 9px', fontSize: 10, fontWeight: 700, cursor: testing ? 'not-allowed' : 'pointer' }}>
+                  {testing ? '…' : 'Probar'}
+                </button>
               </div>
             )}
           </div>
