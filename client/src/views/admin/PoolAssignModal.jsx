@@ -109,7 +109,7 @@ export default function PoolAssignModal({ route, onClose, onAssigned }) {
           ) : (
             packages.map(pkg => {
               const isSel = selected.has(pkg._id);
-              const company = pkg.companyId;
+              const company = companies.find(c => c._id === pkg.companyId);
               return (
                 <div
                   key={pkg._id}

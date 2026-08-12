@@ -420,7 +420,6 @@ export default function DriverView({ routeId, onBack, onLogout, nativeApp = fals
                         index={i}
                         onEdit={setEditPkg}
                         onStatusChange={handleStatusChange}
-                        hidePrice
                         lockDelivered
                         readOnly={['completed', 'paused'].includes(selectedRoute?.status)}
                         sameAddressCount={addrCountMap[(pkg.address || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ')] || 1}

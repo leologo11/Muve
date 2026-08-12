@@ -514,6 +514,7 @@ export default function AllPackagesView() {
               key={pkg._id}
               pkg={pkg}
               routes={routes}
+              companies={companies}
               onMove={() => setMoveTarget({ pkg, targetRouteId: '' })}
               onStatusChange={handleStatusChange}
               onDelete={() => setConfirmDelete(pkg)}
@@ -968,12 +969,12 @@ function SinglePackageModal({ companies, onClose, onDone }) {
 }
 
 /* ─── Package row ─────────────────────────────────────────────────── */
-function PkgRow({ pkg, routes, onMove, onStatusChange, onDelete, onEdit, onMarkReviewed, selected, onToggleSelect }) {
+function PkgRow({ pkg, routes, companies, onMove, onStatusChange, onDelete, onEdit, onMarkReviewed, selected, onToggleSelect }) {
   const [expanded, setExpanded] = useState(false);
   const sc         = STATUS_COLOR[pkg.status] || '#888';
-  const route      = pkg.routeId;
+  const route      = routes.find(r => r._id === pkg.routeId);
   const driver     = route?.driverId;
-  const company    = pkg.companyId;
+  const company    = companies.find(c => c._id === pkg.companyId);
   const noCommune  = !pkg.commune;
   const noAddrNum  = pkg.address && !/\d/.test(pkg.address.trim());
   const noPhone    = !pkg.customerPhone;

@@ -75,6 +75,8 @@ export const api = {
   getPoolSummary: () => request('GET', '/packages/pool-summary'),
   geocodeBatch: () => request('POST', '/packages/geocode-batch'),
   restorePackage: (id) => request('PATCH', `/packages/${id}/restore`),
+  demoArchivePackages: () => request('POST', '/packages/demo-archive'),
+  demoRestorePackages: (ids) => request('POST', '/packages/demo-restore', { ids }),
   reorderPackages: (order) => request('PATCH', '/packages/reorder/batch', { order }),
 
   uploadPhoto: (packageId, file, n = 1) => {

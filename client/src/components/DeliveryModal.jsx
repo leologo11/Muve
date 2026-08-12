@@ -115,6 +115,9 @@ export default function DeliveryModal({ pkg, onClose, onSaved, readOnly, route }
           {pkg.commune && (
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 1 }}>{pkg.commune}</div>
           )}
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--accent)', marginTop: 6 }}>
+            ${(pkg.price || 0).toLocaleString('es-CL')}
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)' }}>#{pkg.trackingId}</div>
             {pkg.trackingId && (

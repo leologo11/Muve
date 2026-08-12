@@ -455,6 +455,33 @@ router.post('/bulk-delete', requireRole('admin'), async (req, res) => {
   }
 });
 
+// POST /api/packages/demo-archive — soft-archive every active package in one shot (reversible via demo-restore)
+router.post('/demo-archive', requireRole('admin'), async (req, res) => {
+  try {
+    const rows = await supabaseRequest(`/packages${qs({ status: 'neq.eliminado', select: 'id' })}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'eliminado', updated_at: new Date().toISOString() }),
+    });
+    return res.json({ ids: (rows || []).map(r => r.id) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/packages/demo-restore — bring back packages archived via demo-archive
+router.post('/demo-restore', requireRole('admin'), async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || !ids.length) return res.json({ restored: 0 });
+    const rows = await supabaseRequest(`/packages${qs({ id: `in.(${ids.join(',')})` })}`, {
+      method: 'PATCH', body: JSON.stringify({ status: 'pendiente', updated_at: new Date().toISOString() }),
+    });
+    return res.json({ restored: (rows || []).length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/packages/geocode-batch — re-geocode all packages that have address but no lat/lng
 router.post('/geocode-batch', requireRole('admin'), async (req, res) => {
   try {

@@ -261,7 +261,12 @@ function RouteCard({ route, onClick }) {
           <div style={{ height: 5, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
             <div style={{ height: 5, background: 'var(--accent)', width: `${progress}%`, borderRadius: 3, transition: 'width .5s' }} />
           </div>
-          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, textAlign: 'right' }}>{progress}% completado</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+            {s.totalAmount != null && (
+              <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 700 }}>${Number(s.totalAmount || 0).toLocaleString('es-CL')}</span>
+            )}
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>{progress}% completado</span>
+          </div>
         </>
       )}
 
@@ -312,6 +317,9 @@ function PkgRow({ pkg, index, onClick }) {
         </div>
         {pkg.failReason && <div style={{ fontSize: 11, color: '#cc2244', marginTop: 3 }}>↳ {pkg.failReason}</div>}
         {pkg.note && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>📝 {pkg.note}</div>}
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)', marginTop: 4 }}>
+          ${(pkg.price || 0).toLocaleString('es-CL')}
+        </div>
       </div>
 
       {/* Photos */}
@@ -331,6 +339,7 @@ function CompanyReport({ packages, route, onDownload }) {
   const delivered = active.filter(p => p.status === 'entregado');
   const failed = active.filter(p => p.status === 'no-entregado');
   const pending = active.filter(p => p.status === 'pendiente');
+  const totalAmount = active.reduce((sum, p) => sum + (p.price || 0), 0);
   const driver = route?.driverId;
 
   return (
@@ -361,6 +370,12 @@ function CompanyReport({ packages, route, onDownload }) {
         ))}
       </div>
 
+      {/* Total amount */}
+      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 14, padding: 14, marginBottom: 12, textAlign: 'center' }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: 'var(--muted)', textTransform: 'uppercase' }}>Monto total ruta</div>
+        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent)', marginTop: 4 }}>${totalAmount.toLocaleString('es-CL')}</div>
+      </div>
+
       {/* Download */}
       <button onClick={onDownload} style={{
         width: '100%', padding: '13px 16px', borderRadius: 12,
@@ -381,7 +396,10 @@ function CompanyReport({ packages, route, onDownload }) {
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: 'var(--muted)', padding: '10px 0 6px', textTransform: 'uppercase' }}>{label}</div>
           {list.map(p => (
             <div key={p._id} style={{ background: '#fff', border: `1px solid ${color}28`, borderRadius: 12, padding: '12px 14px', marginBottom: 8 }}>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>{p.customerName} {p.customerLastName}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{p.customerName} {p.customerLastName}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>${(p.price || 0).toLocaleString('es-CL')}</div>
+              </div>
               <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{p.address}{p.aptFloor ? `, ${p.aptFloor}` : ''}{p.commune ? `, ${p.commune}` : ''}</div>
               {p.failReason && <div style={{ fontSize: 11, color: '#cc2244', marginTop: 3 }}>↳ {p.failReason}</div>}
               {p.note && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>📝 {p.note}</div>}
