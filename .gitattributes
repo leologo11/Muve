@@ -1,0 +1,5 @@
+# Gradle wrapper must keep Unix line endings and stay executable, or Android
+# builds break on macOS/Linux after checking out from a Windows machine.
+client/android/gradlew text eol=lf
+client/android/gradlew.bat text eol=crlf
+*.sh text eol=lf
