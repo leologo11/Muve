@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { PRICES } from '../utils/priceByCommune.js';
+import { PRICES, normalize as norm } from '../utils/priceByCommune.js';
 import { qs, supabaseRequest } from '../utils/supabase.js';
 
 const router = Router();
@@ -85,10 +85,12 @@ router.post('/bulk', requireRole('admin'), async (req, res) => {
 
     // Update matching zones
     const zones = await supabaseRequest(`/zones${qs({ source: 'eq.commune', select: 'id,name' })}`);
-    const norm = s => (s || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '');
     const priceMap = {};
     items.forEach(({ commune, price }) => { priceMap[norm(commune)] = Number(price); });
 
+    // Sequential PATCH per zone — a batch upsert isn't viable here because `zones.polygon`
+    // is NOT NULL with no default, so a POST+on_conflict upsert would fail PostgREST's
+    // INSERT-side constraint check unless every row also carried its full polygon payload.
     let updated = 0;
     for (const z of zones) {
       const p = priceMap[norm(z.name)];
@@ -111,7 +113,7 @@ export async function getDbPricesMap() {
   const configs = await supabaseRequest(`/price_configs${qs({ select: '*' })}`);
   const map = {};
   configs.forEach(c => {
-    const key = c.commune.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const key = norm(c.commune);
     map[key] = Number(c.price || 0);
   });
   return map;

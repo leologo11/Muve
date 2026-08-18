@@ -92,11 +92,10 @@ function LeafletRouteMap({ from, to, distanceKm }) {
       new gm.Marker({ position: { lat: to.lat, lng: to.lng }, map, icon: mkIcon(SUC) }),
     );
 
-    fetch(`https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?geometries=geojson&overview=simplified`)
-      .then(r => r.json())
+    api.getPublicOsrmPath({ originLat: from.lat, originLng: from.lng, destLat: to.lat, destLng: to.lng })
       .then(data => {
-        if (!mapRef.current) return;
-        const path = data.routes[0].geometry.coordinates.map(([lng, lat]) => ({ lat, lng }));
+        if (!mapRef.current || !data.geometry) throw new Error('no geometry');
+        const path = data.geometry.coordinates.map(([lng, lat]) => ({ lat, lng }));
         routeRef.current = new gm.Polyline({ path, strokeColor: B, strokeWeight: 4.5, strokeOpacity: 0.9, map });
         const bounds = new gm.LatLngBounds();
         path.forEach(p => bounds.extend(p));
@@ -120,7 +119,7 @@ function LeafletRouteMap({ from, to, distanceKm }) {
   }, [mapReady, from.lat, from.lng, to.lat, to.lng]);
 
   return (
-    <div style={{ borderRadius: 14, overflow: 'hidden', height: 130, marginBottom: 10, border: `1px solid ${BDR}`, position: 'relative', background: '#EEF3FF' }}>
+    <div style={{ borderRadius: 14, overflow: 'hidden', height: 190, marginBottom: 10, border: `1px solid ${BDR}`, position: 'relative', background: '#EEF3FF' }}>
       <div ref={divRef} style={{ width: '100%', height: '100%' }}/>
       {distanceKm && from.lat && to.lat && (
         <div style={{
@@ -483,124 +482,99 @@ function SceneStatic() {
   );
 }
 
-// ─── Animated truck — 6 cardboard boxes, smoke on depart ─────
-const N_BOXES = 6;
-const BOX_DEFS = [
-  { x: 74,  y: 120, w: 136, h: 96 }, // row1-col1
-  { x: 220, y: 120, w: 136, h: 96 }, // row1-col2
-  { x: 366, y: 120, w: 136, h: 96 }, // row1-col3
-  { x: 74,  y: 222, w: 136, h: 96 }, // row2-col1
-  { x: 220, y: 222, w: 136, h: 96 }, // row2-col2
-  { x: 366, y: 222, w: 136, h: 96 }, // row2-col3
-];
-const BOX_FILL   = '#C8956C';
-const BOX_STROKE = '#8B5E3C';
-const BOX_LINE   = '#A07040';
-const BOX_DARK   = '#7A4F2A';
-
-function TruckAnim({ phase }) {
-  const initReady = Array(N_BOXES).fill(false);
-  const [boxReady, setBoxReady] = useState(initReady);
-
-  useEffect(() => {
-    if (phase === 'loading') {
-      const ts = BOX_DEFS.map((_, i) =>
-        setTimeout(() => setBoxReady(prev => { const n = [...prev]; n[i] = true; return n; }), 100 + i * 160)
-      );
-      return () => ts.forEach(clearTimeout);
-    }
-    if (phase === 'entering' || phase === 'parked') {
-      setBoxReady(Array(N_BOXES).fill(false));
-    }
-  }, [phase]);
-
-  const showBoxes = phase === 'loading' || phase === 'departing';
-  const showSmoke = phase === 'departing' || phase === 'loading';
-
+// ─── Truck cab art — cropped from the same coordinate space as the old full-truck
+// drawing (just the cab + front wheel), reused wherever a cab needs to attach to a
+// cargo box. Pure presentational: no positioning, no animation. ──────────────────
+function CabArt({ width, height, spin }) {
   return (
-    <div className={`czTruckOuter czTruck-${phase}`}>
-      <svg width="576" height="269" viewBox="0 0 900 420" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="tG" x1="0" x2="1">
-            <stop offset="0" stopColor={B}/><stop offset="1" stopColor={C}/>
-          </linearGradient>
-        </defs>
+    <svg width={width} height={height} viewBox="574 138 256 270" preserveAspectRatio="none" style={{ display: 'block' }}>
+      <ellipse cx="722" cy="400" rx="150" ry="12" fill="rgba(10,20,40,.14)"/>
+      <path d="M574 148 L730 148 C750 148 764 160 772 178 L814 265 L814 332 L574 332 Z" fill="#0F172A"/>
+      <path d="M592 168 L718 168 C732 168 742 176 748 193 L778 258 L592 258 Z" fill="#7EC8E3" opacity=".88"/>
+      <line x1="592" y1="168" x2="616" y2="258" stroke="rgba(255,255,255,.2)" strokeWidth="3.5"/>
+      <rect x="574" y="260" width="184" height="72" fill="#1A2535"/>
+      <line x1="574" y1="260" x2="758" y2="260" stroke="#2A3A50" strokeWidth="2"/>
+      <rect x="740" y="290" width="20" height="6" rx="3" fill="#4B5563"/>
+      <rect x="770" y="302" width="50" height="30" rx="7" fill="#2A3A50"/>
+      <rect x="765" y="155" width="13" height="48" rx="5" fill="#374151"/>
+      <rect x="804" y="272" width="22" height="15" rx="4" fill="#FCD34D"/>
+      <g className={spin ? 'czWheelSpin' : ''} style={{ transformBox: 'fill-box', transformOrigin: '50% 50%' }}>
+        <circle cx="722" cy="336" r="54" fill="#1E293B"/>
+        <circle cx="722" cy="336" r="26" fill="#94A3B8"/>
+        <circle cx="722" cy="336" r="10" fill="#CBD5E1"/>
+        {/* Spoke so the rotation actually reads as spinning, not just a static disc —
+            kept within the rim (r=26) so it doesn't poke out over the tire. */}
+        <rect x="718" y="310" width="8" height="52" fill="#64748B" opacity=".8"/>
+      </g>
+    </svg>
+  );
+}
 
-        {/* Shadow */}
-        <ellipse cx="420" cy="408" rx="380" ry="14" fill="rgba(0,0,0,.18)"/>
-
-        {/* Cargo body */}
-        <rect x="60" y="86" width="514" height="244" rx="18" fill="#FFFFFF" stroke="#D7E2F0" strokeWidth="3"/>
-        {/* Blue top stripe */}
-        <rect x="60" y="86" width="514" height="32" rx="18" fill="url(#tG)"/>
-
-        {/* MUVE brand (hidden when cargo is full) */}
-        {!showBoxes && (
-          <>
-            <rect x="220" y="125" width="194" height="104" rx="12" fill="#EFF5FF"/>
-            <text x="317" y="202" textAnchor="middle" fontFamily="Inter,system-ui,sans-serif"
-                  fontWeight="900" fontSize="78" fill={B}>MUVE</text>
-          </>
-        )}
-
-        {/* 6 cardboard boxes — scale-in from center */}
-        {BOX_DEFS.map((b, i) => {
-          const ready = showBoxes && boxReady[i];
-          return (
-            <g key={i} style={{
-              transformBox: 'fill-box',
-              transformOrigin: '50% 50%',
-              transform: ready ? 'scale(1)' : 'scale(0.05)',
-              opacity: ready ? 1 : 0,
-              transition: ready
-                ? `transform 0.45s cubic-bezier(0.34,1.56,0.64,1) ${i * 0.02}s, opacity 0.15s ease ${i * 0.02}s`
-                : 'none',
-            }}>
-              {/* Box body */}
-              <rect x={b.x} y={b.y} width={b.w} height={b.h} rx="8" fill={BOX_FILL} stroke={BOX_STROKE} strokeWidth="3"/>
-              {/* Top flap highlight */}
-              <rect x={b.x} y={b.y} width={b.w} height={22} rx="8" fill={BOX_DARK} opacity=".35"/>
-              {/* Tape horizontal */}
-              <rect x={b.x} y={b.y + b.h/2 - 5} width={b.w} height={10} fill={BOX_DARK} opacity=".25"/>
-              {/* Tape vertical */}
-              <rect x={b.x + b.w/2 - 5} y={b.y} width={10} height={b.h} fill={BOX_DARK} opacity=".25"/>
-              {/* Corner shadow */}
-              <line x1={b.x+3} y1={b.y+3} x2={b.x+3} y2={b.y+b.h-3} stroke={BOX_DARK} strokeWidth="3" opacity=".18"/>
-            </g>
-          );
-        })}
-
-        {/* Smoke — SVG native animate (no CSS px/SVG unit issues) */}
-        {showSmoke && [0, 0.4, 0.8, 1.2].map((delay, i) => (
-          <circle key={i} cx={771} cy={152} r={14 + i * 2} fill={`rgba(80,80,80,${0.5 - i*0.08})`}>
-            <animate attributeName="cy"      from="152" to="72"  dur="1.5s" begin={`${delay}s`} repeatCount="indefinite"/>
-            <animate attributeName="r"       from={14+i*2} to={38+i*4} dur="1.5s" begin={`${delay}s`} repeatCount="indefinite"/>
-            <animate attributeName="opacity" from="0.6" to="0"   dur="1.5s" begin={`${delay}s`} repeatCount="indefinite"/>
-          </circle>
-        ))}
-
-        {/* Cab — drawn last so it covers cargo-cab seam */}
-        <path d="M574 148 L730 148 C750 148 764 160 772 178 L814 265 L814 332 L574 332 Z" fill="#0F172A"/>
-        <path d="M592 168 L718 168 C732 168 742 176 748 193 L778 258 L592 258 Z" fill="#7EC8E3" opacity=".88"/>
-        <line x1="592" y1="168" x2="616" y2="258" stroke="rgba(255,255,255,.2)" strokeWidth="3.5"/>
-        <rect x="574" y="260" width="184" height="72" fill="#1A2535"/>
-        <line x1="574" y1="260" x2="758" y2="260" stroke="#2A3A50" strokeWidth="2"/>
-        <rect x="740" y="290" width="20" height="6" rx="3" fill="#4B5563"/>
-        <rect x="770" y="302" width="50" height="30" rx="7" fill="#2A3A50"/>
-        <rect x="765" y="155" width="13" height="48" rx="5" fill="#374151"/>
-        <rect x="804" y="272" width="22" height="15" rx="4" fill="#FCD34D"/>
-        {[[164,336],[418,336],[722,336]].map(([cx,cy]) => (
-          <g key={cx}>
-            <circle cx={cx} cy={cy} r={54} fill="#1E293B"/>
-            <circle cx={cx} cy={cy} r={26} fill="#94A3B8"/>
-            <circle cx={cx} cy={cy} r={10} fill="#CBD5E1"/>
-          </g>
-        ))}
-        <rect x="348" y="308" width="122" height="20" rx="5" fill="#374151"/>
+// ─── Rear wheel — the card (cargo box) needs one too, or only the cab looks like it's
+// rolling. Sits behind the card (lower z-index) so its top half is hidden by the card's
+// own white background and only the bottom half pokes out past its edge, like a wheel
+// tucked under a truck box. While the card is still cropped short (doorOpen false), it
+// has to anchor to that CROPPED visible edge, not the card's true (taller, invisible)
+// full-height box — .cz-inner's clip-path only changes what's painted, not its layout
+// size, so anchoring to "bottom:0" here would leave the wheel dangling in the empty
+// space below the visible edge instead of tucked right into it. Tracks the same
+// crop→full transition as the card, so it "rides" the edge down as it unfolds. ────────
+function RearWheel({ doorOpen, spinning, diameter, centerFromBottom }) {
+  const peek = diameter * 0.34;
+  return (
+    <div style={{
+      position: 'absolute', zIndex: 1, left: 64,
+      // Level with the front wheel while visible (its own center at the same height
+      // above the ground); tucked back to barely poking out once parked + hidden.
+      bottom: doorOpen ? -peek : centerFromBottom - diameter / 2,
+      opacity: doorOpen ? 0 : 1,
+      transition: 'bottom 900ms cubic-bezier(.65,0,.35,1), opacity 500ms ease',
+    }}>
+      <svg width={diameter} height={diameter} viewBox="0 0 64 64" style={{ display: 'block' }}>
+        <g className={spinning ? 'czWheelSpin' : ''} style={{ transformBox: 'fill-box', transformOrigin: '50% 50%' }}>
+          <circle cx="32" cy="32" r="30" fill="#1E293B"/>
+          <circle cx="32" cy="32" r="15" fill="#94A3B8"/>
+          <circle cx="32" cy="32" r="6" fill="#CBD5E1"/>
+          <rect x="28" y="12" width="8" height="26" fill="#64748B" opacity=".8"/>
+        </g>
       </svg>
     </div>
   );
 }
+
+// ─── The one truck. Rendered as a flex sibling right after the quote card (see the
+// `.czRig` wrapper in the main component) so it's always physically glued to the
+// card's edge and scales with it — no separate positioning math to fall out of sync.
+// Same cab for the whole lifecycle: rolls in from the left on page load, holds that
+// exact spot while the form is filled, then rolls back out to the left once the quote
+// is submitted. Wheels only spin while it's actually moving (entering/departing). ────
+function Cab({ phase, widthDesign, heightDesign }) {
+  return (
+    // Absolutely positioned off .czRig's right edge, not a flex sibling — so it doesn't
+    // count toward the card's own box when the card gets centered. It's fine for the
+    // cab to spill past the viewport edge on a narrow window; the card is what has to
+    // stay centered.
+    <div style={{ position: 'absolute', left: '100%', bottom: 0 }}>
+      <CabArt width={widthDesign} height={heightDesign} spin={phase === 'entering' || phase === 'departing'}/>
+    </div>
+  );
+}
+
+// Inline transform/opacity per rig phase — see the .czRig comment in CZ_CSS for why
+// this lives in JS/inline style rather than as CSS animation classes.
+const RIG_ENTER_MS = 3000;
+const RIG_POSE = {
+  pending:   { transform: 'translateX(-140vw) translateY(46px)', opacity: 0 },
+  entering:  { transform: 'translateX(0) translateY(0)',         opacity: 1 },
+  attached:  { transform: 'translateX(0) translateY(0)',         opacity: 1 },
+  departing: { transform: 'translateX(160vw) translateY(0)',     opacity: 0 },
+};
+const RIG_TRANSITION = {
+  pending:   'none',
+  entering:  `transform ${RIG_ENTER_MS}ms cubic-bezier(.16,.84,.44,1), opacity 900ms ease`,
+  attached:  `transform ${RIG_ENTER_MS}ms cubic-bezier(.16,.84,.44,1), opacity 900ms ease`,
+  departing: 'transform 1.6s cubic-bezier(.45,0,1,.55), opacity 1.6s cubic-bezier(.45,0,1,.55) .3s',
+};
 
 // ─── Ripple click feedback ────────────────────────────────────
 function addRipple(e) {
@@ -671,34 +645,39 @@ function FloatingWA() {
 
 const CASES = [
   {
-    type:'Mini flete — 1 cama', icon:'🛏️',
+    type:'Mini flete — 1 cama', icon:'🛏️', photo:'/testimonials/mini-flete.jpg',
     items:['🛏️ Cama 1 plaza','🛌 Colchón','📦 2 cajas'],
     km:5, price:32000,
     name:'Valentina S.',
     comment:'En menos de una hora tenía la cama instalada en mi nuevo depto. ¡Súper rápido y cuidadoso!',
   },
   {
-    type:'Flete camión 3/4', icon:'🚚',
+    type:'Flete camión 3/4', icon:'🚚', photo:'/testimonials/flete-camion.jpg',
     items:['🛏️ Cama 2 plazas','🪞 Clóset','🧊 Refrigerador'],
     km:8, price:58000,
     name:'Felipe A.',
     comment:'Llegaron con el equipo correcto para los muebles pesados. Sin rasguños y exactamente a la hora.',
   },
   {
-    type:'Mudanza mediana', icon:'🏘️',
+    type:'Mudanza mediana', icon:'🏘️', photo:'/testimonials/mudanza-mediana.jpg',
     items:['🛏️ Cama 2 plazas','🪞 Clóset','🛋️ Sofá 2 plazas','🧊 Refrigerador','🫧 Lavadora','🍽️ Mesa comedor','💻 Escritorio','📦 8 cajas'],
     km:14, price:79990,
     name:'Ana M.',
     comment:'Todo organizado y sin contratiempos. Los muebles llegaron perfectos. ¡Los recomiendo al 100%!',
   },
   {
-    type:'Mudanza grande', icon:'🏡',
+    type:'Mudanza grande', icon:'🏡', photo:'/testimonials/mudanza-grande.jpg',
     items:['🛏️ Cama Queen','🛏️ Cama 1 plaza','🪞 Clóset doble','🛋️ Sofá 3 plazas','🧊 Refrigerador','🫧 Lavadora','🌀 Secadora','🍳 Cocina','🍽️ Mesa comedor','🪑 6 sillas','🗄️ Cómoda','💻 Escritorio','📚 Librero','📺 TV 65"','🎨 Cuadros','📦 15 cajas','🌿 Plantas'],
     km:25, price:169990,
     name:'Jorge & Claudia R.',
     comment:'Mudanza completa de 3 dormitorios, impecables. Cuidaron cada mueble como si fuera de ellos.',
   },
 ];
+
+// The card's item chip list is capped so its height never grows with the case's
+// full inventory (some demo cases list 3 items, others 17) — that used to make the
+// card visibly resize every 4.5s as it cycled. Overflow collapses into one "+N más" chip.
+const CARD_ITEMS_VISIBLE = 4;
 
 function ScreenWelcome({ onStart }) {
   const [activeCase, setActiveCase] = useState(0);
@@ -765,11 +744,38 @@ function ScreenWelcome({ onStart }) {
         @media (min-width: 640px) {
           .czContent { flex: 1 !important; padding: 0 40px !important; flex-direction: row !important; align-items: center; gap: 36px; }
           .czHeroInner { align-items: flex-start !important; text-align: left !important; }
-          .czHeroTitle { font-size: 46px !important; letter-spacing: -2px !important; line-height: 1.05 !important; }
-          .czHeroSub { font-size: 15px !important; max-width: 100% !important; }
-          .czHeroCta { max-width: 300px !important; }
+          .czHeroTitle { font-size: 54px !important; letter-spacing: -2.4px !important; line-height: 1.05 !important; }
+          .czHeroSub { font-size: 17px !important; max-width: 100% !important; }
+          .czActionBlock { max-width: 400px !important; }
+          .czCtaBtn { font-size: 22px !important; padding: 22px 26px !important; }
+          .czStepCircle { width: 48px !important; height: 48px !important; }
+          .czStepLabel { font-size: 12px !important; }
           .czTrustChips { justify-content: flex-start !important; }
-          .czSideCards { display: flex !important; flex-direction: column; width: 296px; flex-shrink: 0; }
+          .czChipIcon { width: 32px !important; height: 32px !important; }
+          .czChipTitle { font-size: 12px !important; }
+          .czChipSub { font-size: 10.5px !important; }
+          .czSideCards { display: flex !important; flex-direction: column; width: 340px; flex-shrink: 0; }
+          .czCardPhoto { height: 148px !important; }
+          .czCardHeader { padding: 18px 22px !important; gap: 12px !important; }
+          .czCardIcon { width: 48px !important; height: 48px !important; font-size: 24px !important; }
+          .czCardType { font-size: 16px !important; }
+          .czCardKm { font-size: 12px !important; }
+          .czItemsSection { padding: 16px 20px !important; }
+          .czItemsLabel { font-size: 10.5px !important; }
+          .czItemsWrap { height: 102px !important; gap: 7px !important; }
+          .czItemChip { font-size: 13px !important; padding: 5px 11px !important; }
+          .czPriceSection { padding: 16px 20px 14px !important; }
+          .czPriceLabel { font-size: 10.5px !important; }
+          .czPriceVal { font-size: 32px !important; }
+          .czTestimonialSection { padding: 16px 20px !important; }
+          .czTestimonialInner { padding: 14px 16px !important; }
+          .czTestimonialText { font-size: 13px !important; }
+          .czAvatar { width: 26px !important; height: 26px !important; font-size: 12px !important; }
+          .czReviewerName { font-size: 13px !important; }
+          /* Only .czContent should absorb the extra vertical space on tall/large cards —
+             otherwise both it and this footer split the leftover 50/50, leaving a big dead
+             gap in the middle on tall screens instead of centering the hero content. */
+          .czFooterMove { flex: 0 0 auto !important; padding-top: 24px !important; }
         }
       `}</style>
 
@@ -806,7 +812,7 @@ function ScreenWelcome({ onStart }) {
           </p>
 
           {/* Step bar + CTA en el mismo contenedor y mismo ancho */}
-          <div style={{ width:'100%', maxWidth:340, alignSelf:'center', marginBottom:12 }}>
+          <div className="czActionBlock" style={{ width:'100%', maxWidth:340, alignSelf:'center', marginBottom:12 }}>
             <div style={{ display:'flex', alignItems:'center', width:'100%', marginBottom:14 }}>
               {[
                 { n:'1', t:'Ruta',      cls:'czStep1', icon:<MapPin size={17} strokeWidth={2.2}/> },
@@ -816,8 +822,8 @@ function ScreenWelcome({ onStart }) {
                 <React.Fragment key={s.n}>
                   {i > 0 && <div style={{ flex:1, height:2, background:`linear-gradient(90deg,${B}55,${C}55)`, borderRadius:99 }}/>}
                   <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-                    <div className={s.cls} style={{ width:40, height:40, borderRadius:'50%', background:GRAD, display:'grid', placeItems:'center', color:'#fff', flexShrink:0, boxShadow:`0 3px 10px ${B}35` }}>{s.icon}</div>
-                    <div style={{ fontSize:10, fontWeight:700, color:T2 }}>{s.t}</div>
+                    <div className={`${s.cls} czStepCircle`} style={{ width:40, height:40, borderRadius:'50%', background:GRAD, display:'grid', placeItems:'center', color:'#fff', flexShrink:0, boxShadow:`0 3px 10px ${B}35` }}>{s.icon}</div>
+                    <div className="czStepLabel" style={{ fontSize:10, fontWeight:700, color:T2 }}>{s.t}</div>
                   </div>
                   {i < 2 && <div style={{ flex:1, height:2, background:`linear-gradient(90deg,${B}55,${C}55)`, borderRadius:99 }}/>}
                 </React.Fragment>
@@ -828,7 +834,7 @@ function ScreenWelcome({ onStart }) {
               type="button"
               onClick={onStart}
               onMouseDown={addRipple}
-              className="czCta"
+              className="czCta czCtaBtn"
               style={{
                 width:'100%', padding:'18px 20px', borderRadius:18, border:'none',
                 color:'#fff', fontSize:19, fontWeight:900, cursor:'pointer', letterSpacing:'-0.4px',
@@ -843,7 +849,7 @@ function ScreenWelcome({ onStart }) {
           </div>
 
           {/* Trust chips — mismo ancho que el botón */}
-          <div style={{ width:'100%', maxWidth:340, alignSelf:'center' }}>
+          <div className="czActionBlock" style={{ width:'100%', maxWidth:340, alignSelf:'center' }}>
             <div className="czTrustChips" style={{ display:'flex', gap:0, background:'rgba(255,255,255,.7)', borderRadius:14, border:`1px solid ${BDR}`, overflow:'hidden', backdropFilter:'blur(8px)' }}>
               {[
                 { icon:<IcoBolt size={15}/>,    t:'Menos de 1 min',   sub:'Precio al instante',   c:'#F59E0B' },
@@ -851,9 +857,9 @@ function ScreenWelcome({ onStart }) {
                 { icon:<IcoDiamond size={15}/>, t:'Precio real',       sub:'Sin letra chica',       c:B         },
               ].map((b,i) => (
                 <div key={b.t} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2, padding:'10px 6px', borderRight: i < 2 ? `1px solid ${BDR}` : 'none' }}>
-                  <div style={{ width:28, height:28, borderRadius:8, background:`${b.c}15`, display:'grid', placeItems:'center', color:b.c }}>{b.icon}</div>
-                  <span style={{ fontSize:10, fontWeight:800, color:N, textAlign:'center', lineHeight:1.2 }}>{b.t}</span>
-                  <span style={{ fontSize:9, fontWeight:500, color:T3, textAlign:'center', lineHeight:1.2 }}>{b.sub}</span>
+                  <div className="czChipIcon" style={{ width:28, height:28, borderRadius:8, background:`${b.c}15`, display:'grid', placeItems:'center', color:b.c }}>{b.icon}</div>
+                  <span className="czChipTitle" style={{ fontSize:10, fontWeight:800, color:N, textAlign:'center', lineHeight:1.2 }}>{b.t}</span>
+                  <span className="czChipSub" style={{ fontSize:9, fontWeight:500, color:T3, textAlign:'center', lineHeight:1.2 }}>{b.sub}</span>
                 </div>
               ))}
             </div>
@@ -865,51 +871,60 @@ function ScreenWelcome({ onStart }) {
 
           {/* Rotating testimonial card */}
           <div style={{ borderRadius:18, overflow:'hidden', boxShadow:`0 4px 24px ${B}22`, opacity: fading ? 0 : 1, transition:'opacity .32s ease' }}>
-            {/* Header */}
-            <div style={{ background:GRAD, padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <div style={{ width:40, height:40, borderRadius:10, background:'rgba(255,255,255,.2)', display:'grid', placeItems:'center', fontSize:20, flexShrink:0 }}>{c.icon}</div>
-                <div>
-                  <div style={{ fontSize:13, fontWeight:800, color:'#fff', letterSpacing:'-0.2px' }}>{c.type}</div>
-                  <div style={{ fontSize:10, color:'rgba(255,255,255,.75)', marginTop:1 }}>{c.km} km recorridos</div>
-                </div>
-              </div>
-              <div style={{ color:'#FFD700', fontSize:15, letterSpacing:2 }}>★★★★★</div>
+            {/* Photo — fixed height so the card never resizes as it cycles cases */}
+            <div className="czCardPhoto" style={{ position:'relative', height:110, background:'#e2e8f0' }}>
+              <img src={c.photo} alt={c.type} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
+              <div style={{ position:'absolute', top:8, right:10, color:'#FFD700', fontSize:14, letterSpacing:1.5, textShadow:'0 1px 3px rgba(0,0,0,.5)' }}>★★★★★</div>
             </div>
 
-            {/* Items */}
-            <div style={{ background:'#fff', padding:'12px 16px', borderBottom:`1px solid ${BDR}` }}>
-              <div style={{ fontSize:9, fontWeight:700, color:T3, textTransform:'uppercase', letterSpacing:.8, marginBottom:6 }}>Lo que llevamos</div>
-              <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
-                {c.items.map(item => (
-                  <span key={item} style={{ fontSize:11, fontWeight:600, color:T2, background:`${B}08`, border:`1px solid ${B}18`, borderRadius:6, padding:'3px 9px' }}>{item}</span>
+            {/* Header */}
+            <div className="czCardHeader" style={{ background:GRAD, padding:'14px 18px', display:'flex', alignItems:'center', gap:10 }}>
+              <div className="czCardIcon" style={{ width:40, height:40, borderRadius:10, background:'rgba(255,255,255,.2)', display:'grid', placeItems:'center', fontSize:20, flexShrink:0 }}>{c.icon}</div>
+              <div>
+                <div className="czCardType" style={{ fontSize:13, fontWeight:800, color:'#fff', letterSpacing:'-0.2px' }}>{c.type}</div>
+                <div className="czCardKm" style={{ fontSize:10, color:'rgba(255,255,255,.75)', marginTop:1 }}>{c.km} km recorridos</div>
+              </div>
+            </div>
+
+            {/* Items — capped at CARD_ITEMS_VISIBLE with a fixed-height wrap, so a case
+                with 3 items and one with 17 take up exactly the same space. */}
+            <div className="czItemsSection" style={{ background:'#fff', padding:'12px 16px', borderBottom:`1px solid ${BDR}` }}>
+              <div className="czItemsLabel" style={{ fontSize:9, fontWeight:700, color:T3, textTransform:'uppercase', letterSpacing:.8, marginBottom:6 }}>Lo que llevamos</div>
+              <div className="czItemsWrap" style={{ display:'flex', flexWrap:'wrap', alignContent:'flex-start', gap:5, height:54 }}>
+                {c.items.slice(0, CARD_ITEMS_VISIBLE).map(item => (
+                  <span key={item} className="czItemChip" style={{ fontSize:11, fontWeight:600, color:T2, background:`${B}08`, border:`1px solid ${B}18`, borderRadius:6, padding:'3px 9px' }}>{item}</span>
                 ))}
+                {c.items.length > CARD_ITEMS_VISIBLE && (
+                  <span className="czItemChip" style={{ fontSize:11, fontWeight:700, color:T3, background:'#f1f5f9', border:`1px solid ${BDR}`, borderRadius:6, padding:'3px 9px' }}>
+                    +{c.items.length - CARD_ITEMS_VISIBLE} más
+                  </span>
+                )}
               </div>
             </div>
 
             {/* Price + km */}
-            <div style={{ background:'#fff', padding:'12px 16px 10px', borderBottom:`1px solid ${BDR}` }}>
+            <div className="czPriceSection" style={{ background:'#fff', padding:'12px 16px 10px', borderBottom:`1px solid ${BDR}` }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end' }}>
                 <div>
-                  <div style={{ fontSize:9, color:T3, fontWeight:700, textTransform:'uppercase', letterSpacing:.6 }}>Precio cobrado</div>
-                  <div style={{ fontSize:26, fontWeight:900, color:B, letterSpacing:'-1px', lineHeight:1.1 }}>{'$' + String(c.price).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}</div>
+                  <div className="czPriceLabel" style={{ fontSize:9, color:T3, fontWeight:700, textTransform:'uppercase', letterSpacing:.6 }}>Precio cobrado</div>
+                  <div className="czPriceVal" style={{ fontSize:26, fontWeight:900, color:B, letterSpacing:'-1px', lineHeight:1.1 }}>{'$' + String(c.price).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}</div>
                 </div>
                 <div style={{ textAlign:'right' }}>
-                  <div style={{ fontSize:9, color:T3, fontWeight:700, textTransform:'uppercase', letterSpacing:.6 }}>Distancia</div>
-                  <div style={{ fontSize:26, fontWeight:900, color:N, letterSpacing:'-1px', lineHeight:1.1 }}>{c.km} km</div>
+                  <div className="czPriceLabel" style={{ fontSize:9, color:T3, fontWeight:700, textTransform:'uppercase', letterSpacing:.6 }}>Distancia</div>
+                  <div className="czPriceVal" style={{ fontSize:26, fontWeight:900, color:N, letterSpacing:'-1px', lineHeight:1.1 }}>{c.km} km</div>
                 </div>
               </div>
             </div>
 
             {/* Testimonial */}
-            <div style={{ background:'#FAFBFF', padding:'12px 16px' }}>
-              <div style={{ background:'#fff', borderRadius:10, padding:'10px 13px', border:`1px solid ${BDR}`, boxShadow:'0 1px 6px rgba(0,0,0,.04)' }}>
-                <div style={{ fontSize:11, color:T2, lineHeight:1.6, fontStyle:'italic' }}>"{c.comment}"</div>
+            <div className="czTestimonialSection" style={{ background:'#FAFBFF', padding:'12px 16px' }}>
+              <div className="czTestimonialInner" style={{ background:'#fff', borderRadius:10, padding:'10px 13px', border:`1px solid ${BDR}`, boxShadow:'0 1px 6px rgba(0,0,0,.04)' }}>
+                <div className="czTestimonialText" style={{ fontSize:11, color:T2, lineHeight:1.6, fontStyle:'italic' }}>"{c.comment}"</div>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:8 }}>
-                  <div style={{ width:22, height:22, borderRadius:'50%', background:GRAD, display:'grid', placeItems:'center', fontSize:10, color:'#fff', fontWeight:800, flexShrink:0 }}>
+                  <div className="czAvatar" style={{ width:22, height:22, borderRadius:'50%', background:GRAD, display:'grid', placeItems:'center', fontSize:10, color:'#fff', fontWeight:800, flexShrink:0 }}>
                     {c.name[0]}
                   </div>
-                  <div style={{ fontSize:11, fontWeight:800, color:N }}>{c.name}</div>
+                  <div className="czReviewerName" style={{ fontSize:11, fontWeight:800, color:N }}>{c.name}</div>
                   <div style={{ marginLeft:'auto', color:'#FFD700', fontSize:11 }}>★★★★★</div>
                 </div>
               </div>
@@ -928,7 +943,7 @@ function ScreenWelcome({ onStart }) {
       </div>
 
       {/* ── What we move — flat icon grid ───────────────────────── */}
-      <div style={{ flex:1, display:'flex', flexDirection:'column', justifyContent:'flex-end', paddingBottom:'max(20px,env(safe-area-inset-bottom,20px))', position:'relative', zIndex:2, padding:'0 22px max(20px,env(safe-area-inset-bottom,20px))' }}>
+      <div className="czFooterMove" style={{ flex:1, display:'flex', flexDirection:'column', justifyContent:'flex-end', paddingBottom:'max(20px,env(safe-area-inset-bottom,20px))', position:'relative', zIndex:2, padding:'0 22px max(20px,env(safe-area-inset-bottom,20px))' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
           <div style={{ flex:1, height:1, background:BDR }}/>
           <span style={{ fontSize:9, fontWeight:800, color:T3, textTransform:'uppercase', letterSpacing:1.4, whiteSpace:'nowrap' }}>
@@ -1602,174 +1617,82 @@ function ScreenContact({ state, onBack, onSubmit, saving }) {
   );
 }
 
-// ─── SCREEN 6 — SUCCESS ───────────────────────────────────────
-const SUCCESS_TIPS = [
-  { icon: '📱', text: 'Recibirás respuesta pronto — normalmente en menos de 30 minutos.' },
-  { icon: '⭐', text: 'Más de 500 traslados realizados · Calificación promedio 4.9 / 5.' },
-  { icon: '🚚', text: 'Nuestros conductores conocen tu ciudad y cuidan cada artículo.' },
-  { icon: '💬', text: '¿Cambió algo? Sin problema — avísanos por WhatsApp cuando quieras.' },
-  { icon: '🏠', text: 'Atendemos hogares, oficinas y pymes en todo Chile.' },
-  { icon: '📦', text: '¿Necesitas embalaje extra? Solo pídelo al confirmar tu traslado.' },
-];
-
-function CyclingTips() {
-  const [idx, setIdx]   = useState(0);
-  const [show, setShow] = useState(true);
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      setShow(false);
-      setTimeout(() => { setIdx(i => (i + 1) % SUCCESS_TIPS.length); setShow(true); }, 380);
-    }, 3800);
-    return () => clearInterval(t);
-  }, []);
-
-  const tip = SUCCESS_TIPS[idx];
-  return (
-    <div style={{ background: `${B}09`, borderRadius: 16, border: `1px solid ${B}16`, padding: '14px 16px' }}>
-      <div style={{
-        display: 'flex', gap: 10, alignItems: 'flex-start',
-        opacity: show ? 1 : 0,
-        transform: show ? 'translateY(0)' : 'translateY(6px)',
-        transition: 'opacity .36s ease, transform .36s ease',
-        minHeight: 44,
-      }}>
-        <span style={{ fontSize: 22, lineHeight: 1.3, flexShrink: 0 }}>{tip.icon}</span>
-        <span style={{ fontSize: 13, color: T2, lineHeight: 1.55, fontWeight: 500 }}>{tip.text}</span>
-      </div>
-      {/* Progress dots */}
-      <div style={{ display: 'flex', gap: 5, justifyContent: 'center', marginTop: 10 }}>
-        {SUCCESS_TIPS.map((_, i) => (
-          <div key={i} style={{
-            height: 4, borderRadius: 99,
-            width: i === idx ? 18 : 4,
-            background: i === idx ? B : `${B}28`,
-            transition: 'all .35s ease',
-          }}/>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ScreenSuccess({ state, onRestart }) {
-  const { result, from, to, distanceKm, extras, selectedHelpers, manualReview } = state;
-  const helpers = selectedHelpers ?? result?.recommendedHelpers ?? 0;
+// ─── Success — a small centered window, independent of the quote card's size/frame.
+// Appears once the truck has fully driven off (see the main component: rendered as
+// its own fixed overlay, not inside .cz-inner), so it always shows at the same
+// compact size and centered position regardless of how big the card/rig was. ────────
+function SuccessNote({ state, onRestart }) {
+  const { result, from, to, manualReview } = state;
   const waMsg = manualReview
     ? `Hola MUVE! 👋 Solicité una cotización de mudanza grande.\n📍 ${from?.address || ''} → ${to?.address || ''}`
     : `Hola MUVE! 👋 Acabo de solicitar una cotización.\n🚚 ${result?.vehicleName || ''}\n📍 ${from?.address || ''} → ${to?.address || ''}\n💰 Estimado: ${fmt(result?.price)}`;
   const waUrl = `https://wa.me/56952023504?text=${encodeURIComponent(waMsg)}`;
 
   return (
-    <div style={{ height: '100dvh', background: BG, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <style>{`@keyframes czCheckPop { 0%{transform:scale(0.4);opacity:0} 70%{transform:scale(1.12)} 100%{transform:scale(1);opacity:1} }`}</style>
-
-      {/* Header */}
-      <div style={{ background: SURF, borderBottom: `1px solid ${BDR}`, padding: '12px 20px', paddingTop: 'max(12px,env(safe-area-inset-top,12px))', flexShrink: 0 }}>
-        <img src="/logo_reducido.png" alt="MUVE" style={{ height: 38, objectFit: 'contain' }}/>
-      </div>
-
-      {/* Body */}
-      <div style={{ flex: 1, padding: '20px 20px 0', display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
-
-        {/* Check + title */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-          <div style={{
-            width: 76, height: 76, borderRadius: '50%',
-            background: `linear-gradient(135deg,${SUC},#16D760)`,
-            display: 'grid', placeItems: 'center', marginBottom: 14,
-            boxShadow: `0 10px 28px ${SUC}44`,
-            animation: 'czCheckPop .55s cubic-bezier(.34,1.56,.64,1) both',
-          }}>
-            <Check size={38} color="#fff" strokeWidth={3}/>
-          </div>
-          <h2 style={{ fontSize: 24, fontWeight: 900, color: N, margin: '0 0 6px', letterSpacing: '-0.6px' }}>¡Solicitud enviada!</h2>
-          <p style={{ fontSize: 13, color: T2, margin: 0, lineHeight: 1.5, maxWidth: 280 }}>
-            {manualReview
-              ? 'Tienes muchas cosas — para darte el mejor precio un asesor MUVE se comunicará contigo en un instante.'
-              : 'Revisaremos tu solicitud y te contactaremos pronto.'
-            }
-          </p>
+    <div className="czNoteOverlay">
+      <style>{`
+        @keyframes czNoteBackdropIn { from{opacity:0} to{opacity:1} }
+        @keyframes czNoteIn { from{opacity:0;transform:scale(.92) translateY(8px)} to{opacity:1;transform:scale(1) translateY(0)} }
+        @keyframes czCheckPop { 0%{transform:scale(0.4);opacity:0} 70%{transform:scale(1.12)} 100%{transform:scale(1);opacity:1} }
+        .czNoteOverlay {
+          position: fixed; inset: 0; z-index: 6;
+          display: flex; align-items: center; justify-content: center;
+          padding: 20px; background: rgba(10,31,61,.32);
+          animation: czNoteBackdropIn .3s ease both;
+        }
+        .czNoteCard {
+          width: 100%; max-width: 380px; background: ${SURF}; border-radius: 24px;
+          padding: 32px 28px 24px; text-align: center;
+          box-shadow: 0 30px 80px rgba(10,31,61,.35), 0 0 0 1px rgba(0,0,0,.05);
+          animation: czNoteIn .4s cubic-bezier(.22,.68,.36,1) both;
+        }
+      `}</style>
+      <div className="czNoteCard">
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', margin: '0 auto 16px',
+          background: `linear-gradient(135deg,${SUC},#16D760)`,
+          display: 'grid', placeItems: 'center',
+          boxShadow: `0 10px 28px ${SUC}44`,
+          animation: 'czCheckPop .55s cubic-bezier(.34,1.56,.64,1) both',
+        }}>
+          <Check size={32} color="#fff" strokeWidth={3}/>
         </div>
+        <h2 style={{ fontSize: 21, fontWeight: 900, color: N, margin: '0 0 6px', letterSpacing: '-0.5px' }}>¡Solicitud enviada!</h2>
+        <p style={{ fontSize: 13, color: T2, margin: '0 0 18px', lineHeight: 1.5 }}>
+          {manualReview
+            ? 'Tienes muchas cosas — un asesor MUVE se comunicará contigo en un instante.'
+            : 'Revisaremos tu solicitud y te contactaremos pronto.'
+          }
+        </p>
 
-        {/* Recap — normal si hay precio, tarjeta de agente si es manual */}
-        {manualReview ? (
-          <div style={{ background: GRAD_DEEP, borderRadius: 16, padding: '16px 18px', display: 'flex', gap: 14, alignItems: 'center' }}>
-            <div style={{ fontSize: 40, flexShrink: 0 }}>📞</div>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: '#fff', marginBottom: 4 }}>Un asesor te contactará</div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,.75)', lineHeight: 1.5 }}>
-                Revisamos artículo por artículo y te damos el precio justo para tu mudanza.
-              </div>
+        {!manualReview && result?.price && (
+          <div style={{ background: BG, borderRadius: 14, border: `1px solid ${BDR}`, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, textAlign: 'left' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
+              <span style={{ fontSize: 22, flexShrink: 0 }}>{result?.vehicleIcon || '🚐'}</span>
+              <div style={{ fontSize: 12, fontWeight: 700, color: N, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{result?.vehicleName}</div>
             </div>
-          </div>
-        ) : (
-          <div style={{ background: SURF, borderRadius: 16, border: `1px solid ${BDR}`, padding: '12px 14px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', minWidth: 0 }}>
-                <span style={{ fontSize: 26, flexShrink: 0 }}>{result?.vehicleIcon || '🚐'}</span>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: N }}>{result?.vehicleName}</div>
-                  <div style={{ fontSize: 11, color: T3, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>
-                    <MapPin size={10} style={{ verticalAlign: 'middle', marginRight: 2 }}/>{from?.address?.split(',')[0] || '—'} → {to?.address?.split(',')[0] || '—'}
-                    {distanceKm ? ` · ${distanceKm} km` : ''}
-                  </div>
-                </div>
-              </div>
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontSize: 22, fontWeight: 900, color: B, letterSpacing: '-0.5px' }}>{fmt(result?.price)}</div>
-                {result?.priceMin && result?.priceMax && result.priceMin !== result.priceMax && (
-                  <div style={{ fontSize: 10, color: T3 }}>{fmt(result.priceMin)} – {fmt(result.priceMax)}</div>
-                )}
-              </div>
-            </div>
-            {(helpers > 0 || extras?.floors > 0 || extras?.packing) && (
-              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}>
-                {helpers > 0 && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${B}12`, color: B, fontWeight: 700 }}>👷 {helpers} ayudante{helpers !== 1 ? 's' : ''}</span>}
-                {extras?.floors > 0 && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${B}12`, color: B, fontWeight: 700 }}>🏢 {extras.floors} piso{extras.floors !== 1 ? 's' : ''}</span>}
-                {extras?.packing && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${B}12`, color: B, fontWeight: 700 }}>📦 Embalaje</span>}
-              </div>
-            )}
+            <div style={{ fontSize: 18, fontWeight: 900, color: B, letterSpacing: '-0.4px', flexShrink: 0 }}>{fmt(result.price)}</div>
           </div>
         )}
 
-        {/* Cycling tips */}
-        <CyclingTips/>
-
-        {/* Trust row — compact */}
-        <div style={{ display: 'flex', gap: 7, justifyContent: 'center' }}>
-          {[{e:'⭐',t:'4.9 / 5'},{e:'🏠',t:'+500 traslados'},{e:'📍',t:'Todo Chile'}].map(b => (
-            <div key={b.t} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 10px', borderRadius:99, background:SURF, border:`1px solid ${BDR}`, fontSize:10, color:T2, fontWeight:700 }}>
-              <span style={{ fontSize:11 }}>{b.e}</span>{b.t}
-            </div>
-          ))}
-        </div>
-
-        {/* WA card */}
         <a href={waUrl} target="_blank" rel="noreferrer" style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          padding: '12px 14px', borderRadius: 14,
+          display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12,
+          padding: '11px 14px', borderRadius: 14,
           background: 'linear-gradient(135deg,#f0fdf6,#e8fbf0)',
           border: '1px solid rgba(37,211,102,.25)', textDecoration: 'none',
         }}>
-          <div style={{ width: 40, height: 40, borderRadius: 12, background: WA, display: 'grid', placeItems: 'center', flexShrink: 0, boxShadow: '0 3px 10px rgba(37,211,102,.32)' }}>
-            <svg width={22} height={22} viewBox="0 0 24 24" fill="white"><path d="M20.5 3.5A11 11 0 003.4 17.4L2 22l4.7-1.4A11 11 0 1020.5 3.5z"/></svg>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: WA, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+            <svg width={18} height={18} viewBox="0 0 24 24" fill="white"><path d="M20.5 3.5A11 11 0 003.4 17.4L2 22l4.7-1.4A11 11 0 1020.5 3.5z"/></svg>
           </div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#15803D' }}>¿Preguntas? Escríbenos</div>
-            <div style={{ fontSize: 11, color: '#16A34A', fontWeight: 600, marginTop: 1 }}>Respuesta por WhatsApp →</div>
-          </div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#15803D', textAlign: 'left' }}>¿Preguntas? Escríbenos por WhatsApp</div>
         </a>
 
-      </div>
-
-      <CtaBar>
         <button type="button" onClick={onRestart} style={{
-          flex: 1, padding: '14px', borderRadius: 14, border: `1.5px solid ${BDR}`,
-          background: BG, color: T2, fontSize: 14, fontWeight: 700, cursor: 'pointer',
+          width: '100%', padding: '12px', borderRadius: 14, border: `1.5px solid ${BDR}`,
+          background: BG, color: T2, fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
           fontFamily: 'Inter,system-ui,sans-serif',
         }}>Nueva cotización</button>
-      </CtaBar>
+      </div>
     </div>
   );
 }
@@ -1854,6 +1777,8 @@ function ScreenCalculating() {
 // ─── Desktop shell CSS ────────────────────────────────────────
 const CZ_CSS = `
   .cz-anim { display: none; }
+  .czScaleWrap { display: contents; }
+  .czRig { display: contents; }
   .cz-outer { background: #EBF4FF; }
   .czTestBtn { display: none; }
   @keyframes czRipple       { to { transform: scale(1); opacity: 0; } }
@@ -1867,6 +1792,9 @@ const CZ_CSS = `
       position: fixed; inset: 0; overflow: hidden;
       background: linear-gradient(180deg,#5BB8F5 0%,#89CFED 45%,#C4E8FF 100%);
       display: flex; align-items: center; justify-content: center;
+      /* --cz-scale is set inline via JS (computeCzScale in the component) — computed there,
+         not with CSS clamp()/calc() division, because that formula resolves unreliably across
+         browsers (Safari in particular mis-computes nested var()/calc()/min() viewport-unit chains). */
     }
     .cz-anim {
       display: block; position: absolute; inset: 0;
@@ -1875,12 +1803,13 @@ const CZ_CSS = `
       transform: translateZ(0);
     }
     .cz-inner {
-      width: 100%; max-width: 820px;
-      height: calc(100dvh - 48px); max-height: 960px;
+      width: 820px; height: 960px;
+      /* transform is set inline (JS, local pop-in/out only — overall scale lives on
+         the .czScaleWrap ancestor, position/slide on .czRig) — see the component's render */
       border-radius: 24px; overflow: hidden;
       box-shadow: 0 40px 100px rgba(10,31,61,.28), 0 0 0 1px rgba(0,0,0,.07);
-      position: relative; display: flex; flex-direction: column;
-      z-index: 2;
+      position: relative; z-index: 2; display: flex; flex-direction: column;
+      flex-shrink: 0;
     }
     .cz-inner > div {
       flex: 1; min-height: 0 !important; height: 100% !important;
@@ -1894,46 +1823,36 @@ const CZ_CSS = `
       box-shadow: 0 2px 10px rgba(0,0,0,.18); transition: transform .12s;
     }
     .czTestBtn:hover { transform: scale(1.04); }
-    /* Truck is 400×187 px — center offset = 400/2 = 200px */
-    .czTruckOuter { position: absolute; bottom: calc(14.5vh - 19px); left: 0; width: 576px; height: 269px; will-change: transform, opacity; }
-    .czTruck-entering { animation: czTruckEnter 2.5s cubic-bezier(.2,.65,.35,1) forwards; }
-    @keyframes czTruckEnter {
-      from { transform: translateX(-680px); opacity: 0; }
-      8%   { opacity: 1; }
-      to   { transform: translateX(calc(50vw - 288px)); opacity: 1; }
+
+    /* Two separate layers so the responsive scale and the drive-in/out slide never
+       fight over the same transform property (mixing both in one animated transform
+       was causing the whole rig to visibly drift instead of holding a fixed spot):
+       .czScaleWrap only ever scales (static per render, never animated) — it's the
+       single source of truth for size, so the card and the cab are always exactly the
+       same scale. .czRig, its only child, only ever translates on X — it sits still at
+       translateX(0) here holding its place ("el mismo sitio") the entire time the form
+       is being filled, and only moves when entering/departing. */
+    .czScaleWrap {
+      display: flex; align-items: center; justify-content: center;
+      transform: scale(var(--cz-scale));
+      position: relative; z-index: 2;
     }
-    .czTruck-parked {
-      transform: translateX(calc(50vw - 288px));
-      animation: czTruckBob 3s ease-in-out 0.5s infinite;
+    /* Position/opacity here are driven entirely by inline style in JS (RIG_POSE), not
+       by CSS classes — a plain CSS transition on values that change between two
+       separately-committed inline styles, instead of a @keyframes animation that has
+       to be "kicked off" correctly. Inline styles apply in the same render as the
+       elements they're on, with no dependency on this <style> tag having already been
+       parsed — the most reliable way to guarantee the very first pose (off-screen,
+       invisible) actually paints before the drive-in starts animating toward it. */
+    /* Sized by the card alone (its only in-flow child) — the cab attaches via absolute
+       positioning (see the Cab component) instead of being a flex sibling, so
+       .czScaleWrap centers the CARD, not the card+cab pair. The cab is free to hang
+       off the right edge, even past the viewport, without pulling the card off-center. */
+    .czRig {
+      display: block; position: relative; z-index: 2;
     }
-    @keyframes czTruckBob {
-      0%,100% { transform: translateX(calc(50vw - 288px)) translateY(0); }
-      50%      { transform: translateX(calc(50vw - 288px)) translateY(-4px); }
-    }
-    .czTruck-loading {
-      transform: translateX(calc(50vw - 288px));
-      animation: czTruckRev 0.2s ease-in-out infinite;
-    }
-    @keyframes czTruckRev {
-      0%,100% { transform: translateX(calc(50vw - 288px)) translateY(0); }
-      50%      { transform: translateX(calc(50vw - 288px)) translateY(-6px); }
-    }
-    .czTruck-departing { animation: czTruckDepart 1.9s cubic-bezier(.45,0,1,.55) forwards; }
-    @keyframes czTruckDepart {
-      from { transform: translateX(calc(50vw - 288px)); opacity: 1; }
-      82%  { opacity: 1; }
-      to   { transform: translateX(140vw); opacity: 0; }
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .czTruck-entering, .czTruck-departing {
-      animation: none !important;
-      transform: translateX(calc(50vw - 288px)) !important;
-      opacity: 1 !important;
-    }
-    .czTruck-loading, .czTruck-parked {
-      animation: none !important;
-    }
+    .czWheelSpin { animation: czWheelSpin .55s linear infinite; }
+    @keyframes czWheelSpin { to { transform: rotate(360deg); } }
   }
 `;
 
@@ -1954,14 +1873,74 @@ const INIT = {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Card is designed at a fixed 820×960 canvas, then scaled as one unit to fill whatever
+// room the screen actually has. Computed in JS (not CSS clamp/calc division) because that
+// formula is unreliable across browsers — Safari in particular mis-resolves nested
+// var()/calc()/min() chains dividing viewport units, producing a wildly oversized scale.
+//
+// scale drives overall content size (fonts, icons, padding — everything), based on
+// available height so text/buttons never get absurdly huge on a merely-wide screen.
+// designWidth is the pre-scale width fed to .cz-inner: on screens much wider than tall
+// (ultrawide/big monitors), it stretches beyond the plain 820*scale so the card actually
+// spreads sideways into that space instead of just floating there as a taller sliver.
+// Below 640px the floating-card treatment doesn't apply at all (.cz-anim/.cz-outer's
+// desktop CSS is gated behind that same breakpoint) — the scene is plain full-bleed mobile
+// flow instead, so scale/designWidth must stay unset there or they'd force the desktop
+// card's sizing onto mobile through the inline style regardless of the CSS breakpoint.
+function computeCzLayout() {
+  if (typeof window === 'undefined') return { isDesktop: false, scale: 1, designWidth: 820 };
+  const vw = window.innerWidth, vh = window.innerHeight;
+  if (vw < 640) return { isDesktop: false, scale: 1, designWidth: 820 };
+  const sx = (vw - 48) / 820;
+  const sy = (vh - 48) / 960;
+  // sx is a floor here (not just a max cap) so a narrow-but-tall window can never make
+  // the proportional width exceed what's actually available — the stretch bonus below
+  // only ever adds width, it never causes an overflow scale on its own.
+  const scale = Math.min(Math.max(Math.min(sx, sy), 0.65), 1.6);
+  const proportionalWidthPx = 820 * scale;
+  const stretchedWidthPx = Math.min(vw - 48, proportionalWidthPx * 1.45, 1300);
+  const widthPx = Math.max(proportionalWidthPx, stretchedWidthPx);
+  return { isDesktop: true, scale, designWidth: widthPx / scale };
+}
+
 // ─── MAIN ─────────────────────────────────────────────────────
 export default function CotizadorView() {
   const [state, setState]           = useState(INIT);
   const [calculating, setCalc]      = useState(false);
   const [saving, setSaving]         = useState(false);
-  const [truckPhase, setTruckPhase] = useState('entering');
+  const [czLayout, setCzLayout] = useState(computeCzLayout);
+  const { isDesktop: isDesktopScene, scale: cardScale, designWidth: cardDesignWidth } = czLayout;
+  // Always plays on desktop — deliberately not gated behind prefers-reduced-motion,
+  // since this truck entrance/exit is the point of the landing, not incidental chrome.
+  const playIntro = isDesktopScene;
+  // Card starts visible (not hidden-then-revealed) — it's glued to the cab as one
+  // object, so it rides in together with it, not fading in separately afterward.
   const [frameHidden, setFrameHidden] = useState(false);
+  const [showCab, setShowCab] = useState(isDesktopScene);
+  // Starts 'pending' (held statically off-screen, see RIG_POSE), not 'entering' directly
+  // — flipping to 'entering' a frame later (below) guarantees the browser has already
+  // painted the off-screen pose separately, so the transition to the on-screen pose
+  // actually plays instead of the rig just appearing there on the very first paint.
+  const [rigPhase, setRigPhase] = useState(playIntro ? 'pending' : 'attached');
+  // While the truck is still on its way, the card shows a blank cover (white + big
+  // logo) instead of the real form — it "opens" like a roll-up door once the truck
+  // has arrived. See the .czDoor cover inside .cz-inner in the main render.
+  const [doorOpen, setDoorOpen] = useState(!playIntro);
   const frameRef = useRef(null);
+
+  useEffect(() => {
+    if (!playIntro) return;
+    const t1 = setTimeout(() => setRigPhase('entering'), 50);
+    const t2 = setTimeout(() => setRigPhase('attached'), 50 + RIG_ENTER_MS);
+    const t3 = setTimeout(() => setDoorOpen(true), 50 + RIG_ENTER_MS + 550);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => setCzLayout(computeCzLayout());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // step → pageTracker level (1=landing, 9=submit handled separately)
   const STEP_DB_LEVEL = { 1: 2, 2: 3, 3: 4, 5: 7 };
@@ -1970,8 +1949,6 @@ export default function CotizadorView() {
     initMetaPixel();
     trackStep(0);
     _trackLandingDB();
-    const t = setTimeout(() => setTruckPhase('parked'), 2600);
-    return () => clearTimeout(t);
   }, []);
 
   const go = step => {
@@ -2056,24 +2033,42 @@ export default function CotizadorView() {
     } catch { /* non-blocking */ }
 
     if (typeof window !== 'undefined' && window.innerWidth >= 640) {
-      // Hide the phone frame so the animation is fully visible
+      // Reverse the arrival first: card re-crops (the rear wheel reappears) and the
+      // cover closes back over the content (logo + slogan again) — then the whole rig
+      // rolls off to the right, wheels spinning, before the SuccessNote overlay
+      // (rendered independently, see the main return) takes over.
+      setDoorOpen(false);
+      await sleep(900);
+      setRigPhase('departing');
+      await sleep(1600);
+      setShowCab(false);
       setFrameHidden(true);
-      setTruckPhase('loading');
-      await sleep(1100);
-      setTruckPhase('departing');
-      await sleep(1900);
+      setRigPhase('attached');
     }
 
     setSaving(false);
     setState(s => ({ ...s, step: 5 }));
-    setFrameHidden(false);
     trackStep(5);
   };
 
-  const restart = () => setState(INIT);
+  const restart = () => {
+    setState(INIT);
+    if (!playIntro) return;
+    // The cab retired off-screen when the last quote finished — bring it back for
+    // the next one, replaying the same drive-in it did on first page load (same
+    // pending → entering handoff, see the mount effect above).
+    // Card stays visible the whole time — it's glued to the cab, riding in together.
+    setShowCab(true);
+    setFrameHidden(false);
+    setDoorOpen(false);
+    setRigPhase('pending');
+    setTimeout(() => setRigPhase('entering'), 50);
+    setTimeout(() => setRigPhase('attached'), 50 + RIG_ENTER_MS);
+    setTimeout(() => setDoorOpen(true), 50 + RIG_ENTER_MS + 550);
+  };
 
   const triggerTruckTest = async () => {
-    // Inject mock data so ScreenSuccess renders correctly
+    // Inject mock data so SuccessNote renders correctly
     setState(s => ({
       ...s,
       step: s.step,
@@ -2088,21 +2083,33 @@ export default function CotizadorView() {
       to:   s.to?.address   ? s.to   : { address: 'Providencia, Santiago', lat: -33.43, lng: -70.62 },
       distanceKm: s.distanceKm || 8,
     }));
-    // Camión ya estaba estacionado — saltar directo a carga
-    setTruckPhase('parked');
-    setFrameHidden(false);
-    await sleep(350);
-    // Ocultar formulario y cargar cajas
+    // Reproducir la secuencia de cierre completa: primero se re-cierra (reaparece la
+    // rueda, vuelve el logo), luego el rig se va rodando a la derecha, y por último
+    // aparece la ventanita de éxito.
+    setDoorOpen(false);
+    await sleep(900);
+    setRigPhase('departing');
+    await sleep(1600);
+    setShowCab(false);
     setFrameHidden(true);
-    setTruckPhase('loading');
-    await sleep(1300);
-    // Camión parte con humo
-    setTruckPhase('departing');
-    await sleep(2000);
-    // Mostrar pantalla de éxito
+    setRigPhase('attached');
     setState(s => ({ ...s, step: 5 }));
-    setFrameHidden(false);
   };
+
+  const cabWidthDesign = Math.min(480, 320 / cardScale) * (256 / 270) * 1.1;
+  const cabHeightDesign = Math.min(702, 513 / cardScale);
+  // CabArt's cab is stretched taller without going wider (preserveAspectRatio="none"),
+  // which also stretches its tire into a taller ellipse, not a plain circle anymore —
+  // so the rear wheel (a plain circle) has to match the front tire's VERTICAL size
+  // (height-based scale), not its width-based scale, or it comes out visibly smaller.
+  const wheelDiameter = cabHeightDesign * (108 / 270);
+  // Front wheel's own center sits 72/270 of the cab's height above the cab's bottom
+  // edge (that's where cy=336 falls inside CabArt's 138–408 viewBox) — matching that
+  // same height for the rear wheel's center keeps both wheels level with each other.
+  const frontWheelCenterFromBottom = cabHeightDesign * (72 / 270);
+  // Crop line sits right at the rear wheel's center — the white edge only needs to
+  // cover the top half of the wheel; the bottom half shows fully below it.
+  const cardCropPx = frontWheelCenterFromBottom;
 
   const screen = calculating ? <ScreenCalculating/> : (() => {
     switch (state.step) {
@@ -2127,7 +2134,7 @@ export default function CotizadorView() {
         onBack={() => go(1)}/>;
       case 3: return <ScreenExtras state={state} setState={setState} onNext={() => calculate()} onBack={() => go(2)}/>;
       case 4: return <ScreenResult state={state} onRestart={restart} onBack={() => go(3)} onNext={h => { setState(s => ({...s, selectedHelpers: h})); submitContact(state.name, state.phone, state.email); }}/>;
-      case 5: return <ScreenSuccess state={state} onRestart={restart}/>;
+      case 5: return null;
       default: return <ScreenWelcome onStart={() => go(1)}/>;
     }
   })();
@@ -2135,24 +2142,96 @@ export default function CotizadorView() {
   return (
     <>
       <style>{CZ_CSS}</style>
-      <div className="cz-outer">
+      <div className="cz-outer" style={{ '--cz-scale': String(cardScale) }}>
         <div className="cz-anim">
           <SceneStatic/>
-          <TruckAnim phase={truckPhase}/>
         </div>
+        {/* .czScaleWrap only scales (static — the single source of truth for size).
+            .czRig, its only child, only slides on X and holds a fixed spot ("el mismo
+            sitio") the whole time the form is filled; card + cab are glued together in
+            one flex row so there's never a gap between them. */}
+        <div className="czScaleWrap">
+          <div className="czRig" style={{ ...RIG_POSE[rigPhase], transition: RIG_TRANSITION[rigPhase] }}>
+            <div className="cz-inner" ref={frameRef} style={{
+              opacity: frameHidden ? 0 : 1,
+              ...(isDesktopScene ? {
+                width: cardDesignWidth,
+                transform: `scale(${frameHidden ? 0.96 : 1})`,
+              } : {
+                transform: frameHidden ? 'scale(0.96)' : 'scale(1)',
+              }),
+              // Cropped short (bottom hidden) while the truck is still en route — the
+              // rear wheel sits in that gap (see RearWheel below) — then unfolds down to
+              // the card's real full height once parked, completing the form's layout.
+              // clip-path (not a height/layout change) so the crop never nudges the cab,
+              // wheel or tail light, which are all positioned relative to this box's
+              // real, constant layout size.
+              clipPath: doorOpen ? 'inset(0 round 24px)' : `inset(0 0 ${cardCropPx}px 0 round 24px)`,
+              transition: frameHidden
+                ? 'opacity 0.38s ease, transform 0.38s ease'
+                : 'opacity 0.45s ease 0.1s, transform 0.45s ease 0.1s, clip-path 900ms cubic-bezier(.65,0,.35,1)',
+              pointerEvents: frameHidden ? 'none' : 'auto',
+            }}>
+              {screen}
+              {/* Blank + logo cover for the entire trip — real content only shows once
+                  the card unfolds (doorOpen): splits open from the middle, top half up
+                  and bottom half down (stretching a bit as it goes). Clipped by the same
+                  clip-path as the card itself, so it never shows below the crop line.
+                  The logo lives INSIDE each panel (each one clipped to its own half of
+                  a full-card-size copy) rather than on a layer behind both — otherwise,
+                  once the two solid panels meet in the middle, they'd cover the logo
+                  completely and the "closed" state would just be blank white. */}
+              <div style={{ position: 'absolute', inset: 0, zIndex: 5, pointerEvents: doorOpen ? 'none' : 'auto' }}>
+                <div style={{
+                  position: 'absolute', top: 0, left: 0, right: 0, height: '50%', background: '#fff', overflow: 'hidden',
+                  transform: doorOpen ? 'translateY(-100%)' : 'translateY(0)',
+                  transition: 'transform 900ms cubic-bezier(.65,0,.35,1)',
+                }}>
+                  <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, height: '200%',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14,
+                  }}>
+                    <img src="/logo_reducido.png" alt="MUVE" style={{ width: '62%', maxWidth: 380, objectFit: 'contain' }}/>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: B, textTransform: 'uppercase', letterSpacing: 3 }}>
+                      Fletes · Mudanzas · Santiago
+                    </div>
+                  </div>
+                </div>
+                <div style={{
+                  position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%', background: '#fff', overflow: 'hidden',
+                  transformOrigin: 'top',
+                  transform: doorOpen ? 'translateY(100%) scaleY(1.3)' : 'translateY(0) scaleY(1)',
+                  transition: 'transform 900ms cubic-bezier(.65,0,.35,1)',
+                }}>
+                  <div style={{
+                    position: 'absolute', bottom: 0, left: 0, right: 0, height: '200%',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14,
+                  }}>
+                    <img src="/logo_reducido.png" alt="MUVE" style={{ width: '62%', maxWidth: 380, objectFit: 'contain' }}/>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: B, textTransform: 'uppercase', letterSpacing: 3 }}>
+                      Fletes · Mudanzas · Santiago
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {showCab && <Cab phase={rigPhase} widthDesign={cabWidthDesign} heightDesign={cabHeightDesign}/>}
+            {/* Tail light — the cab attaches on the right, so this is the true rear of
+                the whole "truck" (card = cargo box), flush against its left edge. */}
+            {showCab && (
+              <div style={{ position: 'absolute', right: '100%', top: '50%', marginTop: -18, width: 13, height: 36, borderRadius: 4, background: '#DC2626' }}>
+                <div style={{ position: 'absolute', top: 6, left: 3.5, width: 6, height: 13, borderRadius: 2, background: '#FCA5A5', opacity: .85 }}/>
+              </div>
+            )}
+            {showCab && <RearWheel doorOpen={doorOpen} spinning={rigPhase === 'entering' || rigPhase === 'departing'} diameter={wheelDiameter} centerFromBottom={frontWheelCenterFromBottom}/>}
+          </div>
+        </div>
+        {/* Independent of the card/rig sizing entirely — always the same compact size,
+            centered on the real viewport (not the scaled truck scene). */}
+        {state.step === 5 && <SuccessNote state={state} onRestart={restart}/>}
         {import.meta.env.DEV && (
           <button type="button" className="czTestBtn" onClick={triggerTruckTest}>🚚 Probar animación</button>
         )}
-        <div className="cz-inner" ref={frameRef} style={{
-          opacity: frameHidden ? 0 : 1,
-          transform: frameHidden ? 'scale(0.96)' : 'scale(1)',
-          transition: frameHidden
-            ? 'opacity 0.38s ease, transform 0.38s ease'
-            : 'opacity 0.45s ease 0.1s, transform 0.45s ease 0.1s',
-          pointerEvents: frameHidden ? 'none' : 'auto',
-        }}>
-          {screen}
-        </div>
       </div>
     </>
   );

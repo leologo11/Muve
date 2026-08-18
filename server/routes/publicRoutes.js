@@ -10,27 +10,13 @@ import {
   validatePublicQuotePayload,
 } from '../middleware/security.js';
 import { notifyAdminQuoteCreated } from '../utils/notifications.js';
+import { OSRM_BASE_URL } from '../utils/geocode.js';
+import { findTierPricePerKm, calcVehiclePrice } from '../utils/vehiclePricing.js';
 import { isSupabaseEnabled, normalizeQuote, normalizeQuoteItem, qs, supabaseRequest } from '../utils/supabase.js';
 
 const router = Router();
 
 const SERVICE_TYPES = ['flete', 'mudanza', 'paqueteria'];
-
-// ── Pricing helpers ───────────────────────────────────────────────────────────
-
-function calcVehiclePrice(config, distanceKm, numHelpers = 0, numFloors = 0, needsPacking = false, driverHelps = false) {
-  const tiers = (config.km_tiers || []).slice().sort((a, b) => a.max_km - b.max_km);
-  const tier = tiers.find(t => distanceKm <= t.max_km) || tiers[tiers.length - 1];
-  const ppk = tier ? Number(tier.price_per_km || 0) : 0;
-  const extras = config.extras || {};
-  const kmCost = distanceKm * ppk;
-  const driverHelpCost = driverHelps ? Number(extras.driver_help || 0) : 0;
-  const helperCost = numHelpers * Number(extras.helper || 0);
-  const floorCost = numFloors * Number(extras.floor || 0);
-  const packingCost = needsPacking ? Number(extras.packing || 0) : 0;
-  const total = Number(config.base_price || 0) + kmCost + driverHelpCost + helperCost + floorCost + packingCost;
-  return Math.round(total / 1000) * 1000;
-}
 
 function normalizePublicVehicleConfig(r) {
   return {
@@ -150,7 +136,7 @@ router.post('/distance', publicCalculationLimiter, validatePublicCalculationPayl
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 8000);
       const r = await fetch(
-        `https://router.project-osrm.org/route/v1/driving/${pts}?overview=false`,
+        `${OSRM_BASE_URL}/route/v1/driving/${pts}?overview=false`,
         { headers: { 'User-Agent': 'MUVE/1.0' }, signal: controller.signal }
       );
       clearTimeout(timer);
@@ -172,6 +158,25 @@ router.post('/distance', publicCalculationLimiter, validatePublicCalculationPayl
     res.json({ distanceKm, durationMin, estimated: usedFallback });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/public/osrm-path — road route geometry for the public cotizador map (no auth).
+// The authenticated equivalent lives in deliveryRoutes.js, but that whole router requires
+// a JWT — this proxies the same OSRM call for the public quote flow, which has none.
+router.post('/osrm-path', publicCalculationLimiter, validatePublicCalculationPayload, async (req, res) => {
+  try {
+    const { originLat, originLng, destLat, destLng } = req.body;
+    if (!originLat || !originLng || !destLat || !destLng) return res.json({ geometry: null });
+    const pts = `${originLng},${originLat};${destLng},${destLat}`;
+    const r = await fetch(
+      `${OSRM_BASE_URL}/route/v1/driving/${pts}?overview=simplified&geometries=geojson`,
+      { headers: { 'User-Agent': 'MUVE/1.0' }, signal: AbortSignal.timeout(8000) }
+    );
+    const d = await r.json();
+    res.json({ geometry: d.routes?.[0]?.geometry || null });
+  } catch {
+    res.json({ geometry: null });
   }
 });
 
@@ -904,19 +909,26 @@ router.post('/lead', publicQuoteLimiter, async (req, res) => {
     const destinationAddress = (req.body.to   || '').toString().trim().slice(0, 300);
 
     if (isSupabaseEnabled()) {
-      await supabaseRequest('POST', '/quotes', {
-        service_type: 'flete',
-        contact_person: name,
-        contact_phone: phone,
-        origin_address: originAddress,
-        destination_address: destinationAddress,
-        status: 'draft',
-        client_notes: 'Lead parcial — cotizador web (pre-precio)',
+      const ds = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const quoteCode = `MUVE-${ds}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+      await supabaseRequest('/quotes', {
+        method: 'POST',
+        body: JSON.stringify({
+          quote_code: quoteCode,
+          service_type: 'flete',
+          contact_person: name,
+          contact_phone: phone,
+          origin_address: originAddress,
+          destination_address: destinationAddress,
+          status: 'draft',
+          client_notes: 'Lead parcial — cotizador web (pre-precio)',
+        }),
       });
     }
     res.json({ ok: true });
-  } catch {
-    res.json({ ok: true }); // silencioso — no bloquear al usuario
+  } catch (err) {
+    console.error('[public/lead] Error al guardar lead parcial:', err.message);
+    res.json({ ok: true }); // no bloquear al usuario aunque falle el guardado
   }
 });
 
@@ -1161,16 +1173,10 @@ router.patch('/quote/:token', publicQuoteLimiter, async (req, res) => {
       const finalItems = savedItems || await supabaseRequest(`/quote_items${qs({ quote_id: `eq.${quote.id}`, select: '*', order: 'created_at.asc' })}`);
       return res.json({ ok: true, items: (finalItems || []).map(normalizeQuoteItem) });
     }
-    const quote = await Quote.findOne({ shareToken: req.params.token });
-    if (!quote) return res.status(404).json({ error: 'Cotización no encontrada' });
-    if (['approved', 'rejected', 'submitted'].includes(quote.status)) {
-      return res.status(403).json({ error: 'Esta cotización ya no puede modificarse' });
-    }
-    const { items, clientNotes } = req.body;
-    if (items !== undefined) quote.items = items;
-    if (clientNotes !== undefined) quote.clientNotes = clientNotes;
-    await quote.save();
-    res.json({ ok: true, items: quote.items });
+    // Supabase is this app's only supported database (see CLAUDE.md) — if it's not
+    // configured there is no working fallback, so fail loudly instead of crashing
+    // on an undefined `Quote` model.
+    throw new Error('Base de datos no configurada (Supabase deshabilitado)');
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -1197,17 +1203,10 @@ router.post('/quote/:token/submit', publicQuoteLimiter, async (req, res) => {
       });
       return res.json({ ok: true, status: rows?.[0]?.status || 'submitted' });
     }
-    const quote = await Quote.findOne({ shareToken: req.params.token });
-    if (!quote) return res.status(404).json({ error: 'Cotización no encontrada' });
-    if (['approved', 'rejected', 'submitted'].includes(quote.status)) {
-      return res.status(403).json({ error: 'Esta cotización ya fue enviada' });
-    }
-    const { items, clientNotes } = req.body;
-    if (items !== undefined) quote.items = items;
-    if (clientNotes !== undefined) quote.clientNotes = clientNotes;
-    quote.status = 'submitted';
-    await quote.save();
-    res.json({ ok: true, status: quote.status });
+    // Supabase is this app's only supported database (see CLAUDE.md) — if it's not
+    // configured there is no working fallback, so fail loudly instead of crashing
+    // on an undefined `Quote` model.
+    throw new Error('Base de datos no configurada (Supabase deshabilitado)');
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

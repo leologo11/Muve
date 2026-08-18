@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
+import { formatCLP as fmt } from '../../utils/format.js';
 
 const VEHICLE_ICONS = { furgon: '🚐', camion34: '🚚', camionLargo: '🚛' };
-const fmt = n => Number(n || 0).toLocaleString('es-CL');
 
 // Build human-readable tier ranges: [{from, to, ppk}, ...]
 function buildRanges(tiers) {

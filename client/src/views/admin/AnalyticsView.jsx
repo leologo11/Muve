@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../api/index.js';
+import { formatCLP as fmt } from '../../utils/format.js';
 
 const PERIODS = [
   { days: 1,  label: 'Hoy' },
@@ -41,7 +42,6 @@ const SOURCE_META = {
   desconocido:  { label: 'Desconocido',        icon: '❓', color: '#cbd5e1' },
 };
 
-const fmt = n => Number(n || 0).toLocaleString('es-CL');
 
 function FunnelBar({ label, count, pct, maxCount, isLast, dropPct, stepNote }) {
   const barPct = maxCount > 0 ? Math.round(count / maxCount * 100) : 0;

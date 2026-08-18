@@ -1,51 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { api } from '../../api/index.js';
+import { routeDateISO, weekStart, sumWeekEarnings } from '../../utils/driverEarnings.js';
 import DriverProfileModal from './DriverProfileModal.jsx';
 import DriverPaymentsView from './DriverPaymentsView.jsx';
+import DriverHistoryView from './DriverHistoryView.jsx';
 
 const STATUS = {
-  active:    { label: '● En ruta',       color: '#16a34a', bg: '#dcfce7', border: '#16a34a40' },
-  paused:    { label: '⏸ En revisión',   color: '#f57c00', bg: '#fff8e1', border: '#f57c0040' },
-  draft:     { label: '📋 Pendiente',    color: '#0052FF', bg: '#eff6ff', border: '#0052FF40' },
-  completed: { label: '✓ Completada',    color: '#64748b', bg: '#f1f5f9', border: '#94a3b840' },
-  cancelled: { label: '✗ Cancelada',     color: '#cc2244', bg: '#fff0f2', border: '#cc224440' },
+  active:    { label: '● En ruta',       color: 'var(--success)', bg: 'var(--success-dim)', border: 'var(--success-dim)' },
+  paused:    { label: '⏸ En revisión',   color: 'var(--warn)',    bg: 'var(--warn-dim)',    border: 'var(--warn-dim)' },
+  draft:     { label: '📋 Pendiente',    color: 'var(--accent)',  bg: 'var(--accent-dim)',  border: 'var(--accent-dim)' },
+  completed: { label: '✓ Completada',    color: 'var(--muted)',   bg: 'var(--card2)',       border: 'var(--border)' },
+  cancelled: { label: '✗ Cancelada',     color: 'var(--danger)',  bg: 'var(--danger-dim)',  border: 'var(--danger-dim)' },
 };
-
-// Safe date parsing — handles TIMESTAMPTZ, DATE strings, and null
-function routeDateISO(route) {
-  const raw = route?.date;
-  if (raw) {
-    const s = String(raw).slice(0, 10);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  }
-  const m = String(route?.routeCode || '').match(/^RT-(\d{4})(\d{2})(\d{2})/);
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  return null;
-}
 
 // Week earnings helper (Tuesday to Monday)
 function currentWeekEarnings(routes) {
-  const today = new Date();
-  const dow  = today.getDay();
-  const back = (dow - 2 + 7) % 7;
-  const tueSt = new Date(today);
-  tueSt.setDate(today.getDate() - back);
-  tueSt.setHours(0, 0, 0, 0);
-  const fmtN = n => '$' + Math.round(n || 0).toLocaleString('es-CL');
-  let earned = 0;
-  routes.forEach(r => {
-    const iso = routeDateISO(r);
-    if (!iso) return;
-    const rd = new Date(iso + 'T12:00');
-    if (isNaN(rd.getTime()) || rd < tueSt) return;
-    const base      = Number(r.driverPayout || 0);
-    const total     = Number(r.stats?.total || 1);
-    const delivered = Number(r.stats?.delivered || 0);
-    const failed    = Number(r.stats?.failed || 0);
-    earned += Math.round(base / total * (delivered + failed));
-  });
-  return fmtN(earned);
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const earned = sumWeekEarnings(routes, weekStart(todayISO));
+  return '$' + Math.round(earned || 0).toLocaleString('es-CL');
 }
 
 export default function DriverRoutePicker({ onSelect }) {
@@ -55,6 +28,7 @@ export default function DriverRoutePicker({ onSelect }) {
   const [error, setError]     = useState('');
   const [showProfile, setShowProfile] = useState(false);
   const [showPayments, setShowPayments] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     api.getRoutes()
@@ -64,6 +38,7 @@ export default function DriverRoutePicker({ onSelect }) {
   }, []);
 
   if (showPayments) return <DriverPaymentsView onBack={() => setShowPayments(false)} />;
+  if (showHistory) return <DriverHistoryView onBack={() => setShowHistory(false)} />;
 
   const today     = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' });
   const firstName = user?.name?.split(' ')[0] || 'Driver';
@@ -73,7 +48,7 @@ export default function DriverRoutePicker({ onSelect }) {
   const initials  = (user?.name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 
   return (
-    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: '#F1F5F9', overflow: 'hidden' }}>
+    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
 
       {/* Header */}
       <div style={{ background: 'linear-gradient(135deg, #003BB5 0%, #0052FF 100%)', padding: '16px 18px 20px', flexShrink: 0 }}>
@@ -86,7 +61,7 @@ export default function DriverRoutePicker({ onSelect }) {
 
           {/* Avatar + actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={logout} style={{ background: 'rgba(255,255,255,.15)', border: '1px solid rgba(255,255,255,.25)', borderRadius: 20, padding: '6px 12px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            <button onClick={logout} style={{ background: 'rgba(255,255,255,.15)', border: '1px solid rgba(255,255,255,.25)', borderRadius: 'var(--r-full)', padding: '6px 12px', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               Salir
             </button>
             <button onClick={() => setShowProfile(true)} style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,.22)', border: '2px solid rgba(255,255,255,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 900, color: '#fff', cursor: 'pointer' }}>
@@ -97,15 +72,15 @@ export default function DriverRoutePicker({ onSelect }) {
 
         {/* Stats + earnings */}
         <div style={{ display: 'flex', gap: 8 }}>
-          <div style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 12, padding: '10px 12px', border: '1px solid rgba(255,255,255,.15)', cursor: 'pointer' }} onClick={() => setShowPayments(true)}>
+          <div style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 'var(--r-sm)', padding: '10px 12px', border: '1px solid rgba(255,255,255,.15)', cursor: 'pointer' }} onClick={() => setShowPayments(true)}>
             <div style={{ fontSize: 16, fontWeight: 900, color: '#86efac' }}>{weekEarned}</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,.6)', marginTop: 1 }}>Esta semana 💰</div>
           </div>
-          <div style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 12, padding: '10px 12px', border: '1px solid rgba(255,255,255,.15)' }}>
+          <div style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 'var(--r-sm)', padding: '10px 12px', border: '1px solid rgba(255,255,255,.15)' }}>
             <div style={{ fontSize: 16, fontWeight: 900, color: '#fff' }}>{active.length}</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,.6)', marginTop: 1 }}>Rutas activas 📦</div>
           </div>
-          <div style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 12, padding: '10px 12px', border: '1px solid rgba(255,255,255,.15)', cursor: 'pointer' }} onClick={() => setShowPayments(true)}>
+          <div style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 'var(--r-sm)', padding: '10px 12px', border: '1px solid rgba(255,255,255,.15)', cursor: 'pointer' }} onClick={() => setShowPayments(true)}>
             <div style={{ fontSize: 16, fontWeight: 900, color: 'rgba(255,255,255,.7)' }}>{done.length}</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,.6)', marginTop: 1 }}>Completadas</div>
           </div>
@@ -113,12 +88,13 @@ export default function DriverRoutePicker({ onSelect }) {
       </div>
 
       {/* Action buttons row */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '10px 14px', display: 'flex', gap: 8, flexShrink: 0 }}>
+      <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)', padding: '10px 14px', display: 'flex', gap: 8, flexShrink: 0 }}>
         {[
-          { icon: '💰', label: 'Mis pagos', onClick: () => setShowPayments(true), color: '#0052FF' },
-          { icon: '👤', label: 'Mi perfil', onClick: () => setShowProfile(true), color: '#7c3aed' },
+          { icon: '💰', label: 'Mis pagos', onClick: () => setShowPayments(true), color: 'var(--accent)', bg: 'var(--accent-dim)' },
+          { icon: '📜', label: 'Historial', onClick: () => setShowHistory(true), color: 'var(--info)', bg: 'var(--info-dim)' },
+          { icon: '👤', label: 'Mi perfil', onClick: () => setShowProfile(true), color: '#7c3aed', bg: '#7c3aed14' },
         ].map(btn => (
-          <button key={btn.label} onClick={btn.onClick} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 22, border: `1px solid ${btn.color}25`, background: `${btn.color}08`, color: btn.color, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          <button key={btn.label} onClick={btn.onClick} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 10px', borderRadius: 'var(--r-full)', border: `1px solid ${btn.bg}`, background: btn.bg, color: btn.color, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             <span>{btn.icon}</span>{btn.label}
           </button>
         ))}
@@ -128,29 +104,29 @@ export default function DriverRoutePicker({ onSelect }) {
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 14px', WebkitOverflowScrolling: 'touch' }}>
 
         {loading && (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8' }}>
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)' }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div>
             <div style={{ fontSize: 14 }}>Cargando rutas…</div>
           </div>
         )}
 
         {error && (
-          <div style={{ background: '#fff0f2', border: '1px solid #cc224430', borderRadius: 12, padding: '14px 16px', color: '#cc2244', fontSize: 13 }}>
+          <div style={{ background: 'var(--danger-dim)', border: '1px solid var(--danger-dim)', borderRadius: 'var(--r-sm)', padding: '14px 16px', color: 'var(--danger)', fontSize: 13 }}>
             ⚠ {error}
           </div>
         )}
 
         {!loading && routes.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94a3b8' }}>
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)' }}>
             <div style={{ fontSize: 44, marginBottom: 10 }}>📭</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#64748b' }}>Sin rutas asignadas</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--muted)' }}>Sin rutas asignadas</div>
             <div style={{ fontSize: 13, marginTop: 4 }}>Contacta al administrador</div>
           </div>
         )}
 
         {active.length > 0 && (
           <>
-            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.5, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 10 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.5, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 10 }}>
               Rutas pendientes
             </div>
             {active.map(r => <RouteCard key={r._id} route={r} onSelect={onSelect} />)}
@@ -159,8 +135,8 @@ export default function DriverRoutePicker({ onSelect }) {
 
         {done.length > 0 && (
           <>
-            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.5, color: '#94a3b8', textTransform: 'uppercase', margin: '18px 0 10px' }}>
-              Historial
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.5, color: 'var(--muted)', textTransform: 'uppercase', margin: '18px 0 10px' }}>
+              Historial de rutas
             </div>
             {done.map(r => <RouteCard key={r._id} route={r} onSelect={onSelect} dimmed />)}
           </>
@@ -186,12 +162,12 @@ function RouteCard({ route, onSelect, dimmed = false }) {
     <div
       onClick={() => onSelect(route._id)}
       style={{
-        background: dimmed ? '#f8fafc' : '#fff',
-        border: `1.5px solid ${dimmed ? '#e2e8f0' : meta.border}`,
-        borderRadius: 16, marginBottom: 12, overflow: 'hidden',
-        boxShadow: dimmed ? 'none' : '0 2px 12px rgba(0,82,255,.08)',
+        background: dimmed ? 'var(--card2)' : 'var(--card)',
+        border: `1.5px solid ${dimmed ? 'var(--border)' : meta.border}`,
+        borderRadius: 'var(--r-lg)', marginBottom: 12, overflow: 'hidden',
+        boxShadow: dimmed ? 'none' : 'var(--shadow-sm)',
         cursor: 'pointer', opacity: dimmed ? 0.75 : 1,
-        transition: 'transform .1s',
+        transition: `transform var(--t-fast) var(--ease)`,
         WebkitTapHighlightColor: 'transparent',
       }}
       onTouchStart={e => e.currentTarget.style.transform = 'scale(.98)'}
@@ -199,22 +175,22 @@ function RouteCard({ route, onSelect, dimmed = false }) {
     >
       {/* Top stripe for active routes */}
       {route.status === 'active' && (
-        <div style={{ height: 3, background: 'linear-gradient(90deg, #0052FF, #00DAFF)' }} />
+        <div style={{ height: 3, background: 'linear-gradient(90deg, var(--accent), var(--a2))' }} />
       )}
 
       <div style={{ padding: '14px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
           <div>
-            <div style={{ fontSize: 17, fontWeight: 900, color: '#0f172a', letterSpacing: -0.3 }}>
+            <div style={{ fontSize: 17, fontWeight: 900, color: 'var(--text)', letterSpacing: -0.3 }}>
               {route.routeCode}
             </div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 1 }}>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 1 }}>
               {dateStr} {route.name ? `· ${route.name}` : ''}
             </div>
           </div>
           <span style={{
             fontSize: 11, fontWeight: 700, padding: '4px 10px',
-            borderRadius: 20, background: meta.bg, color: meta.color,
+            borderRadius: 'var(--r-full)', background: meta.bg, color: meta.color,
             border: `1px solid ${meta.border}`, whiteSpace: 'nowrap',
           }}>
             {meta.label}
@@ -222,20 +198,20 @@ function RouteCard({ route, onSelect, dimmed = false }) {
         </div>
 
         {/* Stats row */}
-        <div style={{ display: 'flex', gap: 14, fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+        <div style={{ display: 'flex', gap: 14, fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
           <span>📦 {pkgs} paquetes</span>
           {route.distanceKm && <span>🗺 {route.distanceKm} km</span>}
           {pkgs > 0 && delivered > 0 && (
-            <span style={{ color: '#16a34a', fontWeight: 700 }}>✓ {delivered} entregados</span>
+            <span style={{ color: 'var(--success)', fontWeight: 700 }}>✓ {delivered} entregados</span>
           )}
         </div>
 
         {/* Progress bar for active/paused */}
         {(route.status === 'active' || route.status === 'paused') && pkgs > 0 && (
-          <div style={{ height: 4, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden', marginBottom: 12 }}>
+          <div style={{ height: 4, background: 'var(--border)', borderRadius: 4, overflow: 'hidden', marginBottom: 12 }}>
             <div style={{
               height: '100%', borderRadius: 4,
-              background: 'linear-gradient(90deg, #0052FF, #00DAFF)',
+              background: 'linear-gradient(90deg, var(--accent), var(--a2))',
               width: `${pct}%`, transition: 'width .5s',
             }} />
           </div>
@@ -243,7 +219,7 @@ function RouteCard({ route, onSelect, dimmed = false }) {
 
         {/* Start point */}
         {route.startPoint?.address && (
-          <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 10 }}>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
             📍 {route.startPoint.address}
           </div>
         )}
@@ -251,9 +227,9 @@ function RouteCard({ route, onSelect, dimmed = false }) {
         {/* Enter button */}
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <div style={{
-            padding: '9px 20px', borderRadius: 22,
-            background: dimmed ? '#f1f5f9' : 'linear-gradient(90deg, #0052FF, #0070FF)',
-            color: dimmed ? '#94a3b8' : '#fff',
+            padding: '9px 20px', borderRadius: 'var(--r-full)',
+            background: dimmed ? 'var(--card2)' : 'linear-gradient(90deg, var(--accent), #0070FF)',
+            color: dimmed ? 'var(--muted)' : '#fff',
             fontSize: 13, fontWeight: 800,
           }}>
             {route.status === 'completed' ? 'Ver →' : 'Entrar →'}

@@ -9,7 +9,7 @@ router.use(requireAuth);
 // GET /api/users — admin only
 router.get('/', requireRole('admin'), async (req, res) => {
   try {
-    const rows = await supabaseRequest(`/app_users${qs({ select: '*', order: 'created_at.desc' })}`);
+    const rows = await supabaseRequest(`/app_users${qs({ select: '*', order: 'created_at.desc', limit: 2000 })}`);
     return res.json(rows.map(normalizeUser));
   } catch (err) {
     res.status(500).json({ error: err.message });

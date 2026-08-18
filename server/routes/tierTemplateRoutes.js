@@ -22,7 +22,7 @@ function toClient(r) {
 // GET /api/tier-templates
 router.get('/', async (req, res) => {
   try {
-    const rows = await supabaseRequest(`/tier_templates${qs({ select: '*', order: 'created_at.desc' })}`);
+    const rows = await supabaseRequest(`/tier_templates${qs({ select: '*', order: 'created_at.desc', limit: 2000 })}`);
     res.json(rows.map(toClient));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

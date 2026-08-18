@@ -4,6 +4,8 @@ import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
 import InventoryPicker, { CATALOG, totalVol, recommendVehicleType, recommendVehicleTypeByVolume, serializeInventory, VEHICLE_THRESHOLDS, inventoryHasTallItems, requiredHelpersForInventory } from '../../components/InventoryPicker.jsx';
 import { trackMetaEvent, trackFunnelStep } from '../../utils/metaPixel.js';
 import { trackLanding, trackEvent, trackSubmit as trackSubmitDB } from '../../utils/pageTracker.js';
+import { formatCLP as fmt } from '../../utils/format.js';
+import { findTierPricePerKm } from '../../utils/vehiclePricing.js';
 
 const LARGE_ITEM_IDS = new Set(['camaQueen', 'cama2p', 'sofa3p', 'sofa2p', 'closet', 'nevera', 'lavadora', 'cocina']);
 
@@ -20,7 +22,6 @@ const FLETE_DRIVER_HELP  = 10_000; // ayuda del chofer
 const FLETE_HELPER_COST  = 15_000; // por ayudante adicional
 const FLETE_PACKING_COST = 22_000; // embalaje profesional
 const MUDANZA_PACKING_PER_M3 = 7_500; // embalaje mudanza: por m³ (labor + materiales)
-const fmt = n => Number(n || 0).toLocaleString('es-CL');
 const WHATSAPP_DIRECT_URL = 'https://wa.me/56952023504?text=Hola%20MUVE%2C%20quiero%20cotizar%20un%20flete%20o%20mudanza';
 const makeRange = (exact) => ({
   exact,
@@ -28,11 +29,7 @@ const makeRange = (exact) => ({
   hi: Math.round(exact * 1.15 / 1000) * 1000,
 });
 
-function tierPricePerKm(kmTiers = [], distanceKm = 0) {
-  const tiers = (kmTiers || []).slice().sort((a, b) => Number(a.max_km) - Number(b.max_km));
-  const tier = tiers.find(t => Number(distanceKm) <= Number(t.max_km)) || tiers[tiers.length - 1];
-  return tier ? Number(tier.price_per_km || tier.pricePerKm || 0) : 0;
-}
+const tierPricePerKm = (kmTiers, distanceKm) => findTierPricePerKm(kmTiers, distanceKm);
 
 function roundToThousand(n) {
   return Math.round(Number(n || 0) / 1000) * 1000;

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
+import { PACKAGE_STATUS, packageStatusColor, packageStatusLabel } from '../../utils/packageStatus.js';
+import { COMMUNES } from '../../utils/communes.js';
 
 // Sectors that aren't official communes — map to real commune for geocoding/prices
 const SECTOR_TO_COMMUNE = {
@@ -12,30 +14,11 @@ const SECTOR_TO_COMMUNE = {
   'los dominicos': 'Las Condes', 'el principal': 'Pirque',
 };
 
-const STATUS_COLOR = {
-  pendiente:      '#888',
-  entregado:      '#0052FF',
-  'no-entregado': '#cc2244',
-  eliminado:      '#c04a1a',
-};
 const STATUS_LABEL = {
   todos: 'Todos',
-  pendiente: '⏳ Pendientes',
-  entregado: '✅ Entregados',
-  'no-entregado': '❌ No entregados',
-  eliminado: '🗑️ Eliminados',
+  ...Object.fromEntries(Object.keys(PACKAGE_STATUS).map(k => [k, packageStatusLabel(k)])),
 };
 
-const COMMUNES = [
-  'Alhué','Buin','Calera de Tango','Cerrillos','Cerro Navia','Colina','Conchalí','Curacaví',
-  'El Bosque','El Monte','Estación Central','Huechuraba','Independencia','Isla de Maipo',
-  'La Cisterna','La Florida','La Granja','La Pintana','La Reina','Lampa','Las Condes',
-  'Lo Barnechea','Lo Espejo','Lo Prado','Macul','Maipú','María Pinto','Melipilla','Ñuñoa',
-  'Padre Hurtado','Paine','Peñaflor','Peñalolén','Pirque','Providencia','Pudahuel',
-  'Puente Alto','Quilicura','Quinta Normal','Recoleta','Renca','San Bernardo','San Joaquín',
-  'San José de Maipo','San Miguel','San Pedro','San Ramón','Santiago','Talagante','Tiltil',
-  'Vitacura',
-];
 
 function fmtDate(d) {
   if (!d) return '';
@@ -971,7 +954,7 @@ function SinglePackageModal({ companies, onClose, onDone }) {
 /* ─── Package row ─────────────────────────────────────────────────── */
 function PkgRow({ pkg, routes, companies, onMove, onStatusChange, onDelete, onEdit, onMarkReviewed, selected, onToggleSelect }) {
   const [expanded, setExpanded] = useState(false);
-  const sc         = STATUS_COLOR[pkg.status] || '#888';
+  const sc         = packageStatusColor(pkg.status);
   const route      = routes.find(r => r._id === pkg.routeId);
   const driver     = route?.driverId;
   const company    = companies.find(c => c._id === pkg.companyId);
@@ -1122,8 +1105,6 @@ function PkgRow({ pkg, routes, companies, onMove, onStatusChange, onDelete, onEd
 }
 
 /* ─── All packages table (excel-style) ──────────────────────────── */
-const STATUS_COLOR_MAP = { pendiente: '#888', entregado: '#0052FF', 'no-entregado': '#cc2244', eliminado: '#c04a1a' };
-
 function AllPkgTable({ packages, companies, routes, onMove, onStatusChange, onDelete, onEdit, onMarkReviewed, selected, onToggleSelect, allSelected, onToggleAll }) {
   const companyMap = Object.fromEntries(companies.map(c => [c._id, c.name]));
   const routeMap   = Object.fromEntries(routes.map(r => [r._id, r.routeCode]));
@@ -1150,7 +1131,7 @@ function AllPkgTable({ packages, companies, routes, onMove, onStatusChange, onDe
             const hasGeoErr = noCommune || !!noAddrNum;
             const hasFlags  = pkg.aiFlags?.length > 0;
             const isSel     = selected.has(pkg._id);
-            const sc        = STATUS_COLOR_MAP[pkg.status] || '#888';
+            const sc        = packageStatusColor(pkg.status);
 
             const rowBg = isSel ? '#0052FF08' : hasGeoErr ? '#fef2f2' : hasFlags ? '#fffbeb' : i % 2 === 0 ? '#fff' : 'var(--card2)';
             const leftBorder = isSel ? 'var(--accent)' : hasGeoErr ? '#ef4444' : hasFlags ? '#f59e0b' : 'transparent';

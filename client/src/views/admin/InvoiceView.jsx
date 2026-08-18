@@ -327,7 +327,10 @@ function NoInvoiceSection({ routes, onEdit }) {
 function InvoiceEditModal({ route, saving, onClose, onSave }) {
   const [form, setForm] = useState({
     status: route.invoice?.status || 'pending',
-    amount: route.invoice?.amount ?? '',
+    // Pre-fill from the system's own calculated total (route.stats.collectedAmount)
+    // when there's no invoice amount yet — previously this started blank and the
+    // admin had to recall/recompute the total by hand with no cross-check.
+    amount: route.invoice?.amount ?? route.stats?.collectedAmount ?? '',
     invoiceDate: route.invoice?.invoiceDate ? new Date(route.invoice.invoiceDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
     notes: route.invoice?.notes || '',
     clientCompany: {
@@ -396,6 +399,18 @@ function InvoiceEditModal({ route, saving, onClose, onSave }) {
         {/* Invoice */}
         <SectionTitle color="#f57c00">💳 Factura al cliente</SectionTitle>
         <FL label="Monto cobrado al cliente (CLP)" value={form.amount} onChange={v => setInv('amount', v)} placeholder="150000" type="number" />
+        {route.stats?.collectedAmount > 0 && Number(form.amount) !== route.stats.collectedAmount && (
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: -8, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+            Calculado por el sistema: <strong>${route.stats.collectedAmount.toLocaleString('es-CL')}</strong>
+            <button
+              type="button"
+              onClick={() => setInv('amount', route.stats.collectedAmount)}
+              style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-dim)', border: 'none', borderRadius: 'var(--r-full)', padding: '2px 8px', cursor: 'pointer' }}
+            >
+              Usar
+            </button>
+          </div>
+        )}
         <FL label="Fecha de factura" value={form.invoiceDate} onChange={v => setInv('invoiceDate', v)} type="date" />
 
         <Label>Estado de pago</Label>

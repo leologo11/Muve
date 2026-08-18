@@ -4,9 +4,9 @@ import * as XLSX from 'xlsx';
 import Anthropic from '@anthropic-ai/sdk';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { syncRouteStats } from './deliveryRoutes.js';
-import { suggestPrice, roundPrice, SECTOR_TO_COMMUNE } from '../utils/priceByCommune.js';
+import { suggestPrice, roundPrice, SECTOR_TO_COMMUNE, normalize } from '../utils/priceByCommune.js';
 import { getDbPricesMap } from './priceRoutes.js';
-import { geocodeAddress, sleep } from '../utils/geocode.js';
+import { geocodeMissingCoords } from '../utils/geocode.js';
 import { pointInPolygon } from '../utils/zones.js';
 import { qs, supabaseRequest } from '../utils/supabase.js';
 
@@ -48,10 +48,6 @@ async function parseWithClaude(client, content) {
   const jsonMatch = text.match(/\[[\s\S]*\]/);
   if (!jsonMatch) throw new Error('Claude no pudo extraer datos. Intenta con otro formato.');
   return JSON.parse(jsonMatch[0]);
-}
-
-function normalize(str) {
-  return (str || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 function applyPrices(packages, dbPricesMap = {}, zones = []) {
@@ -154,26 +150,25 @@ async function handleConfirm(req, res) {
       const existingRows = await supabaseRequest(`/packages${qs({ route_id: `eq.${routeId}`, select: 'id' })}`);
       existing = existingRows.length;
     }
+    const cleaned = packages.map(({ _preview, _suggestedPrice: isSuggested, _flags, ...p }) => ({ ...p, _isSuggested: isSuggested, _flags }));
+    const geocoded = await geocodeMissingCoords(cleaned);
+
     const docs = [];
-    for (let i = 0; i < packages.length; i++) {
-      const { _preview, _suggestedPrice: isSuggested, _flags, ...p } = packages[i];
-      const doc = { ...p };
-      if ((!doc.lat || !doc.lng) && doc.address) {
-        const geo = await geocodeAddress(doc.address, doc.commune);
-        if (geo) {
-          doc.lat = geo.lat;
-          doc.lng = geo.lng;
-          // Re-aplicar precio de zona ahora que tenemos coordenadas reales.
-          // Solo si el precio fue sugerido automáticamente (no puesto por el usuario).
-          if (isSuggested && zones.length) {
-            const matched = zones.find(z => {
-              const ring = z.polygon?.coordinates?.[0] || z.polygon?.geometry?.coordinates?.[0];
-              return ring && pointInPolygon([doc.lng, doc.lat], ring);
-            });
-            if (matched?.price) doc.price = matched.price;
-          }
+    for (let i = 0; i < cleaned.length; i++) {
+      const { _isSuggested: isSuggested, _flags, ...doc } = cleaned[i];
+      const geo = geocoded[i];
+      if (geo) {
+        doc.lat = geo.lat;
+        doc.lng = geo.lng;
+        // Re-aplicar precio de zona ahora que tenemos coordenadas reales.
+        // Solo si el precio fue sugerido automáticamente (no puesto por el usuario).
+        if (isSuggested && zones.length) {
+          const matched = zones.find(z => {
+            const ring = z.polygon?.coordinates?.[0] || z.polygon?.geometry?.coordinates?.[0];
+            return ring && pointInPolygon([doc.lng, doc.lat], ring);
+          });
+          if (matched?.price) doc.price = matched.price;
         }
-        await sleep(1100);
       }
       docs.push({
         tracking_id: doc.trackingId || `MUVE${Date.now().toString(36).toUpperCase()}${String(existing + i + 1).padStart(3, '0')}`,

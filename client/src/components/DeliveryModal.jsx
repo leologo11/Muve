@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api/index.js';
 import { toast } from './Toast.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { haversineMeters } from '../utils/geo.js';
 
 const FAIL_REASONS = [
   'Nadie en casa',
@@ -245,18 +246,6 @@ function Label({ children }) {
   return <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: 'var(--muted)', textTransform: 'uppercase', margin: '13px 0 5px' }}>{children}</div>;
 }
 
-function distanceMeters(a, b) {
-  if (!a?.lat || !a?.lng || !b?.lat || !b?.lng) return null;
-  const R = 6371000;
-  const toRad = n => Number(n) * Math.PI / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
-}
-
 function getCurrentPositionSafe() {
   return new Promise(resolve => {
     if (!navigator.geolocation) return resolve(null);
@@ -273,7 +262,7 @@ async function captureDeliveryMeta(pkg, status) {
   const pos = await getCurrentPositionSafe();
   const point = pos ? { lat: pos.coords.latitude, lng: pos.coords.longitude } : null;
   const target = pkg.lat && pkg.lng ? { lat: Number(pkg.lat), lng: Number(pkg.lng) } : null;
-  const dist = point && target ? distanceMeters(point, target) : null;
+  const dist = point && target ? haversineMeters(point, target) : null;
   return {
     lat: point?.lat ?? null,
     lng: point?.lng ?? null,

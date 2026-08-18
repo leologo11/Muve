@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { api } from '../api/index.js';
+import { api, TOKEN_KEY } from '../api/index.js';
 
 const AuthContext = createContext(null);
 
@@ -8,11 +8,11 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('rf_token');
+    const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
       api.me()
         .then(({ user }) => setUser(user))
-        .catch(() => localStorage.removeItem('rf_token'))
+        .catch(() => localStorage.removeItem(TOKEN_KEY))
         .finally(() => setLoading(false));
     } else {
       setLoading(false);
@@ -21,13 +21,13 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const { token, user } = await api.login(email, password);
-    localStorage.setItem('rf_token', token);
+    localStorage.setItem(TOKEN_KEY, token);
     setUser(user);
     return user;
   };
 
   const logout = () => {
-    localStorage.removeItem('rf_token');
+    localStorage.removeItem(TOKEN_KEY);
     setUser(null);
   };
 

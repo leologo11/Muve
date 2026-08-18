@@ -25,9 +25,14 @@
   --warn-dim:     #d4650a12;
   --info:         #0077aa;
   --info-dim:     #0077aa12;
+  --success:      #16a34a;
+  --success-dim:  #16a34a14;
+  --devuelto:     #7b1fa2;
+  --devuelto-dim: #7b1fa214;
   --waze:         #0077aa;
   --gmaps:        #2a9940;
   --elim:         #c04a1a;
+  --elim-dim:     #c04a1a14;
   --text:         #0F172A;
   --text2:        #1E293B;
   --muted:        #64748B;
@@ -73,6 +78,14 @@ html, body, #root {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Mobile/Capacitor build: overlay scrollbars take no layout space, so reserving
+   a gutter for one just leaves a permanent blank strip on one edge of the screen. */
+html.driver-app,
+html.driver-app body,
+html.driver-app #root {
+  scrollbar-gutter: auto;
+}
+
 #root {
   display: flex;
   flex-direction: column;
@@ -97,6 +110,24 @@ textarea:focus {
   border-color: var(--border-focus) !important;
   box-shadow: 0 0 0 3px var(--accent-dim) !important;
   outline: none;
+}
+
+/* Driver login inputs sit on a dark blue background — keep them readable when
+   the phone's autofill (Chrome/WebView) tries to paint its own light background. */
+.driver-login-input::placeholder {
+  color: rgba(255, 255, 255, .65);
+}
+.driver-login-input:-webkit-autofill,
+.driver-login-input:-webkit-autofill:hover,
+.driver-login-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #fff;
+  -webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, .18) inset;
+  transition: background-color 9999s ease-in-out 0s;
+  caret-color: #fff;
+}
+.driver-login-input:focus {
+  border-color: rgba(255, 255, 255, .6) !important;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, .15) !important;
 }
 
 /* ── Interactive transitions ────────────────────────────────────────────────── */

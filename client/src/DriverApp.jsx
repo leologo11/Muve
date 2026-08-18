@@ -48,12 +48,14 @@ function LoginScreen() {
 
   const inpStyle = {
     width: '100%', boxSizing: 'border-box',
-    background: 'rgba(255,255,255,.15)',
-    border: '1.5px solid rgba(255,255,255,.3)',
+    background: 'rgba(255,255,255,.18)',
+    border: '1.5px solid rgba(255,255,255,.35)',
     borderRadius: 14, padding: '16px 18px',
     fontSize: 16, color: '#fff', outline: 'none',
     fontFamily: 'Inter,system-ui,sans-serif',
     marginBottom: 12, WebkitTextFillColor: '#fff',
+    WebkitAppearance: 'none', appearance: 'none',
+    colorScheme: 'dark', caretColor: '#fff',
   };
 
   const handleSubmit = async (e) => {
@@ -83,21 +85,21 @@ function LoginScreen() {
       </div>
 
       <form onSubmit={handleSubmit} style={{ width: '100%', maxWidth: 380 }}>
-        <input style={inpStyle} type="email" autoComplete="email" placeholder="Correo electrónico" required value={email} onChange={e => setEmail(e.target.value)} />
-        <input style={inpStyle} type="password" autoComplete="current-password" placeholder="Contraseña" required value={password} onChange={e => setPassword(e.target.value)} />
+        <input className="driver-login-input" style={inpStyle} type="email" autoComplete="email" placeholder="Correo electrónico" required value={email} onChange={e => setEmail(e.target.value)} />
+        <input className="driver-login-input" style={inpStyle} type="password" autoComplete="current-password" placeholder="Contraseña" required value={password} onChange={e => setPassword(e.target.value)} />
 
         {error && (
-          <div style={{ background: 'rgba(255,70,70,.2)', border: '1px solid rgba(255,100,100,.35)', borderRadius: 10, padding: '11px 16px', color: '#ffcccc', fontSize: 13, fontWeight: 600, marginBottom: 14, textAlign: 'center' }}>
+          <div style={{ background: 'rgba(255,70,70,.2)', border: '1px solid rgba(255,100,100,.35)', borderRadius: 'var(--r-sm)', padding: '11px 16px', color: '#ffcccc', fontSize: 13, fontWeight: 600, marginBottom: 14, textAlign: 'center' }}>
             ⚠ {error}
           </div>
         )}
 
         <button type="submit" disabled={loading} style={{
-          width: '100%', padding: '18px 20px', borderRadius: 14, border: 'none',
+          width: '100%', padding: '18px 20px', borderRadius: 'var(--r-md)', border: 'none',
           background: loading ? 'rgba(255,255,255,.25)' : '#fff',
-          color: loading ? 'rgba(255,255,255,.6)' : '#0052FF',
+          color: loading ? 'rgba(255,255,255,.6)' : 'var(--accent)',
           fontSize: 17, fontWeight: 900, cursor: loading ? 'not-allowed' : 'pointer',
-          boxShadow: loading ? 'none' : '0 8px 28px rgba(0,0,0,.3)',
+          boxShadow: loading ? 'none' : 'var(--shadow-lg)',
           fontFamily: 'Inter,system-ui,sans-serif',
         }}>
           {loading ? 'Ingresando…' : 'Ingresar'}
@@ -123,7 +125,7 @@ function DriverAppInner() {
   }, []);
 
   if (loading) return (
-    <div style={{ height: '100dvh', background: '#0052FF', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ height: '100dvh', background: 'var(--accent)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ fontSize: 60, marginBottom: 14 }}>🚗</div>
       <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', letterSpacing: -0.5 }}>MUVE Driver</div>
     </div>
@@ -141,7 +143,7 @@ function DriverAppInner() {
   return (
     <div style={{
       height: '100dvh', display: 'flex', flexDirection: 'column',
-      overflow: 'hidden', background: '#F1F5F9',
+      overflow: 'hidden', background: 'var(--bg)',
     }}>
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <ErrorBoundary>

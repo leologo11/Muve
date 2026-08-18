@@ -3,6 +3,7 @@ import { loadGoogleMaps } from '../../utils/googleMaps.js';
 import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
+import { COMMUNES } from '../../utils/communes.js';
 
 const SECTOR_TO_COMMUNE = {
   'chicureo': 'Colina', 'hacienda chicureo': 'Colina', 'piedra roja': 'Colina',
@@ -12,21 +13,12 @@ const SECTOR_TO_COMMUNE = {
   'los dominicos': 'Las Condes', 'el principal': 'Pirque',
 };
 
-const COMMUNES = [
-  'Alhué','Buin','Calera de Tango','Cerrillos','Cerro Navia','Colina','Conchalí','Curacaví',
-  'El Bosque','El Monte','Estación Central','Huechuraba','Independencia','Isla de Maipo',
-  'La Cisterna','La Florida','La Granja','La Pintana','La Reina','Lampa','Las Condes',
-  'Lo Barnechea','Lo Espejo','Lo Prado','Macul','Maipú','María Pinto','Melipilla','Ñuñoa',
-  'Padre Hurtado','Paine','Peñaflor','Peñalolén','Pirque','Providencia','Pudahuel',
-  'Puente Alto','Quilicura','Quinta Normal','Recoleta','Renca','San Bernardo','San Joaquín',
-  'San José de Maipo','San Miguel','San Pedro','San Ramón','Santiago','Talagante','Tiltil',
-  'Vitacura',
-];
 
 function pinColor(pkg) {
   if (pkg.routeStatus === 'active' && pkg.status === 'pendiente') return '#f59e0b';
   if (pkg.status === 'entregado')    return '#22c55e';
   if (pkg.status === 'no-entregado') return '#ef4444';
+  if (pkg.status === 'devuelto')     return '#7b1fa2';
   return '#94a3b8';
 }
 
@@ -34,6 +26,7 @@ function statusLabel(pkg) {
   if (pkg.routeStatus === 'active' && pkg.status === 'pendiente') return '🟡 En ruta ahora';
   if (pkg.status === 'entregado')    return '🟢 Entregado';
   if (pkg.status === 'no-entregado') return '🔴 Incidencia';
+  if (pkg.status === 'devuelto')     return '🟣 Devuelto';
   return '⚪ Pendiente';
 }
 

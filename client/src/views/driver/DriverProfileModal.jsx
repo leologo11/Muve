@@ -58,39 +58,39 @@ export default function DriverProfileModal({ onClose }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 980, display: 'flex', alignItems: 'flex-end' }}
       onClick={onClose}>
-      <div style={{ background: '#fff', borderRadius: '22px 22px 0 0', width: '100%', maxHeight: '92dvh', display: 'flex', flexDirection: 'column' }}
+      <div style={{ background: 'var(--card)', borderRadius: 'var(--r-xl) var(--r-xl) 0 0', width: '100%', maxHeight: '92dvh', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-xl)' }}
         onClick={e => e.stopPropagation()}>
 
         {/* Handle */}
         <div style={{ padding: '12px 20px 0', flexShrink: 0 }}>
-          <div style={{ width: 40, height: 4, background: '#e2e8f0', borderRadius: 2, margin: '0 auto 16px' }} />
+          <div style={{ width: 40, height: 4, background: 'var(--border)', borderRadius: 2, margin: '0 auto 16px' }} />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               {/* Avatar */}
-              <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg,#0052FF,#00DAFF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 900, color: '#fff', flexShrink: 0 }}>
+              <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg,var(--accent),var(--a2))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 900, color: '#fff', flexShrink: 0 }}>
                 {user?.photoUrl
                   ? <img src={user.photoUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
                   : initials}
               </div>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{user?.name}</div>
-                <div style={{ fontSize: 12, color: '#64748b' }}>{user?.email}</div>
-                <span style={{ fontSize: 10, fontWeight: 700, background: '#eff6ff', color: '#0052FF', padding: '2px 8px', borderRadius: 20, border: '1px solid #0052FF25' }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>{user?.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{user?.email}</div>
+                <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--accent-dim)', color: 'var(--accent)', padding: '2px 8px', borderRadius: 'var(--r-full)', border: '1px solid var(--accent-dim)' }}>
                   {ROLE[user?.role] || user?.role}
                 </span>
               </div>
             </div>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, color: '#94a3b8', cursor: 'pointer', padding: '4px 8px', lineHeight: 1 }}>×</button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, color: 'var(--muted)', cursor: 'pointer', padding: '4px 8px', lineHeight: 1 }}>×</button>
           </div>
 
           {/* Tabs */}
-          <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', marginBottom: 0 }}>
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 0 }}>
             {[['profile', '👤 Perfil'], ['password', '🔒 Contraseña']].map(([t, lbl]) => (
               <button key={t} onClick={() => setTab(t)} style={{
                 flex: 1, padding: '10px 4px', fontSize: 13, fontWeight: 700, border: 'none',
                 background: 'none', cursor: 'pointer',
-                color: tab === t ? '#0052FF' : '#94a3b8',
-                borderBottom: `2px solid ${tab === t ? '#0052FF' : 'transparent'}`,
+                color: tab === t ? 'var(--accent)' : 'var(--muted)',
+                borderBottom: `2px solid ${tab === t ? 'var(--accent)' : 'transparent'}`,
               }}>{lbl}</button>
             ))}
           </div>
@@ -114,11 +114,11 @@ export default function DriverProfileModal({ onClose }) {
                 <input value={user?.email || ''} disabled style={{ ...inputSt, opacity: .5 }} />
               </Field>
               {saveMsg && (
-                <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 14, fontSize: 13, fontWeight: 600, background: saveMsg.startsWith('✓') ? '#dcfce7' : '#fff0f2', color: saveMsg.startsWith('✓') ? '#16a34a' : '#cc2244' }}>
+                <div style={{ padding: '10px 14px', borderRadius: 'var(--r-sm)', marginBottom: 14, fontSize: 13, fontWeight: 600, background: saveMsg.startsWith('✓') ? 'var(--success-dim)' : 'var(--danger-dim)', color: saveMsg.startsWith('✓') ? 'var(--success)' : 'var(--danger)' }}>
                   {saveMsg}
                 </div>
               )}
-              <button type="submit" disabled={saving} style={btnSt('#0052FF')}>
+              <button type="submit" disabled={saving} style={btnSt('var(--accent)')}>
                 {saving ? 'Guardando…' : 'Guardar cambios'}
               </button>
             </form>
@@ -140,16 +140,16 @@ export default function DriverProfileModal({ onClose }) {
                   style={inputSt} placeholder="Repite la nueva contraseña" autoComplete="new-password" />
               </Field>
               {pwError && (
-                <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 14, fontSize: 13, fontWeight: 600, background: '#fff0f2', color: '#cc2244' }}>
+                <div style={{ padding: '10px 14px', borderRadius: 'var(--r-sm)', marginBottom: 14, fontSize: 13, fontWeight: 600, background: 'var(--danger-dim)', color: 'var(--danger)' }}>
                   ⚠ {pwError}
                 </div>
               )}
               {pwMsg && (
-                <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 14, fontSize: 13, fontWeight: 600, background: '#dcfce7', color: '#16a34a' }}>
+                <div style={{ padding: '10px 14px', borderRadius: 'var(--r-sm)', marginBottom: 14, fontSize: 13, fontWeight: 600, background: 'var(--success-dim)', color: 'var(--success)' }}>
                   {pwMsg}
                 </div>
               )}
-              <button type="submit" disabled={pwSaving} style={btnSt('#0052FF')}>
+              <button type="submit" disabled={pwSaving} style={btnSt()}>
                 {pwSaving ? 'Actualizando…' : 'Cambiar contraseña'}
               </button>
             </form>
@@ -163,7 +163,7 @@ export default function DriverProfileModal({ onClose }) {
 function Field({ label, children }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: .8, marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: .8, marginBottom: 6 }}>{label}</div>
       {children}
     </div>
   );
@@ -171,16 +171,16 @@ function Field({ label, children }) {
 
 const inputSt = {
   width: '100%', boxSizing: 'border-box',
-  background: '#f8fafc', border: '1.5px solid #e2e8f0',
-  borderRadius: 12, padding: '13px 14px',
-  fontSize: 15, color: '#0f172a', outline: 'none',
+  background: 'var(--card2)', border: '1.5px solid var(--border)',
+  borderRadius: 'var(--r-sm)', padding: '13px 14px',
+  fontSize: 15, color: 'var(--text)', outline: 'none',
   fontFamily: 'Inter,system-ui,sans-serif',
 };
 
-const btnSt = (color) => ({
-  width: '100%', padding: '15px 20px', borderRadius: 14, border: 'none',
-  background: `linear-gradient(90deg,${color},${color}cc)`,
+const btnSt = (color = 'var(--accent)') => ({
+  width: '100%', padding: '15px 20px', borderRadius: 'var(--r-md)', border: 'none',
+  background: `linear-gradient(90deg, ${color}, var(--accent-hover))`,
   color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer',
   fontFamily: 'Inter,system-ui,sans-serif',
-  boxShadow: `0 4px 16px ${color}40`,
+  boxShadow: 'var(--shadow-md)',
 });

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { loadGoogleMaps, makeSvgIcon, spreadOverlapping } from '../utils/googleMaps.js';
+import { TOKEN_KEY } from '../api/index.js';
 
 const ZONE_COLORS = {
   Providencia: '#e8740a',
@@ -14,6 +15,7 @@ function pinColor(pkg) {
   if (pkg.status === 'eliminado') return '#aaaaaa';
   if (pkg.status === 'entregado') return '#0052FF';
   if (pkg.status === 'no-entregado') return '#cc2244';
+  if (pkg.status === 'devuelto') return '#7b1fa2';
   return ZONE_COLORS[pkg.zone] || ZONE_COLORS.default;
 }
 
@@ -27,7 +29,7 @@ function btnStyle(color) {
 function makePopupContent(pkg, idx, hasStart, readOnly) {
   const displayNum = hasStart ? idx + 2 : idx + 1;
   const color = pinColor(pkg);
-  const statusText = { pendiente: '⏳ Pendiente', entregado: '✅ Entregado', 'no-entregado': '❌ No entregado', eliminado: '🗑️ Eliminado' }[pkg.status] || pkg.status;
+  const statusText = { pendiente: '⏳ Pendiente', entregado: '✅ Entregado', 'no-entregado': '❌ No entregado', devuelto: '📦 Devuelto', eliminado: '🗑️ Eliminado' }[pkg.status] || pkg.status;
   const price = pkg.price ? ` · $${Number(pkg.price).toLocaleString('es-CL')}` : '';
   const aptHtml = pkg.aptFloor ? `<div style="font-size:12px;font-weight:700;color:#d4650a;margin-top:2px;font-style:italic">${pkg.aptFloor}</div>` : '';
   const phoneHtml = pkg.customerPhone
@@ -89,12 +91,29 @@ export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgResto
     });
   }, []);
 
-  // Resize when tab becomes visible
+  // Resize when the map's container actually changes size (tab switch toggles
+  // display:none/block to avoid re-mounting the map). A ResizeObserver fires only
+  // once the browser has finished applying the layout change, unlike a `visible`
+  // prop flag which can race the CSS display swap and trigger `resize` while the
+  // container is still mid-transition — leaving Google Maps tiled for the stale
+  // size and a blank margin on one edge until the user manually pans/zooms.
   useEffect(() => {
-    if (visible && mapInst.current && gmRef.current) {
-      gmRef.current.event.trigger(mapInst.current, 'resize');
-    }
-  }, [visible]);
+    if (!mapRef.current || !mapInst.current || !gmRef.current) return;
+    const map = mapInst.current;
+    const gm = gmRef.current;
+    const el = mapRef.current;
+
+    const ro = new ResizeObserver(() => {
+      if (el.offsetWidth === 0 || el.offsetHeight === 0) return; // still hidden
+      const center = map.getCenter();
+      const zoom = map.getZoom();
+      gm.event.trigger(map, 'resize');
+      if (center) map.setCenter(center);
+      if (zoom != null) map.setZoom(zoom);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [mapReady]);
 
   // Update markers on packages/startPoint change
   useEffect(() => {
@@ -134,7 +153,7 @@ export default function RouteMap({ packages, onPkgClick, onPkgDelete, onPkgResto
 
       // Replace with real road geometry from OSRM proxy
       const base = import.meta.env.VITE_API_URL || '/api';
-      const token = localStorage.getItem('rf_token');
+      const token = localStorage.getItem(TOKEN_KEY);
       fetch(`${base}/routes/osrm-path`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },

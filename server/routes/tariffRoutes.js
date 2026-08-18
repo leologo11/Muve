@@ -8,8 +8,8 @@ router.use(requireAuth, requireRole('admin'));
 router.get('/', async (req, res) => {
   try {
     const [tariffs, items] = await Promise.all([
-      supabaseRequest(`/tariffs${qs({ select: '*', order: 'created_at.desc' })}`),
-      supabaseRequest(`/tariff_items${qs({ select: '*' })}`),
+      supabaseRequest(`/tariffs${qs({ select: '*', order: 'created_at.desc', limit: 2000 })}`),
+      supabaseRequest(`/tariff_items${qs({ select: '*', limit: 20000 })}`),
     ]);
     return res.json(tariffs.map(t => ({
       _id: t.id, id: t.id, name: t.name, description: t.description, defaultPrice: Number(t.default_price || 0),
@@ -80,7 +80,8 @@ router.patch('/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
-    await supabaseRequest(`/tariffs${qs({ id: `eq.${req.params.id}` })}`, { method: 'DELETE' });
+    const rows = await supabaseRequest(`/tariffs${qs({ id: `eq.${req.params.id}` })}`, { method: 'DELETE' });
+    if (!rows?.[0]) return res.status(404).json({ error: 'Tarifario no encontrado' });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

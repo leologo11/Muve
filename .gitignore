@@ -23,6 +23,12 @@ supabase/.temp/
 # ── Claude Code session data (private) ───────────────────────────────────────
 .claude/
 
+# ── Android release signing — NEVER commit these ─────────────────────────────
+client/android/app/keystore.properties
+client/android/app/keystore/
+*.jks
+*.keystore
+
 # ── OS files ─────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db

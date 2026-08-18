@@ -2,11 +2,14 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { loadGoogleMaps } from '../utils/googleMaps.js';
 import { api } from '../api/index.js';
+import { formatCLP as fmt } from '../utils/format.js';
+import { openPrintWindow } from '../utils/printWindow.js';
 
 const STATUS_META = {
   pendiente:      { label: '⏳ Pendiente',    color: '#888' },
   entregado:      { label: '✅ Entregado',     color: '#0052FF' },
-  'no-entregado': { label: '❌ No entregado', color: '#cc2244' }
+  'no-entregado': { label: '❌ No entregado', color: '#cc2244' },
+  devuelto:       { label: '📦 Devuelto',      color: '#7b1fa2' },
 };
 
 const ROUTE_STATUS = {
@@ -20,6 +23,7 @@ const ROUTE_STATUS = {
 function pinColor(status) {
   if (status === 'entregado')    return '#0052FF';
   if (status === 'no-entregado') return '#cc2244';
+  if (status === 'devuelto')     return '#7b1fa2';
   return '#f57c00';
 }
 
@@ -30,7 +34,6 @@ function generatePdf(route, packages) {
   const delivered = active.filter(p => p.status === 'entregado');
   const failed    = active.filter(p => p.status === 'no-entregado');
   const pending   = active.filter(p => p.status === 'pendiente');
-  const fmt       = n => Number(n || 0).toLocaleString('es-CL');
   const dateStr   = new Date(route.date + 'T12:00').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   const subtotalDelivered = delivered.reduce((s, p) => s + Number(p.price || 0), 0);
@@ -284,12 +287,11 @@ ${hasPrice ? `
 </div>
 
 <div class="footer">Generado por MUVE · ${new Date().toLocaleString('es-CL')}</div>
-<script>window.onload = () => { window.print(); }</script>
+<script>window.onload=function(){window.print()}<\/script>
 </body>
 </html>`;
 
-  const w = window.open('', '_blank');
-  if (w) { w.document.write(html); w.document.close(); }
+  openPrintWindow(html, `ruta-${route.routeCode}.html`);
 }
 
 // ── Public map ─────────────────────────────────────────────────────────────────
@@ -376,11 +378,11 @@ function PkgCard({ pkg, expanded, onToggle }) {
       <div style={{ padding: '13px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{
           width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-          background: pkg.status === 'entregado' ? '#0052FF' : pkg.status === 'no-entregado' ? '#cc2244' : '#e8e8e8',
+          background: pkg.status === 'entregado' ? '#0052FF' : pkg.status === 'no-entregado' ? '#cc2244' : pkg.status === 'devuelto' ? '#7b1fa2' : '#e8e8e8',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 12, fontWeight: 800, color: pkg.status === 'pendiente' ? '#888' : '#fff'
         }}>
-          {pkg.status === 'entregado' ? '✓' : pkg.status === 'no-entregado' ? '✗' : pkg.order + 1}
+          {pkg.status === 'entregado' ? '✓' : pkg.status === 'no-entregado' ? '✗' : pkg.status === 'devuelto' ? '📦' : pkg.order + 1}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#111', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

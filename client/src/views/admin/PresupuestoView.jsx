@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../../api/index.js';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
 import { toast } from '../../components/Toast.jsx';
+import { formatCLP } from '../../utils/format.js';
+import { openPrintWindow } from '../../utils/printWindow.js';
 
 const IVA_RATE = 19;
-const fmt = n => Math.round(Number(n) || 0).toLocaleString('es-CL');
+const fmt = n => formatCLP(Math.round(Number(n) || 0));
 const UNITS = ['unidad', 'servicio', 'viaje', 'hora', 'día', 'persona', 'm³', 'km', 'caja', 'piso'];
 
 const QUICK_ITEMS = [
@@ -308,15 +310,7 @@ export default function PresupuestoView({ onBack }) {
       originAddress: origin.address, destinationAddress: dest.address,
       distanceKm, showKm, items, subtotal, discountAmount, ivaAmount, total, includeIVA, notes,
     });
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const win = window.open(url, '_blank');
-    if (!win) {
-      const a = document.createElement('a');
-      a.href = url; a.download = `presupuesto-${code}.html`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    }
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    openPrintWindow(html, `presupuesto-${code}.html`);
   };
 
   const addItem = () => { setItems(p => [...p, newItem(nextId)]); setNextId(n => n + 1); };

@@ -1,83 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../api/index.js';
+import { routeDateISO, parseDate, weekStart, weekLabel, groupByWeek, computeRouteEarnings } from '../../utils/driverEarnings.js';
+import { BarChart, EmptyState } from '../../components/driver-ui/index.js';
 
 const fmt = n => '$' + Math.round(n || 0).toLocaleString('es-CL');
+const fmtCompact = n => n >= 1000 ? Math.round(n / 1000) + 'K' : String(Math.round(n));
 
-// Safely extract YYYY-MM-DD from any date format (DATE, TIMESTAMPTZ, null)
-// Falls back to parsing routeCode RT-YYYYMMDD-XXXX when date field is missing
-function routeDateISO(route) {
-  const raw = route?.date;
-  if (raw) {
-    const s = String(raw).slice(0, 10); // "2026-05-27" from any timestamp format
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  }
-  // Fallback: extract from routeCode format RT-YYYYMMDD-XXXX
-  const m = String(route?.routeCode || '').match(/^RT-(\d{4})(\d{2})(\d{2})/);
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  return null;
-}
-
-function parseDate(iso) {
-  if (!iso) return null;
-  const d = new Date(iso + 'T12:00');
-  return isNaN(d.getTime()) ? null : d;
-}
-
-// Returns the Tuesday that starts the week containing the given ISO date string
-function weekStart(iso) {
-  const d = parseDate(iso);
-  if (!d) return new Date(0);
-  const dow  = d.getDay();
-  const back = (dow - 2 + 7) % 7;
-  d.setDate(d.getDate() - back);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function weekLabel(tue) {
-  const mon = new Date(tue);
-  mon.setDate(tue.getDate() + 6);
-  const opts = { day: 'numeric', month: 'short' };
-  return `${tue.toLocaleDateString('es-CL', opts)} – ${mon.toLocaleDateString('es-CL', opts)}`;
-}
-
-function isSameWeek(iso, tuesdayDate) {
-  const ws = weekStart(iso);
-  return ws.getTime() === tuesdayDate.getTime();
-}
-
-// Per-route earnings calculation (matches calcDriverPay in DriverView)
-function routeEarnings(route) {
-  const settlement  = route.driverSettlement || {};
-  const base        = Number(route.driverPayout || settlement.baseAmount || 0);
-  if (!base) return { base: 0, earned: 0, pricePerPkg: 0, delivered: 0, incidents: 0, total: 0, status: settlement.status || 'pending' };
-  const active      = Number(route.stats?.total ?? 0);
-  const delivered   = Number(route.stats?.delivered ?? 0);
-  const failed      = Number(route.stats?.failed ?? 0);
-  const payable     = delivered + failed; // all incidents count until admin review is added
-  const ppc         = active > 0 ? base / active : 0;
-  const mode        = settlement.mode || 'proportional_delivered';
-  const approved    = Number(settlement.approvedAmount || 0);
-  const adjustment  = Number(settlement.adjustment || 0);
-  const suggested   = mode === 'fixed' ? base : mode === 'manual' ? (approved || base) : Math.round(ppc * payable);
-  const isFinal     = ['approved', 'paid'].includes(settlement.status) && approved > 0;
-  const earned      = Math.max(0, isFinal ? approved : suggested + adjustment);
-  return { base, earned, pricePerPkg: Math.round(ppc), delivered, incidents: failed, total: active, status: settlement.status || 'pending', isFinal };
-}
-
-function groupByWeek(routes) {
-  const weeks = {};
-  routes.forEach(r => {
-    const iso = routeDateISO(r);
-    const ws  = weekStart(iso);
-    const key = ws.getTime();
-    if (!weeks[key]) weeks[key] = { tuesday: ws, routes: [] };
-    weeks[key].routes.push(r);
-  });
-  return Object.values(weeks)
-    .filter(w => w.tuesday.getTime() > 0)
-    .sort((a, b) => b.tuesday - a.tuesday);
-}
+const routeEarnings = route => computeRouteEarnings(route);
 
 // ── Week card ────────────────────────────────────────────────────────────────
 function WeekCard({ week, isCurrentWeek }) {
@@ -89,42 +18,42 @@ function WeekCard({ week, isCurrentWeek }) {
   const allPaid  = earnings.every(e => e.status === 'paid');
 
   return (
-    <div style={{ background: '#fff', borderRadius: 16, marginBottom: 12, overflow: 'hidden', border: `1.5px solid ${isCurrentWeek ? '#0052FF30' : '#e2e8f0'}`, boxShadow: isCurrentWeek ? '0 2px 16px rgba(0,82,255,.1)' : '0 1px 4px rgba(0,0,0,.06)' }}>
-      {isCurrentWeek && <div style={{ height: 3, background: 'linear-gradient(90deg,#0052FF,#00DAFF)' }} />}
+    <div style={{ background: 'var(--card)', borderRadius: 'var(--r-lg)', marginBottom: 12, overflow: 'hidden', border: `1.5px solid ${isCurrentWeek ? 'var(--accent-dim)' : 'var(--border)'}`, boxShadow: isCurrentWeek ? 'var(--shadow-md)' : 'var(--shadow-xs)' }}>
+      {isCurrentWeek && <div style={{ height: 3, background: 'linear-gradient(90deg,var(--accent),var(--a2))' }} />}
       <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setOpen(o => !o)}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-            {isCurrentWeek && <span style={{ fontSize: 10, fontWeight: 800, background: '#0052FF', color: '#fff', padding: '2px 8px', borderRadius: 20 }}>SEMANA ACTUAL</span>}
-            {allPaid && !isCurrentWeek && <span style={{ fontSize: 10, fontWeight: 800, background: '#dcfce7', color: '#16a34a', padding: '2px 8px', borderRadius: 20 }}>✓ PAGADO</span>}
+            {isCurrentWeek && <span style={{ fontSize: 10, fontWeight: 800, background: 'var(--accent)', color: '#fff', padding: '2px 8px', borderRadius: 'var(--r-full)' }}>SEMANA ACTUAL</span>}
+            {allPaid && !isCurrentWeek && <span style={{ fontSize: 10, fontWeight: 800, background: 'var(--success-dim)', color: 'var(--success)', padding: '2px 8px', borderRadius: 'var(--r-full)' }}>✓ PAGADO</span>}
           </div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{weekLabel(week.tuesday)}</div>
-          <div style={{ fontSize: 12, color: '#64748b', marginTop: 1 }}>{week.routes.length} ruta{week.routes.length !== 1 ? 's' : ''}</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{weekLabel(week.tuesday)}</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 1 }}>{week.routes.length} ruta{week.routes.length !== 1 ? 's' : ''}</div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 22, fontWeight: 900, color: '#0052FF', letterSpacing: -0.5 }}>{fmt(total)}</div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--accent)', letterSpacing: -0.5 }}>{fmt(total)}</div>
           {pending > 0 && confirmed > 0 && (
-            <div style={{ fontSize: 11, color: '#64748b' }}>
-              <span style={{ color: '#16a34a', fontWeight: 700 }}>{fmt(confirmed)}</span> pagado · {fmt(pending)} pendiente
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+              <span style={{ color: 'var(--success)', fontWeight: 700 }}>{fmt(confirmed)}</span> pagado · {fmt(pending)} pendiente
             </div>
           )}
-          <div style={{ fontSize: 16, color: '#94a3b8', marginTop: 2 }}>{open ? '▲' : '▼'}</div>
+          <div style={{ fontSize: 16, color: 'var(--muted)', marginTop: 2 }}>{open ? '▲' : '▼'}</div>
         </div>
       </div>
 
       {open && (
-        <div style={{ borderTop: '1px solid #f1f5f9', padding: '8px 12px 12px' }}>
+        <div style={{ borderTop: '1px solid var(--border)', padding: '8px 12px 12px' }}>
           {earnings.map(({ route, earned, pricePerPkg, delivered, incidents, total, status, isFinal }) => (
-            <div key={route._id} style={{ background: '#f8fafc', borderRadius: 12, padding: '12px 14px', marginBottom: 8, border: '1px solid #e2e8f0' }}>
+            <div key={route._id} style={{ background: 'var(--card2)', borderRadius: 'var(--r-sm)', padding: '12px 14px', marginBottom: 8, border: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{route.routeCode}</div>
-                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>{route.routeCode}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>
                     {parseDate(routeDateISO(route))?.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' }) ?? '—'}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 17, fontWeight: 900, color: '#0052FF' }}>{fmt(earned)}</div>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: status === 'paid' ? '#dcfce7' : status === 'approved' ? '#eff6ff' : '#fff8e1', color: status === 'paid' ? '#16a34a' : status === 'approved' ? '#0052FF' : '#f57c00' }}>
+                  <div style={{ fontSize: 17, fontWeight: 900, color: 'var(--accent)' }}>{fmt(earned)}</div>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--r-full)', background: status === 'paid' ? 'var(--success-dim)' : status === 'approved' ? 'var(--accent-dim)' : 'var(--warn-dim)', color: status === 'paid' ? 'var(--success)' : status === 'approved' ? 'var(--accent)' : 'var(--warn)' }}>
                     {status === 'paid' ? '✓ Pagado' : status === 'approved' ? '✓ Aprobado' : '⏳ Pendiente'}
                   </span>
                 </div>
@@ -132,10 +61,10 @@ function WeekCard({ week, isCurrentWeek }) {
 
               {/* Package breakdown */}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <Chip color="#16a34a" bg="#dcfce7">{delivered} entregados</Chip>
-                {incidents > 0 && <Chip color="#f57c00" bg="#fff8e1">{incidents} incidencias</Chip>}
-                <Chip color="#64748b" bg="#f1f5f9">{total} total</Chip>
-                {pricePerPkg > 0 && <Chip color="#0052FF" bg="#eff6ff">{fmt(pricePerPkg)}/pkg</Chip>}
+                <Chip color="var(--success)" bg="var(--success-dim)">{delivered} entregados</Chip>
+                {incidents > 0 && <Chip color="var(--warn)" bg="var(--warn-dim)">{incidents} incidencias</Chip>}
+                <Chip color="var(--muted)" bg="var(--card2)">{total} total</Chip>
+                {pricePerPkg > 0 && <Chip color="var(--accent)" bg="var(--accent-dim)">{fmt(pricePerPkg)}/pkg</Chip>}
               </div>
             </div>
           ))}
@@ -147,9 +76,18 @@ function WeekCard({ week, isCurrentWeek }) {
 
 function Chip({ color, bg, children }) {
   return (
-    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, background: bg, color, border: `1px solid ${color}30` }}>
+    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 'var(--r-full)', background: bg, color, border: `1px solid ${bg}` }}>
       {children}
     </span>
+  );
+}
+
+function StatTile({ label, value, color }) {
+  return (
+    <div style={{ flex: 1, background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', padding: '10px 12px' }}>
+      <div style={{ fontSize: 16, fontWeight: 900, color: color || 'var(--text)' }}>{value}</div>
+      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{label}</div>
+    </div>
   );
 }
 
@@ -174,19 +112,27 @@ export default function DriverPaymentsView({ onBack }) {
   const allEarnings = routes.map(routeEarnings);
   const totalEarned = allEarnings.reduce((s, e) => s + e.earned, 0);
   const totalPaid   = allEarnings.filter(e => e.status === 'paid').reduce((s, e) => s + e.earned, 0);
+  const totalDelivered = routes.reduce((s, r) => s + Number(r.stats?.delivered || 0), 0);
+  const avgWeekly = weeks.length ? Math.round(totalEarned / weeks.length) : 0;
   const curWeekEarned = routes
     .filter(r => weekStart(routeDateISO(r)).getTime() === curWeekTs)
     .reduce((s, r) => s + routeEarnings(r).earned, 0);
 
+  // Last 8 weeks (oldest→newest) for the chart, using already-grouped data — no extra queries.
+  const chartData = weeks.slice(0, 8).reverse().map(w => ({
+    label: w.tuesday.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' }),
+    value: w.routes.reduce((s, r) => s + routeEarnings(r).earned, 0),
+  }));
+
   return (
-    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: '#F1F5F9', overflow: 'hidden' }}>
+    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
 
       {/* Header */}
       <div style={{ background: 'linear-gradient(135deg,#003BB5,#0052FF)', padding: '16px 20px 20px', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-          <button onClick={onBack} style={{ background: 'rgba(255,255,255,.2)', border: 'none', borderRadius: 10, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff', fontSize: 18 }}>←</button>
+          <button onClick={onBack} style={{ background: 'rgba(255,255,255,.2)', border: 'none', borderRadius: 'var(--r-sm)', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff', fontSize: 18 }}>←</button>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', letterSpacing: -0.5 }}>💰 Mis pagos</div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', letterSpacing: -0.5 }}>💰 Mis pagos y estadísticas</div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,.65)', marginTop: 1 }}>Cortes martes a lunes</div>
           </div>
         </div>
@@ -197,7 +143,7 @@ export default function DriverPaymentsView({ onBack }) {
             { label: 'Esta semana', val: curWeekEarned, color: '#86efac' },
             { label: 'Total pagado', val: totalPaid, color: 'rgba(255,255,255,.9)' },
           ].map(s => (
-            <div key={s.label} style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 14, padding: '12px 14px', border: '1px solid rgba(255,255,255,.15)' }}>
+            <div key={s.label} style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 'var(--r-md)', padding: '12px 14px', border: '1px solid rgba(255,255,255,.15)' }}>
               <div style={{ fontSize: 20, fontWeight: 900, color: s.color, letterSpacing: -0.5 }}>{fmt(s.val)}</div>
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,.6)', marginTop: 2 }}>{s.label}</div>
             </div>
@@ -206,27 +152,41 @@ export default function DriverPaymentsView({ onBack }) {
       </div>
 
       {/* Info banner */}
-      <div style={{ background: '#fffbeb', borderBottom: '1px solid #fde68a', padding: '8px 16px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ background: 'var(--warn-dim)', borderBottom: '1px solid var(--warn-dim)', padding: '8px 16px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: 14 }}>ℹ️</span>
-        <span style={{ fontSize: 11, color: '#92400e', fontWeight: 600, lineHeight: 1.35 }}>
+        <span style={{ fontSize: 11, color: 'var(--warn)', fontWeight: 600, lineHeight: 1.35 }}>
           Pagos todos los martes. Precio por paquete = monto de ruta ÷ paquetes activos.
           Las incidencias se pagan una vez verificadas por el admin.
         </span>
       </div>
 
+      {/* Historical stats + chart */}
+      <div style={{ padding: '14px 14px 0', flexShrink: 0 }}>
+        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.5, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>
+          Estadísticas históricas
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <StatTile label="Ganado histórico" value={fmt(totalEarned)} color="var(--accent)" />
+          <StatTile label="Entregados histórico" value={totalDelivered} />
+          <StatTile label="Promedio semanal" value={fmt(avgWeekly)} />
+        </div>
+        {chartData.length > 1 && (
+          <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '14px 10px 10px', marginBottom: 4 }}>
+            <BarChart data={chartData} formatValue={v => fmtCompact(v)} />
+          </div>
+        )}
+      </div>
+
       {/* Weeks list */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '14px 14px', WebkitOverflowScrolling: 'touch' }}>
         {loading && (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8' }}>
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)' }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div>
             <div>Cargando pagos…</div>
           </div>
         )}
         {!loading && weeks.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94a3b8' }}>
-            <div style={{ fontSize: 44, marginBottom: 10 }}>💸</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#64748b' }}>Sin pagos registrados</div>
-          </div>
+          <EmptyState icon="💸" title="Sin pagos registrados" />
         )}
         {weeks.map(week => (
           <WeekCard

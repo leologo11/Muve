@@ -3,7 +3,7 @@ import multer from 'multer';
 import * as XLSX from 'xlsx';
 import Anthropic from '@anthropic-ai/sdk';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { PRICES } from '../utils/priceByCommune.js';
+import { PRICES, normalize as norm } from '../utils/priceByCommune.js';
 import { qs, supabaseRequest } from '../utils/supabase.js';
 
 const router = Router();
@@ -30,10 +30,6 @@ const TIER_COLOR = (price) => {
   return '#7b1fa2';
 };
 
-function norm(s) {
-  return (s || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '');
-}
-
 function titleCase(s) {
   return s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 }
@@ -45,7 +41,7 @@ function communeName(props) {
 // GET /api/zones
 router.get('/', async (req, res) => {
   try {
-    const rows = await supabaseRequest(`/zones${qs({ select: '*', order: 'source.asc,name.asc' })}`);
+    const rows = await supabaseRequest(`/zones${qs({ select: '*', order: 'source.asc,name.asc', limit: 2000 })}`);
     return res.json(rows.map(z => ({
       _id: z.id,
       id: z.id,
@@ -100,7 +96,8 @@ router.patch('/:id', requireRole('admin'), async (req, res) => {
 // DELETE /api/zones/:id
 router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {
-    await supabaseRequest(`/zones${qs({ id: `eq.${req.params.id}` })}`, { method: 'DELETE' });
+    const rows = await supabaseRequest(`/zones${qs({ id: `eq.${req.params.id}` })}`, { method: 'DELETE' });
+    if (!rows?.[0]) return res.status(404).json({ error: 'Zona no encontrada' });
     return res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -228,6 +225,9 @@ router.post('/bulk-tiers', requireRole('admin'), async (req, res) => {
     const zones = await supabaseRequest(`/zones${qs({ source: 'eq.commune', select: 'id,name' })}`);
     let updated = 0;
 
+    // Sequential PATCH per zone — a batch upsert isn't viable here because `zones.polygon`
+    // is NOT NULL with no default, so a POST+on_conflict upsert would fail PostgREST's
+    // INSERT-side constraint check unless every row also carried its full polygon payload.
     for (const item of items) {
       const zone = zones.find(z => norm(z.name) === norm(item.commune));
       if (!zone) continue;

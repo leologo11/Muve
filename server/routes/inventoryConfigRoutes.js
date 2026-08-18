@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { isSupabaseEnabled, qs, supabaseRequest } from '../utils/supabase.js';
+import { normalize } from '../utils/priceByCommune.js';
 
 const router = Router();
 router.use(requireAuth, requireRole('admin'));
@@ -66,8 +67,7 @@ router.patch('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     if (!isSupabaseEnabled()) return res.status(503).json({ error: 'Solo disponible con Supabase' });
-    const key = (req.body.id || req.body.itemKey || req.body.name || '').toString()
-      .trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    const key = normalize((req.body.id || req.body.itemKey || req.body.name || '').toString())
       .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
     if (!key) return res.status(400).json({ error: 'Nombre requerido' });
     const payload = {

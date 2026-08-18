@@ -3,6 +3,9 @@ import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
 import InventoryPicker, { totalVol, recommendVehicleType, serializeInventory, parseInventoryStr, requiredHelpersForInventory } from '../../components/InventoryPicker.jsx';
+import { formatCLP as fmt } from '../../utils/format.js';
+import { openPrintWindow } from '../../utils/printWindow.js';
+import { findTierPricePerKm } from '../../utils/vehiclePricing.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -18,18 +21,16 @@ const VEHICLE_NAMES = { furgon: 'Furgon', camion34: 'Camion 3/4', camionLargo: '
 const VEHICLE_ICONS = { furgon: '🚐', camion34: '🚚', camionLargo: '🚛' };
 const SERVICE_LABELS = { flete: 'Flete', mudanza: 'Mudanza', paqueteria: 'Paqueteria' };
 
-// ── Price helpers (mirrors server logic) ──────────────────────────────────────
+// ── Price helpers (mirrors server logic in server/utils/vehiclePricing.js) ────
 
 function calcExactPrice(cfg, distKm, driverHelps, helpers, floors, packing) {
   if (!cfg || !distKm) return 0;
-  const tiers = (cfg.kmTiers || []).slice().sort((a, b) => a.max_km - b.max_km);
-  const tier  = tiers.find(t => distKm <= t.max_km) || tiers[tiers.length - 1];
-  const ppk   = tier ? Number(tier.price_per_km || 0) : 0;
-  const ex    = cfg.extras || {};
+  const ppk = findTierPricePerKm(cfg.kmTiers, distKm);
+  const ex  = cfg.extras || {};
   return Math.round((
     Number(cfg.basePrice || 0)
     + distKm * ppk
-    + 0
+    + (driverHelps ? Number(ex.driver_help || 0) : 0)
     + helpers * Number(ex.helper || 0)
     + floors  * Number(ex.floor  || 0)
     + (packing ? Number(ex.packing || 0) : 0)
@@ -44,20 +45,17 @@ function calcRange(exact) {
 
 function calcBreakdown(cfg, distKm, driverHelps, helpers, floors, packing) {
   if (!cfg || !distKm) return null;
-  const tiers  = (cfg.kmTiers || []).slice().sort((a, b) => a.max_km - b.max_km);
-  const tier   = tiers.find(t => distKm <= t.max_km) || tiers[tiers.length - 1];
-  const ppk    = tier ? Number(tier.price_per_km || 0) : 0;
+  const ppk    = findTierPricePerKm(cfg.kmTiers, distKm);
   const ex     = cfg.extras || {};
   const base   = Number(cfg.basePrice || 0);
   const kmCost = Math.round(distKm * ppk);
-  const dvCost = 0;
+  const dvCost = driverHelps ? Number(ex.driver_help || 0) : 0;
   const hlCost = helpers * Number(ex.helper || 0);
   const flCost = floors  * Number(ex.floor  || 0);
   const pkCost = packing ? Number(ex.packing || 0) : 0;
   return { base, kmCost, ppk, dvCost, hlCost, flCost, pkCost, total: base + kmCost + dvCost + hlCost + flCost + pkCost };
 }
 
-const fmt = n => Number(n || 0).toLocaleString('es-CL');
 
 // ── PDF generator ─────────────────────────────────────────────────────────────
 
@@ -89,7 +87,7 @@ function printQuotePDF(q, priceMin, priceMax, cfg, priceFinal = null) {
 <h2>Detalle del precio</h2>
 <div class="row"><span class="lbl">Precio base (${VEHICLE_NAMES[q.vehicleType] || q.vehicleType})</span><span class="val">$${fmt(bd.base)}</span></div>
 <div class="row"><span class="lbl">Distancia: ${km} km × $${fmt(bd.ppk)}/km</span><span class="val">$${fmt(bd.kmCost)}</span></div>
-${dh ? `<div class="row"><span class="lbl">Ayuda del chofer incluida</span><span class="val">$0</span></div>` : ''}
+${dh ? `<div class="row"><span class="lbl">Ayuda del chofer incluida</span><span class="val">$${fmt(bd.dvCost)}</span></div>` : ''}
 ${bd.hlCost > 0 ? `<div class="row"><span class="lbl">Ayudantes adicionales (${nh} × $${fmt(cfg?.extras?.helper)})</span><span class="val">$${fmt(bd.hlCost)}</span></div>` : ''}
 ${bd.flCost > 0 ? `<div class="row"><span class="lbl">Pisos sin ascensor (${originFloors} retiro + ${destinationFloors} entrega)</span><span class="val">$${fmt(bd.flCost)}</span></div>` : ''}
 ${bd.pkCost > 0 ? `<div class="row"><span class="lbl">Embalaje profesional</span><span class="val">$${fmt(bd.pkCost)}</span></div>` : ''}
@@ -164,14 +162,10 @@ ${q.clientNotes ? `<h2>Notas del cliente</h2><div style="font-size:13px;color:#4
   <p><strong>MUVE</strong> · Transporte y logistica en Chile</p>
   <p>Para confirmar o modificar este servicio, contactenos directamente.</p>
 </div>
+<script>window.onload=function(){window.print()}<\/script>
 </body></html>`;
 
-  const w = window.open('', '_blank', 'width=760,height=960');
-  if (!w) { toast('Permite popups para generar el PDF'); return; }
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  setTimeout(() => w.print(), 400);
+  openPrintWindow(html, `cotizacion-${q.quoteCode}.html`);
 }
 
 // ── Main view ─────────────────────────────────────────────────────────────────

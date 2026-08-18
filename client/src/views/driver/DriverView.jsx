@@ -1,6 +1,8 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../../api/index.js';
-import { watchGeoPosition, clearGeoWatch } from '../../utils/geo.js';
+import { watchGeoPosition, clearGeoWatch, haversineMeters } from '../../utils/geo.js';
+import { computeRouteEarnings } from '../../utils/driverEarnings.js';
+import { SegmentedControl, FilterChipRow } from '../../components/driver-ui/index.js';
 import Header from '../../components/Header.jsx';
 import RouteMap from '../../components/RouteMap.jsx';
 import PackageCard from '../../components/PackageCard.jsx';
@@ -12,7 +14,8 @@ export default function DriverView({ routeId, onBack, onLogout, nativeApp = fals
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [packages, setPackages] = useState([]);
   const [tab, setTab] = useState('m'); // m=map, l=list, r=report
-  const [filter, setFilter] = useState('todos');
+  const [segment, setSegment] = useState('pending'); // 'pending' | 'delivered' — primary Lista split
+  const [subFilter, setSubFilter] = useState('todos'); // status sub-filter, only used within 'delivered'
   const [search, setSearch] = useState('');
   const [editPkg, setEditPkg] = useState(null);
   const [showLoadCheck, setShowLoadCheck] = useState(false);
@@ -57,7 +60,11 @@ export default function DriverView({ routeId, onBack, onLogout, nativeApp = fals
         }
       },
       (err) => { if (!cancelled) setGpsState(err.code === 1 ? 'denied' : 'unavailable'); },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 2000 }
+      // minimumUpdateInterval (Android/Capacitor-only, ignored elsewhere) tells the native
+      // location provider not to sample faster than we actually send updates (see the 8s
+      // throttle above) — saves battery at the source instead of just discarding samples
+      // after the fact.
+      { minimumUpdateInterval: 8000 }
     ).then(handle => {
       if (cancelled) { clearGeoWatch(handle); return; }
       watchHandleRef.current = handle;
@@ -68,6 +75,32 @@ export default function DriverView({ routeId, onBack, onLogout, nativeApp = fals
       if (watchHandleRef.current) { clearGeoWatch(watchHandleRef.current); watchHandleRef.current = null; }
     };
   }, []);
+
+  // Poll for admin-side changes every 15s while a route is open — the driver has
+  // no other way to find out the admin reassigned/edited/added packages or updated
+  // the payout mid-route (mirrors the polling AdminView already does for its own data).
+  // Silent on failure: this runs continuously in the background, a toast per
+  // transient network hiccup while driving would be more annoying than useful.
+  const knownPkgIdsRef = useRef(null);
+  useEffect(() => {
+    knownPkgIdsRef.current = null;
+    if (!selectedRoute?._id) return;
+    const timer = setInterval(() => {
+      api.getRoute(selectedRoute._id)
+        .then(({ route, packages: fresh }) => {
+          const freshIds = new Set(fresh.map(p => p._id));
+          if (knownPkgIdsRef.current) {
+            const added = fresh.filter(p => !knownPkgIdsRef.current.has(p._id));
+            if (added.length) toast(`📦 ${added.length} paquete${added.length > 1 ? 's' : ''} nuevo${added.length > 1 ? 's' : ''} en tu ruta`);
+          }
+          knownPkgIdsRef.current = freshIds;
+          setSelectedRoute(route);
+          setPackages(fresh);
+        })
+        .catch(() => {});
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [selectedRoute?._id]);
 
   const loadRoute = async (id) => {
     try {
@@ -121,37 +154,44 @@ export default function DriverView({ routeId, onBack, onLogout, nativeApp = fals
     }
   };
 
-  const visible = packages.filter(p => {
+  // Memoized: these all derive from `packages`/filters, never from myLocation/gpsState —
+  // without this, every GPS tick (every few seconds while driving) re-ran a full filter +
+  // Unicode-normalize pass over the whole package list, which is real jank on a low-end phone.
+  const active = useMemo(() => packages.filter(p => p.status !== 'eliminado'), [packages]);
+  const pendingCount = useMemo(() => active.filter(p => p.status === 'pendiente').length, [active]);
+  const deliveredCount = active.length - pendingCount;
+
+  const visible = useMemo(() => packages.filter(p => {
     const q = search.toLowerCase();
     const matchQ = !q || [p.customerName, p.customerLastName, p.address, p.commune, p.customerPhone].join(' ').toLowerCase().includes(q);
-    const matchF = filter === 'todos' || p.status === filter;
-    return matchQ && matchF;
-  });
+    const matchSegment = segment === 'pending' ? p.status === 'pendiente' : p.status !== 'pendiente' && p.status !== 'eliminado';
+    const matchSubFilter = segment !== 'delivered' || subFilter === 'todos' || p.status === subFilter;
+    return matchQ && matchSegment && matchSubFilter;
+  }), [packages, search, segment, subFilter]);
 
-  const active = packages.filter(p => p.status !== 'eliminado');
-  const pay = calcDriverPay(selectedRoute, active);
+  const pay = useMemo(() => computeRouteEarnings(selectedRoute, active), [selectedRoute, active]);
 
-  const addrCountMap = (() => {
+  const addrCountMap = useMemo(() => {
     const map = {};
     active.forEach(p => {
       const key = (p.address || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
       if (key) map[key] = (map[key] || 0) + 1;
     });
     return map;
-  })();
+  }, [active]);
 
-  const stats = [
+  const stats = useMemo(() => [
     { label: 'Total', value: active.length },
     { label: 'Entregadas', value: packages.filter(p => p.status === 'entregado').length, color: 'var(--accent)' },
     { label: 'No entregadas', value: packages.filter(p => p.status === 'no-entregado').length, color: 'var(--danger)' },
     { label: 'Pendientes', value: packages.filter(p => p.status === 'pendiente').length },
     ...(packages.filter(p => p.status === 'devuelto').length > 0
-      ? [{ label: 'Devueltos', value: packages.filter(p => p.status === 'devuelto').length, color: '#7b1fa2' }]
+      ? [{ label: 'Devueltos', value: packages.filter(p => p.status === 'devuelto').length, color: 'var(--devuelto)' }]
       : []),
     ...(pay.base > 0
-      ? [{ label: pay.isFinal ? 'Pago final' : 'Pago estimado', value: '$' + pay.final.toLocaleString('es-CL'), color: 'var(--accent)' }]
+      ? [{ label: pay.isFinal ? 'Pago final' : 'Pago estimado', value: '$' + pay.earned.toLocaleString('es-CL'), color: 'var(--accent)' }]
       : [])
-  ];
+  ], [active, packages, pay]);
 
   if (loading) return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>
@@ -169,16 +209,16 @@ export default function DriverView({ routeId, onBack, onLogout, nativeApp = fals
 
       {/* GPS status indicator */}
       {gpsState === 'denied' && (
-        <div style={{ background: '#fff3e0', borderBottom: '1px solid #f57c0030', padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ background: 'var(--warn-dim)', borderBottom: '1px solid var(--warn-dim)', padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <span style={{ fontSize: 16 }}>📍</span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#e65100' }}>Ubicación desactivada</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--warn)' }}>Ubicación desactivada</div>
             <div style={{ fontSize: 11, color: 'var(--muted)' }}>Activa la ubicación en tu navegador para aparecer en el mapa del admin</div>
           </div>
         </div>
       )}
       {gpsState === 'active' && myLocation && (
-        <div style={{ background: '#f4f7ff', borderBottom: '1px solid #0052FF20', padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ background: 'var(--card2)', borderBottom: '1px solid var(--accent-dim)', padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <span style={{ fontSize: 13 }}>📡</span>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)' }}>
             GPS activo · precisión {myLocation.accuracy ? `±${Math.round(myLocation.accuracy)}m` : '…'}
@@ -188,20 +228,20 @@ export default function DriverView({ routeId, onBack, onLogout, nativeApp = fals
 
       {/* Ruta pausada/en revisión banner */}
       {selectedRoute?.status === 'paused' && (
-        <div style={{ background: 'linear-gradient(90deg, #f57c0014, #f57c0022)', borderBottom: '1px solid #f57c0030', padding: '10px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ background: 'var(--warn-dim)', borderBottom: '1px solid var(--warn-dim)', padding: '10px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 18 }}>⏸</span>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#f57c00' }}>Ruta en revisión</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--warn)' }}>Ruta en revisión</div>
             <div style={{ fontSize: 11, color: 'var(--muted)' }}>Todos los paquetes procesados. El admin revisará y cerrará la ruta.</div>
           </div>
         </div>
       )}
       {/* Ruta finalizada banner */}
       {selectedRoute?.status === 'completed' && (
-        <div style={{ background: 'linear-gradient(90deg, #0077aa14, #0077aa22)', borderBottom: '1px solid #0077aa30', padding: '10px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ background: 'var(--info-dim)', borderBottom: '1px solid var(--info-dim)', padding: '10px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 18 }}>🔒</span>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#0077aa' }}>Ruta finalizada</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--info)' }}>Ruta finalizada</div>
             <div style={{ fontSize: 11, color: 'var(--muted)' }}>El administrador cerró esta ruta. No puedes hacer más cambios.</div>
           </div>
         </div>
@@ -244,7 +284,7 @@ export default function DriverView({ routeId, onBack, onLogout, nativeApp = fals
                 {pay.isFinal ? 'Pago final de ruta' : 'Pago estimado de ruta'}
               </div>
               <div style={{ fontSize: 19, color: 'var(--accent)', fontWeight: 900, marginTop: 1 }}>
-                ${pay.final.toLocaleString('es-CL')}
+                ${pay.earned.toLocaleString('es-CL')}
               </div>
             </div>
             <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>
@@ -299,27 +339,37 @@ export default function DriverView({ routeId, onBack, onLogout, nativeApp = fals
         ))}
       </div>
 
-      {/* Search (list tab) */}
+      {/* Segment + search (list tab) */}
       {tab === 'l' && (
         <div style={{ padding: '8px 10px 4px', background: '#fff', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+          <SegmentedControl
+            value={segment}
+            onChange={s => { setSegment(s); setSubFilter('todos'); setNavMode(false); setNavSelected(new Set()); }}
+            options={[
+              { value: 'pending', label: '⏳ Por entregar', count: pendingCount },
+              { value: 'delivered', label: '✅ Entregados', count: deliveredCount },
+            ]}
+          />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="🔍 Buscar por nombre, dirección, comuna…"
-            style={{ width: '100%', background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 22, padding: '8px 14px', fontSize: 14, outline: 'none' }}
+            style={{ width: '100%', background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 22, padding: '8px 14px', fontSize: 14, outline: 'none', marginTop: 8 }}
           />
-          <div style={{ display: 'flex', gap: 6, marginTop: 7, overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 4 }}>
-            {['todos', 'pendiente', 'entregado', 'no-entregado', 'devuelto'].map(f => (
-              <button key={f} onClick={() => setFilter(f)} style={{
-                flexShrink: 0, padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                cursor: 'pointer', border: '1px solid var(--border)',
-                background: filter === f ? (f === 'devuelto' ? '#7b1fa2' : 'var(--accent)') : 'var(--card2)',
-                color: filter === f ? '#fff' : 'var(--muted)'
-              }}>
-                {{ todos: 'Todos', pendiente: '⏳ Pendientes', entregado: '✅ Entregados', 'no-entregado': '❌ No entregados', devuelto: '📦 Devueltos' }[f]}
-              </button>
-            ))}
-          </div>
+          {segment === 'delivered' && (
+            <div style={{ marginTop: 7 }}>
+              <FilterChipRow
+                value={subFilter}
+                onChange={setSubFilter}
+                options={[
+                  { value: 'todos', label: 'Todos' },
+                  { value: 'entregado', label: '✅ Entregados', color: 'var(--accent)' },
+                  { value: 'no-entregado', label: '❌ No entregados', color: 'var(--danger)' },
+                  { value: 'devuelto', label: '📦 Devueltos', color: 'var(--devuelto)' },
+                ]}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -383,9 +433,11 @@ export default function DriverView({ routeId, onBack, onLogout, nativeApp = fals
                   <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>
                     {visible.length} paquete{visible.length !== 1 ? 's' : ''}
                   </span>
-                  <button onClick={() => setNavMode(true)} style={{ background: 'var(--accent)', border: 'none', borderRadius: 20, padding: '6px 13px', fontSize: 12, fontWeight: 800, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
-                    🧭 Seleccionar paradas
-                  </button>
+                  {segment === 'pending' && (
+                    <button onClick={() => setNavMode(true)} style={{ background: 'var(--accent)', border: 'none', borderRadius: 20, padding: '6px 13px', fontSize: 12, fontWeight: 800, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+                      🧭 Seleccionar paradas
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -481,65 +533,29 @@ export default function DriverView({ routeId, onBack, onLogout, nativeApp = fals
   );
 }
 
-function calcDriverPay(route, activePackages = []) {
-  const settlement = route?.driverSettlement || {};
-  const base = Number(route?.driverPayout || settlement.baseAmount || 0);
-  const delivered = activePackages.filter(p => p.status === 'entregado').length;
-  const payable = activePackages.filter(isPayableForDriver).length;
-  const total = activePackages.length;
-  const ratio = total ? payable / total : 0;
-  const status = settlement.status || 'pending';
-  const approved = Number(settlement.approvedAmount || 0);
-  const adjustment = Number(settlement.adjustment || 0);
-  const mode = settlement.mode || 'proportional_delivered';
-  const suggested = mode === 'fixed'
-    ? base
-    : mode === 'manual'
-      ? (approved || base)
-      : Math.round(base * ratio);
-  const isFinal = ['approved', 'paid'].includes(status) && approved > 0;
-  return {
-    base,
-    delivered,
-    payable,
-    total,
-    adjustment,
-    status,
-    isFinal,
-    final: Math.max(0, isFinal ? approved : suggested + adjustment),
-  };
-}
-
-function isPayableForDriver(pkg) {
-  if (pkg.status === 'entregado') return true;
-  if (pkg.status === 'no-entregado') return Boolean(pkg.failReason);
-  if (pkg.status === 'devuelto') return Boolean(pkg.failReason || pkg.note);
-  return false;
-}
-
 function DriverReport({ packages, route }) {
   const active = packages.filter(p => p.status !== 'eliminado');
   const delivered = active.filter(p => p.status === 'entregado');
   const failed = active.filter(p => p.status === 'no-entregado');
   const returned = active.filter(p => p.status === 'devuelto');
   const pending = active.filter(p => p.status === 'pendiente');
-  const pay = calcDriverPay(route, active);
+  const pay = computeRouteEarnings(route, active);
 
   return (
     <div style={{ padding: '14px 10px calc(50px + env(safe-area-inset-bottom))', overflowY: 'auto', height: '100%' }}>
       {pay.base > 0 && (
-        <div style={{ background: '#f4f7ff', border: '1px solid #0052FF26', borderRadius: 13, padding: 14, marginBottom: 14 }}>
+        <div style={{ background: 'var(--card2)', border: '1px solid var(--accent-dim)', borderRadius: 13, padding: 14, marginBottom: 14 }}>
           <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 1.2, color: 'var(--accent)', marginBottom: 8 }}>
             {pay.isFinal ? 'PAGO FINAL' : 'PAGO ESTIMADO'}
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10 }}>
             <div>
-              <div style={{ fontSize: 24, fontWeight: 900, color: 'var(--accent)' }}>${pay.final.toLocaleString('es-CL')}</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: 'var(--accent)' }}>${pay.earned.toLocaleString('es-CL')}</div>
               <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>
                 Base ${pay.base.toLocaleString('es-CL')} · {pay.payable}/{pay.total} pagables
               </div>
             </div>
-            <div style={{ fontSize: 11, fontWeight: 800, color: pay.status === 'paid' ? '#16a34a' : 'var(--muted)', textTransform: 'uppercase' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: pay.status === 'paid' ? 'var(--success)' : 'var(--muted)', textTransform: 'uppercase' }}>
               {pay.status}
             </div>
           </div>
@@ -557,11 +573,11 @@ function DriverReport({ packages, route }) {
           ['No entregados', failed.length],
           ...(returned.length > 0 ? [['Devueltos', returned.length]] : []),
           ['Pendientes', pending.length],
-          ...(pay.base > 0 ? [[pay.isFinal ? 'Pago final' : 'Pago estimado', '$' + pay.final.toLocaleString('es-CL')]] : [])
+          ...(pay.base > 0 ? [[pay.isFinal ? 'Pago final' : 'Pago estimado', '$' + pay.earned.toLocaleString('es-CL')]] : [])
         ].map(([label, val]) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 13, borderBottom: '1px solid var(--border)' }}>
             <span>{label}</span>
-            <span style={{ color: label === 'Devueltos' ? '#7b1fa2' : 'var(--accent)', fontWeight: 700 }}>{val}</span>
+            <span style={{ color: label === 'Devueltos' ? 'var(--devuelto)' : 'var(--accent)', fontWeight: 700 }}>{val}</span>
           </div>
         ))}
       </div>
@@ -586,7 +602,7 @@ function DriverReport({ packages, route }) {
 
       {returned.length > 0 && (
         <>
-          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, color: '#7b1fa2', padding: '14px 0 7px', textTransform: 'uppercase' }}>
+          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, color: 'var(--devuelto)', padding: '14px 0 7px', textTransform: 'uppercase' }}>
             DEVUELTOS ({returned.length})
           </div>
           {returned.map(p => <ReportCard key={p._id} pkg={p} type="devuelto" />)}
@@ -597,10 +613,10 @@ function DriverReport({ packages, route }) {
 }
 
 function ReportCard({ pkg, type }) {
-  const color = type === 'entregado' ? 'var(--accent)' : type === 'devuelto' ? '#7b1fa2' : 'var(--danger)';
-  const borderColor = type === 'entregado' ? '#0052FF28' : type === 'devuelto' ? '#7b1fa228' : '#cc224428';
+  const color = type === 'entregado' ? 'var(--accent)' : type === 'devuelto' ? 'var(--devuelto)' : 'var(--danger)';
+  const borderColor = type === 'entregado' ? 'var(--accent-dim)' : type === 'devuelto' ? 'var(--devuelto-dim)' : 'var(--danger-dim)';
   return (
-    <div style={{ background: '#fff', border: `1px solid ${borderColor}`, borderRadius: 12, padding: '12px 14px', marginBottom: 8 }}>
+    <div style={{ background: 'var(--card)', border: `1px solid ${borderColor}`, borderRadius: 12, padding: '12px 14px', marginBottom: 8 }}>
       <div style={{ fontWeight: 700, fontSize: 14 }}>{pkg.customerName} {pkg.customerLastName}</div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{pkg.address}{pkg.commune ? `, ${pkg.commune}` : ''}</div>
       <div style={{ fontSize: 11, fontWeight: 700, color, marginTop: 5 }}>
@@ -768,12 +784,10 @@ function LoadCheckModal({ packages, onClose, onUpdated }) {
 }
 
 
-// ── Haversine ──────────────────────────────────────────────────────────────
+// Thin adapter over the shared point-based haversineMeters() — kept as a 4-arg
+// function since every call site below already uses this signature.
 function haversine(lat1, lng1, lat2, lng2) {
-  const R=6371e3, f1=lat1*Math.PI/180, f2=lat2*Math.PI/180;
-  const df=(lat2-lat1)*Math.PI/180, dl=(lng2-lng1)*Math.PI/180;
-  const a=Math.sin(df/2)**2+Math.cos(f1)*Math.cos(f2)*Math.sin(dl/2)**2;
-  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  return haversineMeters({ lat: lat1, lng: lng1 }, { lat: lat2, lng: lng2 });
 }
 function fmtDist(m){return m<1000?`${Math.round(m)} m`:`${(m/1000).toFixed(1)} km`;}
 

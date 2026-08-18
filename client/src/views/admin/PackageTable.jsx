@@ -2,12 +2,12 @@ import React, { useState, useRef } from 'react';
 import { api } from '../../api/index.js';
 import { toast } from '../../components/Toast.jsx';
 import AddressAutocomplete from '../../components/AddressAutocomplete.jsx';
+import { PACKAGE_STATUS, packageStatusLabel } from '../../utils/packageStatus.js';
 
-const STATUS_OPTS = [
-  { value: 'pendiente', label: '⏳ Pendiente', bg: '#fff8e1', color: '#f57c00' },
-  { value: 'entregado', label: '✅ Entregado', bg: '#f4f7ff', color: '#2e7d32' },
-  { value: 'no-entregado', label: '❌ No entregado', bg: '#fce4ec', color: '#c62828' }
-];
+// 'eliminado' is excluded — that status has its own delete flow, not a dropdown option.
+const STATUS_OPTS = Object.keys(PACKAGE_STATUS)
+  .filter(k => k !== 'eliminado')
+  .map(value => ({ value, label: packageStatusLabel(value), bg: PACKAGE_STATUS[value].bg, color: PACKAGE_STATUS[value].color }));
 
 function hasNumber(address) {
   return !address || /\d/.test(address.trim());

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { syncRouteStats } from './deliveryRoutes.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { geocodeAddress, sleep } from '../utils/geocode.js';
+import { geocodeMissingCoords } from '../utils/geocode.js';
 import { normalizeQuote, qs, supabaseRequest } from '../utils/supabase.js';
 
 const router = Router();
@@ -12,8 +12,8 @@ router.use(requireAuth, requireRole('admin'));
 router.get('/', async (req, res) => {
   try {
     const [quotes, items] = await Promise.all([
-      supabaseRequest(`/quotes${qs({ select: '*', order: 'created_at.desc' })}`),
-      supabaseRequest(`/quote_items${qs({ select: '*' })}`),
+      supabaseRequest(`/quotes${qs({ select: '*', order: 'created_at.desc', limit: 5000 })}`),
+      supabaseRequest(`/quote_items${qs({ select: '*', limit: 20000 })}`),
     ]);
     const byQuote = new Map();
     items.forEach(item => {
@@ -146,7 +146,8 @@ router.patch('/:id', async (req, res) => {
 // DELETE /api/quotes/:id
 router.delete('/:id', async (req, res) => {
   try {
-    await supabaseRequest(`/quotes${qs({ id: `eq.${req.params.id}` })}`, { method: 'DELETE' });
+    const rows = await supabaseRequest(`/quotes${qs({ id: `eq.${req.params.id}` })}`, { method: 'DELETE' });
+    if (!rows?.[0]) return res.status(404).json({ error: 'Cotización no encontrada' });
     return res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -200,16 +201,12 @@ router.post('/:id/approve', async (req, res) => {
     const route = routeRows[0];
 
     if (items?.length) {
+      const geocoded = await geocodeMissingCoords(items);
       const pkgsToInsert = [];
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
-        let lat = item.lat;
-        let lng = item.lng;
-        if ((!lat || !lng) && item.address) {
-          const geo = await geocodeAddress(item.address, item.commune);
-          if (geo) { lat = geo.lat; lng = geo.lng; }
-          if (items.length > 1) await sleep(1100);
-        }
+        const lat = item.lat || geocoded[i]?.lat;
+        const lng = item.lng || geocoded[i]?.lng;
         pkgsToInsert.push({
           tracking_id: `MUVE${Date.now().toString(36).toUpperCase()}${String(i + 1).padStart(3, '0')}`,
           route_id: route.id,

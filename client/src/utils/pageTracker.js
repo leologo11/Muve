@@ -3,6 +3,8 @@
 // Excluye rutas de admin/driver automáticamente.
 // Envía a: (1) Supabase analytics_sessions y (2) Google Analytics 4.
 
+import { api } from '../api/index.js';
+
 const SESSION_KEY = 'muve_sid';
 const STATE_KEY   = 'muve_track';
 
@@ -82,11 +84,7 @@ function getSource() {
 
 async function post(payload) {
   try {
-    await fetch('/api/analytics/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    await api.trackAnalytics(payload);
   } catch {}
 }
 

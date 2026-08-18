@@ -1,7 +1,10 @@
 const BASE = import.meta.env.VITE_API_URL || '/api';
 
+// localStorage key for the JWT — was repeated as a literal string in AuthContext.jsx and RouteMap.jsx.
+export const TOKEN_KEY = 'rf_token';
+
 function getToken() {
-  return localStorage.getItem('rf_token');
+  return localStorage.getItem(TOKEN_KEY);
 }
 
 function headers(extra = {}) {
@@ -66,6 +69,11 @@ export const api = {
     return request('GET', `/packages/all?${q}`);
   },
   getPackages: (routeId) => request('GET', `/packages?routeId=${routeId}`),
+  getMyPackages: (params = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => v != null && v !== '' && q.set(k, String(v)));
+    return request('GET', `/packages/mine?${q}`);
+  },
   createPackage: (data) => request('POST', '/packages', data),
   bulkCreatePackages: (routeId, packages) => request('POST', '/packages/bulk', { routeId, packages }),
   updatePackage: (id, data) => request('PATCH', `/packages/${id}`, data),
@@ -198,6 +206,7 @@ export const api = {
 
   // Analytics funnel (admin)
   getAnalyticsFunnel: (days = 7) => request('GET', `/analytics/funnel?days=${days}`),
+  trackAnalytics: (payload) => request('POST', '/analytics/track', payload),
 
   // Presupuestos manuales (admin)
   getPresupuestos:    ()     => request('GET',    '/presupuestos'),
@@ -209,6 +218,7 @@ export const api = {
   getPublicVehicleConfigs: () => request('GET', '/public/vehicle-configs'),
   getPublicInventoryConfigs: () => request('GET', '/public/inventory-configs'),
   calculateDistance: (data) => request('POST', '/public/distance', data),
+  getPublicOsrmPath: (data) => request('POST', '/public/osrm-path', data),
   getQuoteEstimate: (data) => request('POST', '/public/quote-estimate', data),
   estimateLoad: (data) => request('POST', '/public/estimate-load', data),
   reviewPrice: (data) => request('POST', '/public/price-review', data),

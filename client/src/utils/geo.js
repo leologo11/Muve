@@ -1,6 +1,20 @@
 // Native GPS wrapper — uses @capacitor/geolocation on Android/iOS,
 // falls back to browser navigator.geolocation on web.
 
+// Haversine great-circle distance in meters — was reimplemented independently in
+// DeliveryModal.jsx and DriverView.jsx.
+export function haversineMeters(a, b) {
+  if (!a?.lat || !a?.lng || !b?.lat || !b?.lng) return null;
+  const R = 6371000;
+  const toRad = n => Number(n) * Math.PI / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
 function isNativePlatform() {
   try { return !!(window.Capacitor?.isNativePlatform?.()); } catch (_) { return false; }
 }

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { geocodeAddress, sleep } from '../utils/geocode.js';
+import { geocodeAddress, geocodeMissingCoords, OSRM_BASE_URL } from '../utils/geocode.js';
 import { upload, uploadToCloudinary, deletePhoto } from '../utils/cloudinary.js';
 import { qs, supabaseRequest } from '../utils/supabase.js';
 
@@ -73,14 +73,17 @@ function normalizePackage(p) {
 async function syncRouteStats(routeId) {
   if (!routeId) return null;
   const pkgs = await supabaseRequest(`/packages${qs({ route_id: `eq.${routeId}`, status: `neq.eliminado`, select: 'status,price' })}`);
+  const isBillable = p => p.status === 'entregado' || p.status === 'no-entregado' || p.status === 'devuelto';
   const stats = {
     total: pkgs.length,
     delivered: pkgs.filter(p => p.status === 'entregado').length,
     failed: pkgs.filter(p => p.status === 'no-entregado').length,
+    returned: pkgs.filter(p => p.status === 'devuelto').length,
     pending: pkgs.filter(p => p.status === 'pendiente').length,
     totalAmount: pkgs.reduce((s, p) => s + Number(p.price || 0), 0),
-    // entregado + no-entregado: both are billed (client pays for the attempt)
-    collectedAmount: pkgs.filter(p => p.status === 'entregado' || p.status === 'no-entregado').reduce((s, p) => s + Number(p.price || 0), 0),
+    // entregado + no-entregado + devuelto: all are billed (client pays for the delivery
+    // attempt regardless of whether the package was later marked for return)
+    collectedAmount: pkgs.filter(isBillable).reduce((s, p) => s + Number(p.price || 0), 0),
   };
   await supabaseRequest(`/routes${qs({ id: `eq.${routeId}` })}`, {
     method: 'PATCH',
@@ -240,10 +243,20 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
 router.delete('/:id/permanent', requireRole('admin'), async (req, res) => {
   try {
     const routeId = req.params.id;
-    // Detach packages from this route (set route_id = null, status back to pendiente if not delivered)
+    // Detach packages from this route (route_id = null). Packages that were never
+    // successfully delivered go back to 'pendiente' so they resurface in the pool for
+    // reassignment; delivered or already soft-deleted packages keep their status.
     const pkgs = await supabaseRequest(`/packages${qs({ route_id: `eq.${routeId}`, select: 'id,status' })}`);
-    if (pkgs.length) {
-      await supabaseRequest(`/packages${qs({ route_id: `eq.${routeId}` })}`, {
+    const resettable = pkgs.filter(p => ['pendiente', 'no-entregado', 'devuelto'].includes(p.status)).map(p => p.id);
+    const keepStatus = pkgs.filter(p => !resettable.includes(p.id)).map(p => p.id);
+    if (resettable.length) {
+      await supabaseRequest(`/packages${qs({ id: `in.(${resettable.join(',')})` })}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ route_id: null, status: 'pendiente', updated_at: new Date().toISOString() }),
+      });
+    }
+    if (keepStatus.length) {
+      await supabaseRequest(`/packages${qs({ id: `in.(${keepStatus.join(',')})` })}`, {
         method: 'PATCH',
         body: JSON.stringify({ route_id: null, updated_at: new Date().toISOString() }),
       });
@@ -332,7 +345,7 @@ router.post('/:id/optimize', requireRole('admin'), async (req, res) => {
     let distanceKm = null;
     try {
       const pts = [start, ...sorted].map(p => `${p.lng},${p.lat}`).join(';');
-      const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${pts}?overview=false`, {
+      const r = await fetch(`${OSRM_BASE_URL}/route/v1/driving/${pts}?overview=false`, {
         headers: { 'User-Agent': 'MUVE/1.0' }, signal: AbortSignal.timeout(8000)
       });
       const d = await r.json();
@@ -369,17 +382,17 @@ router.post('/:id/geocode', requireRole('admin'), async (req, res) => {
       lat: 'is.null',
       select: 'id,address,commune',
     })}`);
+    const geocodedResults = await geocodeMissingCoords(pkgs, { throttleMs: 1200 });
     let geocoded = 0;
-    for (const pkg of pkgs) {
-      const geo = await geocodeAddress(pkg.address, pkg.commune);
+    for (let i = 0; i < pkgs.length; i++) {
+      const geo = geocodedResults[i];
       if (geo) {
-        await supabaseRequest(`/packages${qs({ id: `eq.${pkg.id}` })}`, {
+        await supabaseRequest(`/packages${qs({ id: `eq.${pkgs[i].id}` })}`, {
           method: 'PATCH',
           body: JSON.stringify({ lat: geo.lat, lng: geo.lng, updated_at: new Date().toISOString() }),
         });
         geocoded++;
       }
-      if (pkgs.length > 1) await sleep(1200);
     }
     return res.json({ geocoded, skipped: pkgs.length - geocoded, total: pkgs.length });
   } catch (err) {
@@ -413,7 +426,7 @@ router.post('/osrm-path', async (req, res) => {
     if (!coords?.length || coords.length < 2) return res.json({ geometry: null });
     const pts = coords.map(c => `${c[0]},${c[1]}`).join(';');
     const r = await fetch(
-      `https://router.project-osrm.org/route/v1/driving/${pts}?overview=full&geometries=geojson`,
+      `${OSRM_BASE_URL}/route/v1/driving/${pts}?overview=full&geometries=geojson`,
       { headers: { 'User-Agent': 'MUVE/1.0' }, signal: AbortSignal.timeout(8000) }
     );
     const d = await r.json();

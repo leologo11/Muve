@@ -81,7 +81,9 @@ const PRICES = {
   '_default': 5000,
 };
 
-function normalize(str) {
+// Shared text-normalize helper (lowercase, trim, strip accents) — was independently
+// copy-pasted in geocode.js, importAI.js, zoneRoutes.js, and priceRoutes.js (x2).
+export function normalize(str) {
   return (str || '')
     .toLowerCase()
     .trim()

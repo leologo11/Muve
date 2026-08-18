@@ -17,7 +17,7 @@ function normalizeCompany(c) {
 // GET /api/companies
 router.get('/', requireRole('admin'), async (req, res) => {
   try {
-    const rows = await supabaseRequest(`/companies${qs({ active: 'eq.true', select: '*', order: 'created_at.desc' })}`);
+    const rows = await supabaseRequest(`/companies${qs({ active: 'eq.true', select: '*', order: 'created_at.desc', limit: 2000 })}`);
     return res.json(rows.map(normalizeCompany));
   } catch (err) {
     res.status(500).json({ error: err.message });

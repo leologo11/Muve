@@ -4,11 +4,11 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { upload, uploadToCloudinary, deletePhoto } from '../utils/cloudinary.js';
 import { syncRouteStats } from './deliveryRoutes.js';
 import { geocodeAddress, sleep } from '../utils/geocode.js';
+import { normalize as normStr } from '../utils/priceByCommune.js';
 import { qs, supabaseRequest, supabaseRequestWithCount } from '../utils/supabase.js';
 
 const router = Router();
 
-function normStr(s) { return (s || '').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 
 async function fireDeliveryWebhook(pkg) {
   if (!pkg.company_id) return;
@@ -220,6 +220,42 @@ router.get('/all', requireRole('admin'), async (req, res) => {
       ].join(',');
       path += `${path.includes('?') ? '&' : '?'}or=(${orClause})`;
     }
+
+    const { rows, total } = await supabaseRequestWithCount(path);
+    return res.json({ packages: rows.map(normalizePackage), total, page: Number(page), limit: Number(limit) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/packages/mine — driver: their own packages across ALL their routes, filterable by
+// status/date/route. Unlike GET /api/routes/:id (one route at a time), this aggregates history
+// across every route ever assigned to the driver.
+router.get('/mine', requireRole('driver'), async (req, res) => {
+  try {
+    const { status = 'todos', from, to, routeId, page = 1, limit = 30 } = req.query;
+    const userId = req.user._id || req.user.id;
+
+    const driverRoutes = await supabaseRequest(`/routes${qs({ driver_id: `eq.${userId}`, select: 'id' })}`);
+    const routeIds = driverRoutes.map(r => r.id).filter(Boolean);
+    if (!routeIds.length || (routeId && !routeIds.includes(routeId))) {
+      return res.json({ packages: [], total: 0, page: Number(page), limit: Number(limit) });
+    }
+
+    const params = {
+      select: '*',
+      route_id: routeId ? `eq.${routeId}` : `in.(${routeIds.join(',')})`,
+      status: status && status !== 'todos' ? `eq.${status}` : 'neq.eliminado',
+      order: 'updated_at.desc',
+      limit,
+      offset: (Number(page) - 1) * Number(limit),
+    };
+
+    // Date range filters on updated_at (not delivered_at, which is only set for 'entregado' —
+    // that would silently drop 'no-entregado'/'devuelto' packages from a date-filtered history).
+    let path = `/packages${qs(params)}`;
+    if (from) path += `&updated_at=gte.${encodeURIComponent(new Date(`${from}T00:00:00`).toISOString())}`;
+    if (to) path += `&updated_at=lte.${encodeURIComponent(new Date(`${to}T23:59:59`).toISOString())}`;
 
     const { rows, total } = await supabaseRequestWithCount(path);
     return res.json({ packages: rows.map(normalizePackage), total, page: Number(page), limit: Number(limit) });
@@ -458,10 +494,12 @@ router.post('/bulk-delete', requireRole('admin'), async (req, res) => {
 // POST /api/packages/demo-archive — soft-archive every active package in one shot (reversible via demo-restore)
 router.post('/demo-archive', requireRole('admin'), async (req, res) => {
   try {
-    const rows = await supabaseRequest(`/packages${qs({ status: 'neq.eliminado', select: 'id' })}`, {
+    const rows = await supabaseRequest(`/packages${qs({ status: 'neq.eliminado', select: 'id,route_id' })}`, {
       method: 'PATCH',
       body: JSON.stringify({ status: 'eliminado', updated_at: new Date().toISOString() }),
     });
+    const routeIds = [...new Set((rows || []).map(r => r.route_id).filter(Boolean))];
+    await Promise.all(routeIds.map(id => syncRouteStats(id)));
     return res.json({ ids: (rows || []).map(r => r.id) });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -476,6 +514,8 @@ router.post('/demo-restore', requireRole('admin'), async (req, res) => {
     const rows = await supabaseRequest(`/packages${qs({ id: `in.(${ids.join(',')})` })}`, {
       method: 'PATCH', body: JSON.stringify({ status: 'pendiente', updated_at: new Date().toISOString() }),
     });
+    const routeIds = [...new Set((rows || []).map(r => r.route_id).filter(Boolean))];
+    await Promise.all(routeIds.map(id => syncRouteStats(id)));
     return res.json({ restored: (rows || []).length });
   } catch (err) {
     res.status(500).json({ error: err.message });
