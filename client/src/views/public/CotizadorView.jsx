@@ -250,237 +250,155 @@ const BtnBack = ({ onClick }) => (
 );
 
 // ─── Static scene background (desktop only) ──────────────────
+// Fondo del cotizador (desktop): render limpio y luminoso estilo low-poly.
+// La PISTA se mantiene recta y horizontal en la misma posición de siempre
+// (y=593, línea discontinua en y=644) para que la transición del camión no cambie.
 function SceneStatic() {
-  const WF = 'rgba(10,35,100,.27)';
-  const WS = 'rgba(65,115,195,.28)';
+  const SKY1 = '#DCEBF7', SKY2 = '#F0F6FC';
+  const GND = '#E9EEF6', GND2 = '#DFE6F0';
+  const ROAD = '#C6D0DB', DASH = 'rgba(255,255,255,.9)';
+  const WHT = '#FFFFFF', FACE = '#ECF0F6', FACE2 = '#DFE5EF', LINE = '#D3DCE8';
+  const GLOW = '#F5E1B0', GLOW2 = '#EFD196';
+  const TREE = '#CBDAD0', TREE2 = '#B4C9BD', TREE3 = '#DDE8E1', TRUNK = '#CBB9A4';
+  const ROCK = '#E0E6EF', ROCK2 = '#CED7E2';
 
-  // [x, y, w, h, opacity, cols]
-  const LBUILDS = [
-    [28,  375, 72,  255, .22, 2],
-    [108, 320, 54,  310, .26, 2],
-    [170, 362, 90,  268, .18, 3],
-    [268, 302, 48,  328, .24, 1],
-    [324, 352, 78,  278, .20, 2],
-    [408, 282, 62,  348, .26, 2],
-  ];
-  const RBUILDS = [
-    [870,  352, 75,  278, .20, 2],
-    [952,  296, 58,  334, .26, 2],
-    [1018, 338, 92,  292, .18, 3],
-    [1118, 312, 65,  318, .24, 2],
-    [1190, 358, 80,  272, .20, 2],
-    [1278, 288, 58,  342, .26, 2],
-    [1344, 362, 96,  268, .18, 3],
-  ];
-  const ALL = [...LBUILDS, ...RBUILDS];
+  // Coníferas facetadas (x centro, base y, escala)
+  const CONIFERS = [[520, 545, 1], [1180, 542, 0.92], [1330, 548, 1.08]];
+  // Árboles redondos facetados
+  const BLOBS = [[770, 548, 1], [980, 545, 0.85]];
+  // Rocas facetadas (x, y, escala)
+  const ROCKS = [[300, 540, 1.1], [352, 546, 0.8], [60, 636, 1.9], [1250, 560, 0.9]];
+  // Destellos tipo estrella (x, y, escala)
+  const SPARKS = [[210, 470, 1], [430, 585, .8], [905, 505, 1.1], [1140, 470, .7], [660, 660, .9], [1015, 665, .8]];
 
-  // Generate window grid coords for a building — clipPath clips anything outside
-  function winGrid(bx, by, bw, bh, cols) {
-    const WW = 10, WH = 8, ROW_STEP = 22, TOP_PAD = 22, BOT_PAD = 14;
-    const avail = bw - 16;
-    const gap   = cols > 1 ? (avail - cols * WW) / (cols - 1) : 0;
-    const out   = [];
-    for (let wy = by + TOP_PAD; wy + WH <= by + bh - BOT_PAD; wy += ROW_STEP) {
-      for (let c = 0; c < cols; c++) {
-        out.push([Math.round(bx + 8 + c * (WW + gap)), wy]);
-      }
-    }
-    return out;
-  }
+  const Spark = ([x, y, s], i) => (
+    <path key={`sp${i}`}
+      d={`M${x},${y - 7 * s} L${x + 2 * s},${y - 2 * s} L${x + 7 * s},${y} L${x + 2 * s},${y + 2 * s} L${x},${y + 7 * s} L${x - 2 * s},${y + 2 * s} L${x - 7 * s},${y} L${x - 2 * s},${y - 2 * s} Z`}
+      fill="#fff" opacity=".85"/>
+  );
 
   return (
     <svg width="100%" height="100%" viewBox="0 0 1440 700" preserveAspectRatio="xMidYMax slice"
-         xmlns="http://www.w3.org/2000/svg" style={{ display:'block', position:'absolute', inset:0 }}>
+         xmlns="http://www.w3.org/2000/svg" style={{ display: 'block', position: 'absolute', inset: 0 }}>
       <defs>
-        <linearGradient id="czTG" x1="0" x2="1">
-          <stop offset="0" stopColor={B}/><stop offset="1" stopColor={C}/>
+        <linearGradient id="czSky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={SKY1}/><stop offset="1" stopColor={SKY2}/>
         </linearGradient>
-        {/* One clipPath per building so windows never bleed outside */}
-        {ALL.map(([x,y,w,h], i) => (
-          <clipPath key={i} id={`czB${i}`}>
-            <rect x={x} y={y} width={w} height={h} rx="4"/>
-          </clipPath>
-        ))}
+        <radialGradient id="czHaze" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="rgba(255,255,255,.55)"/>
+          <stop offset="55%" stopColor="rgba(255,255,255,.22)"/>
+          <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+        </radialGradient>
       </defs>
 
-      {/* Sun */}
-      <circle cx="1250" cy="115" r="78" fill="rgba(255,230,80,.2)"/>
-      <circle cx="1250" cy="115" r="50" fill="rgba(255,235,100,.3)"/>
+      {/* Cielo */}
+      <rect x="0" y="0" width="1440" height="560" fill="url(#czSky)"/>
+      {/* Halo de luz superior derecha — difuso, sin disco marcado */}
+      <circle cx="1300" cy="30" r="320" fill="url(#czHaze)"/>
 
-      {/* Clouds — slowly drifting */}
-      <g opacity=".9">
-        <animateTransform attributeName="transform" type="translate" from="0 0" to="90 0" dur="90s" repeatCount="indefinite"/>
-        <ellipse cx="175" cy="88"  rx="95" ry="38" fill="white"/>
-        <ellipse cx="242" cy="70"  rx="68" ry="34" fill="white"/>
-        <ellipse cx="122" cy="84"  rx="52" ry="28" fill="white"/>
+      {/* Nubes suaves que derivan lento */}
+      <g opacity=".85">
+        <animateTransform attributeName="transform" type="translate" from="0 0" to="80 0" dur="120s" repeatCount="indefinite"/>
+        <ellipse cx="200" cy="95"  rx="90" ry="34" fill="#fff"/>
+        <ellipse cx="262" cy="78"  rx="60" ry="30" fill="#fff"/>
+        <ellipse cx="150" cy="86"  rx="46" ry="24" fill="#fff"/>
       </g>
-      <g opacity=".72">
-        <animateTransform attributeName="transform" type="translate" from="0 0" to="70 0" dur="115s" repeatCount="indefinite"/>
-        <ellipse cx="680" cy="130" rx="115" ry="44" fill="white"/>
-        <ellipse cx="768" cy="110" rx="82"  ry="38" fill="white"/>
-        <ellipse cx="618" cy="126" rx="58"  ry="30" fill="white"/>
+      <g opacity=".6">
+        <animateTransform attributeName="transform" type="translate" from="0 0" to="60 0" dur="160s" repeatCount="indefinite"/>
+        <ellipse cx="760" cy="120" rx="100" ry="36" fill="#fff"/>
+        <ellipse cx="840" cy="104" rx="66"  ry="30" fill="#fff"/>
       </g>
-      <g opacity=".55">
-        <animateTransform attributeName="transform" type="translate" from="0 0" to="55 0" dur="140s" repeatCount="indefinite"/>
-        <ellipse cx="1040" cy="72" rx="80" ry="32" fill="white"/>
-        <ellipse cx="1104" cy="56" rx="55" ry="28" fill="white"/>
+      <g opacity=".5">
+        <animateTransform attributeName="transform" type="translate" from="0 0" to="45 0" dur="200s" repeatCount="indefinite"/>
+        <ellipse cx="1060" cy="150" rx="78" ry="28" fill="#fff"/>
+        <ellipse cx="1118" cy="138" rx="50" ry="24" fill="#fff"/>
       </g>
 
-      {/* Birds in the sky */}
-      {[
-        { sy:210, ey:188, dur:'14s',  begin:'0s',   sc:1.0  },
-        { sy:260, ey:242, dur:'10s',  begin:'4.5s', sc:0.7  },
-        { sy:175, ey:158, dur:'19s',  begin:'8s',   sc:0.85 },
-        { sy:300, ey:284, dur:'12s',  begin:'13s',  sc:0.6  },
-        { sy:238, ey:218, dur:'16s',  begin:'2s',   sc:0.75 },
-        { sy:148, ey:134, dur:'22s',  begin:'6s',   sc:0.55 },
-        { sy:330, ey:318, dur:'9.5s', begin:'17s',  sc:0.5  },
-      ].map((b, i) => {
-        const s = b.sc;
+      {/* Silueta lejana de ciudad (derecha, muy tenue) */}
+      {[[905, 432], [968, 384], [1030, 414], [1096, 360], [1162, 406], [1232, 372], [1300, 420], [1372, 366]].map(([x, y], i) => (
+        <rect key={`fc${i}`} x={x} y={y} width={i % 2 ? 44 : 56} height={520 - y} rx="3" fill="#E6EDF6" opacity={i % 2 ? .6 : .45}/>
+      ))}
+
+      {/* Suelo / explanada */}
+      <rect x="0" y="512" width="1440" height="188" fill={GND}/>
+      <rect x="0" y="584" width="1440" height="12" fill={GND2}/>
+
+      {/* ── Casa moderna (izquierda) ─────────────────────────────── */}
+      {/* Garaje con listones verticales */}
+      <rect x="26" y="366" width="96" height="176" fill={WHT} stroke={LINE} strokeWidth="2"/>
+      {Array.from({ length: 8 }, (_, i) => (
+        <line key={`gs${i}`} x1={38 + i * 11} y1="378" x2={38 + i * 11} y2="536" stroke={FACE2} strokeWidth="3"/>
+      ))}
+      {/* Ala baja derecha */}
+      <polygon points="272,322 458,300 458,318 272,340" fill={FACE2}/>
+      <rect x="272" y="336" width="186" height="206" fill={FACE} stroke={LINE} strokeWidth="2"/>
+      <rect x="300" y="356" width="118" height="22" rx="2" fill="#D5E3EC" stroke={LINE} strokeWidth="1.5" opacity=".8"/>
+      {/* Cuerpo principal + techo inclinado */}
+      <polygon points="118,252 312,214 312,236 118,272" fill={FACE2}/>
+      <rect x="120" y="256" width="156" height="286" fill={WHT} stroke={LINE} strokeWidth="2"/>
+      {/* Chimenea */}
+      <rect x="150" y="206" width="26" height="52" fill={FACE2}/>
+      {/* Entrada con luz cálida */}
+      <rect x="176" y="360" width="54" height="182" fill={GLOW}/>
+      <rect x="187" y="372" width="34" height="170" fill={GLOW2}/>
+      <line x1="176" y1="360" x2="176" y2="542" stroke="#E3C98A" strokeWidth="2"/>
+      {/* Escalón */}
+      <rect x="164" y="536" width="150" height="8" fill={FACE2}/>
+      {/* Jardinera con rocas */}
+      <rect x="250" y="506" width="120" height="30" fill={FACE2}/>
+
+      {/* Rocas facetadas */}
+      {ROCKS.map(([x, y, s], i) => (
+        <g key={`rk${i}`}>
+          <polygon points={`${x - 22 * s},${y} ${x - 8 * s},${y - 16 * s} ${x + 10 * s},${y - 12 * s} ${x + 22 * s},${y} `} fill={ROCK}/>
+          <polygon points={`${x - 8 * s},${y - 16 * s} ${x + 10 * s},${y - 12 * s} ${x + 4 * s},${y}`} fill={ROCK2}/>
+        </g>
+      ))}
+
+      {/* Coníferas facetadas */}
+      {CONIFERS.map(([cx, by, s], i) => (
+        <g key={`cf${i}`}>
+          <rect x={cx - 4 * s} y={by - 14 * s} width={8 * s} height={22 * s} fill={TRUNK}/>
+          {[0, 1, 2].map(t => {
+            const w = (62 - t * 16) * s, h = 42 * s, ty = by - 22 * s - t * 30 * s;
+            return (
+              <g key={t}>
+                <polygon points={`${cx},${ty - h} ${cx - w / 2},${ty} ${cx + w / 2},${ty}`} fill={TREE}/>
+                <polygon points={`${cx},${ty - h} ${cx},${ty} ${cx + w / 2},${ty}`} fill={TREE2}/>
+              </g>
+            );
+          })}
+        </g>
+      ))}
+
+      {/* Árboles redondos facetados */}
+      {BLOBS.map(([cx, by, s], i) => {
+        const r = 34 * s;
         return (
-          <path key={i} d={`M0,0 Q${9*s},${-11*s} ${18*s},0 Q${27*s},${-11*s} ${36*s},0`}
-                stroke="rgba(20,50,115,.65)" strokeWidth={2.2*s} fill="none" opacity="0.72">
-            <animateTransform attributeName="transform" type="translate"
-              from={`-60 ${b.sy}`} to={`1520 ${b.ey}`}
-              dur={b.dur} begin={b.begin} repeatCount="indefinite"/>
-          </path>
+          <g key={`bl${i}`}>
+            <rect x={cx - 4 * s} y={by - 12 * s} width={8 * s} height={20 * s} fill={TRUNK}/>
+            <polygon points={`${cx - r},${by - 26 * s} ${cx - r * .5},${by - r - 20 * s} ${cx + r * .5},${by - r - 20 * s} ${cx + r},${by - 26 * s} ${cx + r * .6},${by - 6 * s} ${cx - r * .6},${by - 6 * s}`} fill={TREE}/>
+            <polygon points={`${cx},${by - r - 20 * s} ${cx + r},${by - 26 * s} ${cx + r * .6},${by - 6 * s} ${cx},${by - 6 * s}`} fill={TREE2}/>
+            <polygon points={`${cx - r * .5},${by - r - 20 * s} ${cx + r * .5},${by - r - 20 * s} ${cx},${by - r - 2 * s}`} fill={TREE3} opacity=".7"/>
+          </g>
         );
       })}
 
-      {/* Mid-distance buildings (faint, fill centre gap for depth) */}
-      <rect x="490" y="368" width="82"  height="232" rx="3" fill="rgba(255,255,255,.09)"/>
-      <rect x="582" y="308" width="68"  height="292" rx="3" fill="rgba(255,255,255,.11)"/>
-      <rect x="662" y="350" width="88"  height="250" rx="3" fill="rgba(255,255,255,.08)"/>
-      <rect x="762" y="318" width="74"  height="282" rx="3" fill="rgba(255,255,255,.10)"/>
-
-      {/* Left buildings with clipped windows */}
-      {LBUILDS.map(([x,y,w,h,op,cols], i) => (
-        <g key={`lb${i}`}>
-          <rect x={x} y={y} width={w} height={h} rx="4" fill={`rgba(255,255,255,${op})`}/>
-          <g clipPath={`url(#czB${i})`}>
-            {winGrid(x,y,w,h,cols).map(([wx,wy], j) => (
-              <rect key={j} x={wx} y={wy} width={10} height={8} rx={1.5} fill={WF} stroke={WS} strokeWidth="0.8"/>
-            ))}
-          </g>
-        </g>
+      {/* Matas de pasto */}
+      {[140, 240, 470, 640, 820, 1000, 1210, 1380].map((x, i) => (
+        <path key={`gt${i}`} d={`M${x},560 l-4,-12 M${x},560 l0,-15 M${x},560 l4,-11`} stroke="#BFD4C6" strokeWidth="2.4" fill="none" strokeLinecap="round"/>
       ))}
 
-      {/* Right buildings with clipped windows */}
-      {RBUILDS.map(([x,y,w,h,op,cols], i) => (
-        <g key={`rb${i}`}>
-          <rect x={x} y={y} width={w} height={h} rx="4" fill={`rgba(255,255,255,${op})`}/>
-          <g clipPath={`url(#czB${LBUILDS.length+i})`}>
-            {winGrid(x,y,w,h,cols).map(([wx,wy], j) => (
-              <rect key={j} x={wx} y={wy} width={10} height={8} rx={1.5} fill={WF} stroke={WS} strokeWidth="0.8"/>
-            ))}
-          </g>
-        </g>
-      ))}
-
-      {/* Grass */}
-      <rect x="0" y="575" width="1440" height="125" fill="#4CAF50" opacity=".52"/>
-      <rect x="0" y="575" width="1440" height="18"  fill="#66BB6A" opacity=".58"/>
-
-      {/* Sidewalk */}
-      <rect x="0" y="557" width="1440" height="20" fill="rgba(210,228,248,.44)"/>
-      <rect x="0" y="575" width="1440" height="3"  fill="rgba(135,168,198,.45)"/>
-
-      {/* Street trees (foliage double-layer + trunk) */}
-      <ellipse cx="510"  cy="528" rx="31" ry="28" fill="rgba(55,152,72,.62)"/>
-      <ellipse cx="510"  cy="519" rx="21" ry="17" fill="rgba(80,178,88,.36)"/>
-      <rect    x="507"   y="554"  width="6" height="6" rx="1" fill="rgba(78,46,16,.72)"/>
-
-      <ellipse cx="716"  cy="530" rx="27" ry="25" fill="rgba(52,148,68,.6)"/>
-      <ellipse cx="716"  cy="521" rx="17" ry="14" fill="rgba(76,172,84,.33)"/>
-      <rect    x="713"   y="554"  width="6" height="5" rx="1" fill="rgba(78,46,16,.72)"/>
-
-      <ellipse cx="880"  cy="529" rx="28" ry="25" fill="rgba(60,156,70,.58)"/>
-      <ellipse cx="880"  cy="520" rx="18" ry="15" fill="rgba(84,178,88,.32)"/>
-      <rect    x="877"   y="552"  width="6" height="5" rx="1" fill="rgba(78,46,16,.72)"/>
-
-      <ellipse cx="1090" cy="527" rx="26" ry="24" fill="rgba(55,150,68,.60)"/>
-      <ellipse cx="1090" cy="518" rx="17" ry="14" fill="rgba(78,174,85,.33)"/>
-      <rect    x="1087"  y="550"  width="6" height="5" rx="1" fill="rgba(78,46,16,.72)"/>
-
-      <ellipse cx="1322" cy="528" rx="29" ry="26" fill="rgba(58,152,68,.60)"/>
-      <ellipse cx="1322" cy="519" rx="19" ry="16" fill="rgba(82,174,85,.34)"/>
-      <rect    x="1319"  y="552"  width="6" height="6" rx="1" fill="rgba(78,46,16,.72)"/>
-
-      {/* Lamp posts */}
-      <rect x="630" y="490" width="5" height="70" fill="rgba(105,124,150,.73)"/>
-      <path d="M632 494 Q654 476 670 476" fill="none" stroke="rgba(105,124,150,.73)" strokeWidth="4" strokeLinecap="round"/>
-      <circle cx="671" cy="476" r="7" fill="rgba(255,248,158,.9)"/>
-      <circle cx="671" cy="476" r="4" fill="rgba(255,240,100,.95)"/>
-
-      <rect x="1058" y="492" width="5" height="68" fill="rgba(105,124,150,.73)"/>
-      <path d="M1060 496 Q1082 478 1098 478" fill="none" stroke="rgba(105,124,150,.73)" strokeWidth="4" strokeLinecap="round"/>
-      <circle cx="1099" cy="478" r="7" fill="rgba(255,248,158,.9)"/>
-      <circle cx="1099" cy="478" r="4" fill="rgba(255,240,100,.95)"/>
-
-      {/* Traffic light */}
-      <rect x="818" y="504" width="5" height="56" fill="rgba(88,108,130,.70)"/>
-      <rect x="812" y="502" width="22" height="50" rx="4" fill="rgba(28,42,62,.75)"/>
-      <circle cx="823" cy="512" r="4.5" fill="rgba(255,72,72,.9)"/>
-      <circle cx="823" cy="523" r="4.5" fill="rgba(255,200,48,.9)"/>
-      <circle cx="823" cy="534" r="4.5" fill="rgba(72,210,72,.9)"/>
-
-      {/* Pigeons on sidewalk */}
-      <ellipse cx="592" cy="568" rx="11" ry="7"  fill="rgba(118,120,152,.70)"/>
-      <ellipse cx="600" cy="564" rx="6"  ry="5"  fill="rgba(133,134,166,.63)"/>
-      <circle  cx="604" cy="562" r="3"   fill="rgba(104,105,138,.72)"/>
-      <line x1="586" y1="573" x2="584" y2="578" stroke="rgba(152,108,52,.72)" strokeWidth="1.5"/>
-      <line x1="592" y1="573" x2="594" y2="578" stroke="rgba(152,108,52,.72)" strokeWidth="1.5"/>
-
-      <ellipse cx="638" cy="570" rx="10" ry="6"  fill="rgba(126,128,160,.67)"/>
-      <ellipse cx="645" cy="566" rx="5"  ry="4"  fill="rgba(140,142,172,.60)"/>
-      <circle  cx="649" cy="564" r="2.5" fill="rgba(110,112,144,.70)"/>
-      <line x1="633" y1="574" x2="631" y2="579" stroke="rgba(152,108,52,.70)" strokeWidth="1.5"/>
-      <line x1="639" y1="574" x2="641" y2="579" stroke="rgba(152,108,52,.70)" strokeWidth="1.5"/>
-
-      <ellipse cx="1102" cy="567" rx="10" ry="6" fill="rgba(122,124,156,.68)"/>
-      <ellipse cx="1109" cy="563" rx="5"  ry="4" fill="rgba(138,140,168,.61)"/>
-      <circle  cx="1113" cy="561" r="2.5" fill="rgba(108,110,142,.70)"/>
-      <line x1="1097" y1="571" x2="1095" y2="576" stroke="rgba(152,108,52,.70)" strokeWidth="1.5"/>
-      <line x1="1103" y1="571" x2="1105" y2="576" stroke="rgba(152,108,52,.70)" strokeWidth="1.5"/>
-
-      {/* Airplane with MUVE banner — single plane, S-curve path across sky */}
-      <g opacity="0.92">
-        <animateMotion dur="26s" repeatCount="indefinite" rotate="auto"
-          path="M-300,230 C150,70 480,410 720,210 C960,20 1260,390 1780,185"/>
-        {/* Tow rope */}
-        <line x1="-30" y1="0" x2="-128" y2="0"
-              stroke="rgba(25,50,110,.48)" strokeWidth="1.6" strokeDasharray="7,5"/>
-        {/* Banner */}
-        <rect x="-200" y="-16" width="72" height="30" rx="5"
-              fill="rgba(255,255,255,.93)" stroke="rgba(27,108,245,.75)" strokeWidth="2"/>
-        <text x="-164" y="8" textAnchor="middle"
-              fontFamily="Inter,Arial,system-ui,sans-serif" fontWeight="900"
-              fontSize="17" fill="rgba(27,108,245,1)" letterSpacing="2">MUVE</text>
-        {/* Banner attachment point triangle */}
-        <path d="M-128,-7 L-120,0 L-128,7" fill="rgba(27,108,245,.55)"/>
-        {/* Fuselage */}
-        <ellipse cx="0" cy="0" rx="26" ry="6" fill="rgba(255,255,255,.96)" stroke="rgba(27,108,245,.65)" strokeWidth="1.4"/>
-        {/* Wings */}
-        <path d="M-4,-4 L12,-4 L14,-26 L-14,-24 L-11,-4 Z"
-              fill="rgba(190,218,255,.92)" stroke="rgba(27,108,245,.55)" strokeWidth="1"/>
-        <path d="M-4,4 L12,4 L14,26 L-14,24 L-11,4 Z"
-              fill="rgba(190,218,255,.92)" stroke="rgba(27,108,245,.55)" strokeWidth="1"/>
-        {/* Tail fins */}
-        <path d="M-21,-4 L-30,-16 L-26,-4" fill="rgba(190,218,255,.90)" stroke="rgba(27,108,245,.45)" strokeWidth="0.8"/>
-        <path d="M-21,4  L-30,16  L-26,4"  fill="rgba(190,218,255,.90)" stroke="rgba(27,108,245,.45)" strokeWidth="0.8"/>
-        {/* Cockpit */}
-        <ellipse cx="16" cy="0" rx="6" ry="4" fill="rgba(100,172,255,.78)" stroke="rgba(27,108,245,.42)" strokeWidth="0.9"/>
-        {/* Engine pods */}
-        <ellipse cx="1" cy="-24" rx="4" ry="2.5" fill="rgba(125,178,232,.82)" stroke="rgba(27,108,245,.38)" strokeWidth="0.7"/>
-        <ellipse cx="1" cy="24"  rx="4" ry="2.5" fill="rgba(125,178,232,.82)" stroke="rgba(27,108,245,.38)" strokeWidth="0.7"/>
-      </g>
-
-      {/* Road */}
-      <rect x="0" y="593" width="1440" height="107" fill="#546E7A" opacity=".88"/>
+      {/* ── PISTA — recta y horizontal, misma geometría de siempre ── */}
+      <rect x="0" y="591" width="1440" height="2" fill="rgba(120,140,165,.22)"/>
+      <rect x="0" y="593" width="1440" height="107" fill={ROAD}/>
+      <rect x="0" y="596" width="1440" height="3" fill="rgba(255,255,255,.28)"/>
       {Array.from({ length: 14 }, (_, i) => (
-        <rect key={i} x={i * 110} y="644" width="72" height="5" rx="2" fill="rgba(255,255,255,.52)"/>
+        <rect key={`d${i}`} x={i * 110} y="644" width="72" height="5" rx="2" fill={DASH}/>
       ))}
-      <rect x="0" y="596" width="1440" height="3" fill="rgba(255,255,255,.22)"/>
+
+      {/* Destellos */}
+      {SPARKS.map(Spark)}
     </svg>
   );
 }
@@ -1871,7 +1789,7 @@ const CZ_CSS = `
     body { margin: 0; overflow: hidden; }
     .cz-outer {
       position: fixed; inset: 0; overflow: hidden;
-      background: linear-gradient(180deg,#5BB8F5 0%,#89CFED 45%,#C4E8FF 100%);
+      background: linear-gradient(180deg,#DCEBF7 0%,#E8F1FA 48%,#F1F6FC 100%);
       display: flex; align-items: center; justify-content: center;
       /* --cz-scale is set inline via JS (computeCzScale in the component) — computed there,
          not with CSS clamp()/calc() division, because that formula resolves unreliably across
