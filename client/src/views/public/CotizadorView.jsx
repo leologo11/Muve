@@ -2075,9 +2075,13 @@ export default function CotizadorView() {
       );
 
       if (noOnlinePrice) {
-        setState(s => ({ ...s, result: res, manualReview: true, preliminary: false, step: 5 }));
+        // Aun sin precio online, la cotización se GUARDA y NOTIFICA — así el
+        // operador la ve en el admin y puede escribirle al cliente.
+        setState(s => ({ ...s, result: res, manualReview: true, preliminary: false }));
         trackStep(6);
         _trackEventDB(7);
+        await persistQuote({ result: res, manualReview: true, preliminary: false });
+        setState(s => ({ ...s, step: 5 }));
       } else {
         setState(s => ({ ...s, result: res, manualReview: false, preliminary, step: 4 }));
         trackStep(5);
@@ -2090,9 +2094,12 @@ export default function CotizadorView() {
     }
   };
 
-  const submitContact = async (name, phone, email) => {
-    setSaving(true);
-    const { from, to, extras, freeText, inventory, distanceKm, result, manualReview } = state;
+  // Guarda la cotización en el backend (crea/promueve el registro y dispara la
+  // notificación al admin). `extra` sobrescribe el state cuando aún no se aplicó
+  // el setState (p. ej. el `result` recién llegado).
+  const persistQuote = async (extra = {}) => {
+    const s = { ...state, ...extra };
+    const { from, to, extras, freeText, inventory, distanceKm, result, manualReview, preliminary, name, phone, email, selectedHelpers } = s;
     const inventoryArray = Object.keys(inventory)
       .filter(id => inventory[id] > 0)
       .map(id => {
@@ -2111,17 +2118,22 @@ export default function CotizadorView() {
         destinationAddress: to.address,
         distanceKm: distanceKm || null,
         vehicleType: result?.vehicle || '',
-        numHelpers: state.selectedHelpers ?? result?.recommendedHelpers ?? 0,
+        numHelpers: selectedHelpers ?? result?.recommendedHelpers ?? 0,
         numFloors: extras.floors,
         needsPacking: extras.packing,
         itemsDescription: itemsDesc,
         priceMin: result?.priceMin || null,
         priceMax: result?.priceMax || null,
-        clientNotes: `Cotizador 2.0 | ${result?.vehicleName || ''}${manualReview ? ' | REVISIÓN MANUAL — mudanza grande' : state.preliminary ? ' | ESTIMACIÓN PRELIMINAR — confirmar con asesor' : ''}`,
+        clientNotes: `Cotizador 2.0 | ${result?.vehicleName || ''}${manualReview ? ' | REVISIÓN MANUAL' : preliminary ? ' | ESTIMACIÓN PRELIMINAR — confirmar con asesor' : ''}`,
       });
       trackMetaEvent('Lead', { content_name: 'Cotizador 2.0', value: result?.price });
       _trackSubmitDB(result?.detectedType || 'flete_mudanza');
     } catch { /* non-blocking */ }
+  };
+
+  const submitContact = async (extra = {}) => {
+    setSaving(true);
+    await persistQuote(extra);
 
     if (typeof window !== 'undefined' && window.innerWidth >= 640) {
       // Reverse the arrival first: card re-crops (the rear wheel reappears) and the
@@ -2224,7 +2236,7 @@ export default function CotizadorView() {
         }}
         onBack={() => go(1)}/>;
       case 3: return <ScreenExtras state={state} setState={setState} onNext={() => calculate()} onBack={() => go(2)}/>;
-      case 4: return <ScreenResult state={state} onRestart={restart} onBack={() => go(3)} onNext={h => { setState(s => ({...s, selectedHelpers: h})); submitContact(state.name, state.phone, state.email); }}/>;
+      case 4: return <ScreenResult state={state} onRestart={restart} onBack={() => go(3)} onNext={h => { setState(s => ({...s, selectedHelpers: h})); submitContact({ selectedHelpers: h }); }}/>;
       case 5: return null;
       default: return <ScreenWelcome onStart={() => go(1)}/>;
     }

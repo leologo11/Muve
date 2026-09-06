@@ -9,7 +9,7 @@ import {
   validatePublicCalculationPayload,
   validatePublicQuotePayload,
 } from '../middleware/security.js';
-import { notifyAdminQuoteCreated } from '../utils/notifications.js';
+import { notifyAdminQuoteCreated, notifyAdminLead } from '../utils/notifications.js';
 import { OSRM_BASE_URL } from '../utils/geocode.js';
 import { findTierPricePerKm, calcVehiclePrice } from '../utils/vehiclePricing.js';
 import { isSupabaseEnabled, normalizeQuote, normalizeQuoteItem, qs, supabaseRequest } from '../utils/supabase.js';
@@ -282,6 +282,26 @@ router.post('/ai-quote', publicCalculationLimiter, async (req, res) => {
   }
 
   console.log(`[ai-quote] items=${items.length} freeText="${freeText?.slice(0,40)}" km=${distanceKm}`);
+
+  // Larga distancia: fuera del rango que MUVE cotiza online (o direcciones mal
+  // geocodificadas). No inventar un precio — mandar a revisión manual con mensaje claro.
+  const LONG_DISTANCE_KM = 1200;
+  if (Number(distanceKm) > LONG_DISTANCE_KM) {
+    console.log(`[ai-quote] distancia ${distanceKm}km > ${LONG_DISTANCE_KM}km → revisión manual`);
+    return res.json({
+      detectedType: 'flete',
+      vehicle: 'camionLargo',
+      vehicleName: 'Camión Largo',
+      vehicleIcon: '🚛',
+      price: 0, priceMin: 0, priceMax: 0,
+      tollEstimate: 0,
+      recommendedHelpers: 2,
+      clientExplanation: `Es un traslado de larga distancia (~${Math.round(Number(distanceKm))} km). Un asesor MUVE te prepara una cotización a medida.`,
+      internalNote: `Larga distancia ${distanceKm} km — cotización manual (revisar direcciones si parece error)`,
+      confidence: 'low',
+      needsManualReview: true,
+    });
+  }
 
   try {
     const client = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
@@ -961,6 +981,10 @@ router.post('/lead', publicQuoteLimiter, async (req, res) => {
             client_notes: 'Lead parcial — cotizador web (pre-precio)',
           }),
         });
+        // Solo al crear un lead NUEVO — así el operador tiene el contacto aunque
+        // el cliente abandone antes de terminar. No re-notifica al volver atrás.
+        notifyAdminLead({ name, phone, origin: originAddress, destination: destinationAddress })
+          .catch(err => console.warn('[public/lead] notif lead falló:', err.message));
       }
     }
     res.json({ ok: true });

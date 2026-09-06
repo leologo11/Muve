@@ -16,6 +16,16 @@ function quoteAdminUrl(quote) {
   return `${appUrl()}/admin${id ? `?quote=${encodeURIComponent(id)}` : ''}`;
 }
 
+// Una cotización "manual" es la que no tiene precio online (carga muy grande,
+// larga distancia o IA no disponible). Igual llega la notificación para que el
+// operador pueda contactar al cliente.
+function isManualReview({ quote, payload }) {
+  const notes = String(payload?.client_notes || quote?.client_notes || '').toUpperCase();
+  if (notes.includes('REVISIÓN MANUAL') || notes.includes('REVISION MANUAL')) return true;
+  const hasPrice = Number(payload?.price_min) > 0 || Number(payload?.price_max) > 0;
+  return payload?.service_type !== 'paqueteria' && !hasPrice;
+}
+
 function quoteSummaryLines({ quote, payload }) {
   const service = String(payload?.service_type || quote?.service_type || 'cotizacion').toUpperCase();
   const price = payload?.price_min && payload?.price_max
@@ -78,18 +88,23 @@ async function sendNtfyNotification({ quote, payload }) {
   const origin  = payload?.origin || '';
   const dest    = payload?.destination || '';
 
-  const title = `Nueva cotizacion ${service} - ${name}`;
+  const manual = isManualReview({ quote, payload });
+  // OJO: los headers HTTP son ByteString (Latin-1). Nada de emoji en Title —
+  // el icono visual lo da el header Tags (warning => ⚠️). El body sí es UTF-8.
+  const title = manual
+    ? `[MANUAL] Cotizacion ${service} - ${name}`
+    : `Nueva cotizacion ${service} - ${name}`;
   const body  = [
     phone,
     origin && dest ? `${origin} -> ${dest}` : (origin || dest),
-    `Precio: ${price}`,
+    manual ? 'Precio: a cotizar por un asesor' : `Precio: ${price}`,
     quote?.quote_code || '',
   ].filter(Boolean).join('\n');
 
   const headers = {
     'Title':    title,
-    'Priority': 'high',
-    'Tags':     'truck,muve',
+    'Priority': manual ? 'max' : 'high',
+    'Tags':     manual ? 'warning,muve' : 'truck,muve',
     'Click':    quoteAdminUrl(quote),
     'Content-Type': 'text/plain; charset=utf-8',
   };
@@ -129,8 +144,11 @@ async function sendTelegramNotification({ quote, payload }) {
         : `${money(payload.price_min)} – ${money(payload.price_max)}`)
     : 'Por revisar';
 
+  const manual = isManualReview({ quote, payload });
   const rows = [
-    `🚚 <b>Nueva cotización ${escHtml(service)}</b>`,
+    manual
+      ? `⚠️ <b>Cotización MANUAL ${escHtml(service)}</b>\n<i>Sin precio online — contactá al cliente</i>`
+      : `🚚 <b>Nueva cotización ${escHtml(service)}</b>`,
     '',
     `<b>Código:</b> ${escHtml(quote?.quote_code || payload?.quote_code || 'sin código')}`,
     `<b>Cliente:</b> ${escHtml(payload?.contact_person || 'sin nombre')}`,
@@ -265,6 +283,57 @@ async function sendWhatsAppNotification({ quote, payload, message }) {
   }
   console.log(`[notify] whatsapp enviado a ${recipients.length} número(s)${templateName ? ` (plantilla ${templateName})` : ' (texto libre)'}`);
   return { ok: true };
+}
+
+// Aviso ligero al crear un lead (nombre + teléfono, antes del precio). Garantiza
+// que el operador tenga el contacto aunque el cliente no termine la cotización.
+export async function notifyAdminLead({ name, phone, origin, destination }) {
+  const route = [origin, destination].filter(Boolean).join(' → ');
+  const line = [phone, route].filter(Boolean).join(' · ');
+
+  const tasks = [];
+
+  const topic = process.env.NTFY_TOPIC;
+  if (topic) {
+    const base = (process.env.NTFY_SERVER || 'https://ntfy.sh').replace(/\/+$/, '');
+    const headers = {
+      // Sin emoji en headers (ByteString). El icono lo pone Tags.
+      'Title': `Lead nuevo (sin terminar) - ${name || 'sin nombre'}`,
+      'Priority': 'default',
+      'Tags': 'hourglass_flowing_sand,muve',
+      'Content-Type': 'text/plain; charset=utf-8',
+    };
+    if (process.env.NTFY_TOKEN) headers.Authorization = `Bearer ${process.env.NTFY_TOKEN}`;
+    tasks.push(postWithTimeout(`${base}/${encodeURIComponent(topic)}`, {
+      method: 'POST', headers,
+      body: `${line || 'Cotización en proceso'}\n(aún no terminó la cotización)`,
+    }));
+  }
+
+  const tgToken = process.env.TELEGRAM_BOT_TOKEN;
+  const tgChats = String(process.env.TELEGRAM_CHAT_ID || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (tgToken && tgChats.length) {
+    const text = [
+      `🕓 <b>Lead nuevo</b> <i>(cotización en proceso)</i>`,
+      '',
+      `<b>Cliente:</b> ${escHtml(name || 'sin nombre')}`,
+      `<b>Teléfono:</b> ${escHtml(phone || 'sin teléfono')}`,
+      route ? `<b>Ruta:</b> ${escHtml(route)}` : '',
+    ].filter(Boolean).join('\n');
+    for (const chatId of tgChats) {
+      tasks.push(postWithTimeout(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true }),
+      }));
+    }
+  }
+
+  if (tasks.length === 0) return { skipped: true };
+  const results = await Promise.allSettled(tasks);
+  const ok = results.filter(r => r.status === 'fulfilled').length;
+  console.log(`[notify] lead → ${ok}/${results.length} envíos OK`);
+  return { ok: ok > 0 };
 }
 
 export async function notifyAdminQuoteCreated({ quote, payload }) {
