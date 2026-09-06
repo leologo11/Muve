@@ -253,14 +253,26 @@ const BtnBack = ({ onClick }) => (
 // Fondo del cotizador (desktop): render limpio y luminoso estilo low-poly.
 // La PISTA se mantiene recta y horizontal en la misma posición de siempre
 // (y=593, línea discontinua en y=644) para que la transición del camión no cambie.
-function SceneStatic() {
-  const SKY1 = '#DCEBF7', SKY2 = '#F0F6FC';
-  const GND = '#E9EEF6', GND2 = '#DFE6F0';
-  const ROAD = '#C6D0DB', DASH = 'rgba(255,255,255,.9)';
-  const WHT = '#FFFFFF', FACE = '#ECF0F6', FACE2 = '#DFE5EF', LINE = '#D3DCE8';
-  const GLOW = '#F5E1B0', GLOW2 = '#EFD196';
-  const TREE = '#CBDAD0', TREE2 = '#B4C9BD', TREE3 = '#DDE8E1', TRUNK = '#CBB9A4';
-  const ROCK = '#E0E6EF', ROCK2 = '#CED7E2';
+// `packed` = el camión ya arrancó: las cajas de la mudanza "se cargaron" y desaparecen.
+function SceneStatic({ packed = false }) {
+  const SKY1 = '#9CCBEE', SKY2 = '#E2F0FB';
+  const GND = '#D7E6D9', GND2 = '#C4DEC8';
+  const ROAD = '#AAB8C8', DASH = 'rgba(255,255,255,.95)';
+  const WHT = '#FDFEFF', FACE = '#E3ECF6', FACE2 = '#CBDCEE', LINE = '#AFC6DE';
+  const GLOW = '#FBDE8C', GLOW2 = '#F4C65B';
+  const TREE = '#7FBE9A', TREE2 = '#5EA37F', TREE3 = '#A9D8BC', TRUNK = '#C0946A';
+  const ROCK = '#CBD6E4', ROCK2 = '#B0C0D4';
+
+  // Cajas de mudanza ordenadas [x, y, w, h]
+  const BOXES = [[104, 500, 46, 44], [106, 466, 40, 34], [156, 508, 44, 36], [204, 496, 42, 46], [206, 464, 34, 32]];
+  const Box = ([x, y, w, h], i) => (
+    <g key={`bx${i}`}>
+      <rect x={x} y={y} width={w} height={h} rx="2" fill="#DBB489" stroke="#C09367" strokeWidth="1.5"/>
+      <rect x={x} y={y} width={w} height={h * 0.32} fill="#E7CBA4"/>
+      <rect x={x + w / 2 - 3.5} y={y} width="7" height={h} fill="#EFE0C6" opacity=".85"/>
+      <rect x={x} y={y + h * 0.32 - 2} width={w} height="4" fill="#EFE0C6" opacity=".85"/>
+    </g>
+  );
 
   // Coníferas facetadas (x centro, base y, escala)
   const CONIFERS = [[520, 545, 1], [1180, 542, 0.92], [1330, 548, 1.08]];
@@ -285,16 +297,17 @@ function SceneStatic() {
           <stop offset="0" stopColor={SKY1}/><stop offset="1" stopColor={SKY2}/>
         </linearGradient>
         <radialGradient id="czHaze" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0" stopColor="rgba(255,255,255,.55)"/>
-          <stop offset="55%" stopColor="rgba(255,255,255,.22)"/>
-          <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+          <stop offset="0" stopColor="rgba(255,244,214,.85)"/>
+          <stop offset="45%" stopColor="rgba(255,236,190,.4)"/>
+          <stop offset="100%" stopColor="rgba(255,236,190,0)"/>
         </radialGradient>
       </defs>
 
       {/* Cielo */}
       <rect x="0" y="0" width="1440" height="560" fill="url(#czSky)"/>
-      {/* Halo de luz superior derecha — difuso, sin disco marcado */}
-      <circle cx="1300" cy="30" r="320" fill="url(#czHaze)"/>
+      {/* Sol cálido superior derecha */}
+      <circle cx="1290" cy="40" r="300" fill="url(#czHaze)"/>
+      <circle cx="1290" cy="40" r="46" fill="rgba(255,240,196,.95)"/>
 
       {/* Nubes suaves que derivan lento */}
       <g opacity=".85">
@@ -314,14 +327,19 @@ function SceneStatic() {
         <ellipse cx="1118" cy="138" rx="50" ry="24" fill="#fff"/>
       </g>
 
-      {/* Silueta lejana de ciudad (derecha, muy tenue) */}
+      {/* Silueta lejana de ciudad (derecha, tenue, azulada) */}
       {[[905, 432], [968, 384], [1030, 414], [1096, 360], [1162, 406], [1232, 372], [1300, 420], [1372, 366]].map(([x, y], i) => (
-        <rect key={`fc${i}`} x={x} y={y} width={i % 2 ? 44 : 56} height={520 - y} rx="3" fill="#E6EDF6" opacity={i % 2 ? .6 : .45}/>
+        <rect key={`fc${i}`} x={x} y={y} width={i % 2 ? 44 : 56} height={520 - y} rx="3" fill={i % 2 ? '#B9CFE6' : '#A9C3DF'} opacity=".55"/>
       ))}
+
+      {/* Colinas suaves al fondo */}
+      <path d="M0,512 Q360,452 720,500 T1440,486 L1440,540 L0,540 Z" fill="#BFDBC5" opacity=".8"/>
+      <path d="M0,520 Q300,486 640,514 T1440,506 L1440,552 L0,552 Z" fill="#AAD0B4" opacity=".65"/>
 
       {/* Suelo / explanada */}
       <rect x="0" y="512" width="1440" height="188" fill={GND}/>
-      <rect x="0" y="584" width="1440" height="12" fill={GND2}/>
+      <rect x="0" y="540" width="1440" height="52" fill={GND2} opacity=".8"/>
+      <rect x="0" y="584" width="1440" height="12" fill="#B6D4BB"/>
 
       {/* ── Casa moderna (izquierda) ─────────────────────────────── */}
       {/* Garaje con listones verticales */}
@@ -331,21 +349,36 @@ function SceneStatic() {
       ))}
       {/* Ala baja derecha */}
       <polygon points="272,322 458,300 458,318 272,340" fill={FACE2}/>
+      <rect x="272" y="322" width="186" height="8" fill="#5E9E7A"/>
       <rect x="272" y="336" width="186" height="206" fill={FACE} stroke={LINE} strokeWidth="2"/>
-      <rect x="300" y="356" width="118" height="22" rx="2" fill="#D5E3EC" stroke={LINE} strokeWidth="1.5" opacity=".8"/>
+      <rect x="300" y="356" width="118" height="22" rx="2" fill="#8FC0E2" stroke={LINE} strokeWidth="1.5" opacity=".95"/>
       {/* Cuerpo principal + techo inclinado */}
       <polygon points="118,252 312,214 312,236 118,272" fill={FACE2}/>
       <rect x="120" y="256" width="156" height="286" fill={WHT} stroke={LINE} strokeWidth="2"/>
+      <rect x="136" y="288" width="46" height="32" rx="2" fill="#8FC0E2" stroke={LINE} strokeWidth="1.5" opacity=".95"/>
       {/* Chimenea */}
-      <rect x="150" y="206" width="26" height="52" fill={FACE2}/>
-      {/* Entrada con luz cálida */}
-      <rect x="176" y="360" width="54" height="182" fill={GLOW}/>
-      <rect x="187" y="372" width="34" height="170" fill={GLOW2}/>
-      <line x1="176" y1="360" x2="176" y2="542" stroke="#E3C98A" strokeWidth="2"/>
+      <rect x="150" y="206" width="26" height="52" fill="#C97A63"/>
+      {/* Entrada con luz cálida + marco color */}
+      <rect x="172" y="356" width="62" height="188" fill="#1F8FA6"/>
+      <rect x="180" y="362" width="46" height="182" fill={GLOW}/>
+      <rect x="190" y="374" width="26" height="170" fill={GLOW2}/>
       {/* Escalón */}
-      <rect x="164" y="536" width="150" height="8" fill={FACE2}/>
-      {/* Jardinera con rocas */}
-      <rect x="250" y="506" width="120" height="30" fill={FACE2}/>
+      <rect x="164" y="538" width="150" height="8" fill={FACE2}/>
+      {/* Jardinera con flores */}
+      <rect x="248" y="506" width="122" height="32" fill="#6BA07B"/>
+      {[260, 280, 300, 320, 340, 358].map((fx, i) => (
+        <circle key={`fl${i}`} cx={fx} cy={509 - (i % 2) * 5} r="4.5" fill={['#F2C14E', '#E8617A', '#F2C14E', '#7BB6E0', '#E8617A', '#F2C14E'][i]}/>
+      ))}
+
+      {/* Cajas de mudanza — ordenadas junto a la entrada. Se van cuando arranca el camión. */}
+      <g style={{
+        opacity: packed ? 0 : 1,
+        transform: packed ? 'translateY(8px)' : 'none',
+        transition: 'opacity .7s ease, transform .7s ease',
+      }}>
+        <ellipse cx="176" cy="546" rx="120" ry="9" fill="rgba(20,30,50,.08)"/>
+        {BOXES.map(Box)}
+      </g>
 
       {/* Rocas facetadas */}
       {ROCKS.map(([x, y, s], i) => (
@@ -1789,7 +1822,7 @@ const CZ_CSS = `
     body { margin: 0; overflow: hidden; }
     .cz-outer {
       position: fixed; inset: 0; overflow: hidden;
-      background: linear-gradient(180deg,#DCEBF7 0%,#E8F1FA 48%,#F1F6FC 100%);
+      background: linear-gradient(180deg,#9CCBEE 0%,#C3E0F3 45%,#E4F1FB 100%);
       display: flex; align-items: center; justify-content: center;
       /* --cz-scale is set inline via JS (computeCzScale in the component) — computed there,
          not with CSS clamp()/calc() division, because that formula resolves unreliably across
@@ -2170,7 +2203,7 @@ export default function CotizadorView() {
       <style>{CZ_CSS}</style>
       <div className="cz-outer" style={{ '--cz-scale': String(cardScale) }}>
         <div className="cz-anim">
-          <SceneStatic/>
+          <SceneStatic packed={rigPhase === 'departing' || frameHidden}/>
         </div>
         {/* .czScaleWrap only scales (static — the single source of truth for size).
             .czRig, its only child, only slides on X and holds a fixed spot ("el mismo
