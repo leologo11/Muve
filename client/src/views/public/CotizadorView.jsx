@@ -37,8 +37,11 @@ function trackStep(stepNum) {
 }
 
 // ─── Catalog grouped ──────────────────────────────────────────
-const CAT_EMOJI = { 'Dormitorio':'🛏️','Living':'🛋️','Comedor':'🍽️','Cocina':'🧊','Electrodomésticos':'🫧','Oficina':'💻','Cajas':'📦' };
-const CATS_ORDER = ['Dormitorio','Living','Comedor','Cocina','Electrodomésticos','Oficina','Cajas'];
+const CAT_EMOJI = {
+  'Dormitorio':'🛏️','Living':'🛋️','Comedor':'🍽️','Cocina':'🧊','Electrodomésticos':'🫧',
+  'Oficina':'💻','Baño':'🚿','Exterior':'🌳','Bebé y niños':'🧸','Deco y varios':'🎸','Cajas':'📦',
+};
+const CATS_ORDER = ['Dormitorio','Living','Comedor','Cocina','Electrodomésticos','Oficina','Baño','Exterior','Bebé y niños','Deco y varios','Cajas'];
 const GROUPED = CATS_ORDER.map(cat => ({
   id: cat, label: cat, emoji: CAT_EMOJI[cat] || '📦',
   items: CATALOG.filter(c => c.cat === cat),
@@ -1480,9 +1483,15 @@ function ScreenResult({ state, onRestart, onBack, onNext }) {
           </div>
 
           {/* Disclaimer */}
-          <div style={{ padding: '10px 14px', borderRadius: 12, background: '#FFFBEB', border: '1px solid rgba(234,179,8,.25)', fontSize: 12, color: '#78350F', lineHeight: 1.55 }}>
-            Este es un <strong>precio estimado</strong>. Tras solicitar la cotización te contactaremos para coordinar fecha, horario y detalles finales.
-          </div>
+          {state.preliminary ? (
+            <div style={{ padding: '10px 14px', borderRadius: 12, background: '#FFF7ED', border: '1px solid rgba(234,88,12,.3)', fontSize: 12, color: '#7C2D12', lineHeight: 1.55 }}>
+              <strong>Estimación preliminar.</strong> Un asesor MUVE revisa tu traslado y te confirma el valor final antes de agendar — sin compromiso.
+            </div>
+          ) : (
+            <div style={{ padding: '10px 14px', borderRadius: 12, background: '#FFFBEB', border: '1px solid rgba(234,179,8,.25)', fontSize: 12, color: '#78350F', lineHeight: 1.55 }}>
+              Este es un <strong>precio estimado</strong>. Al aceptar la cotización te contactaremos para coordinar fecha, horario y detalles finales.
+            </div>
+          )}
         </div>
 
         {/* Summary */}
@@ -1518,12 +1527,20 @@ function ScreenResult({ state, onRestart, onBack, onNext }) {
 
       <CtaBar>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T3, textAlign: 'center' }}>
+            ¿Te sirve esta cotización?
+          </div>
           <BtnPrimary onClick={() => onNext(helpers)}>
-            Solicitar cotización <ArrowRight size={18} strokeWidth={2.4}/>
+            Aceptar cotización <ArrowRight size={18} strokeWidth={2.4}/>
           </BtnPrimary>
-          <button type="button" onClick={onRestart} style={{ background: 'none', border: 'none', color: T2, fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '4px 0' }}>
-            Nueva cotización
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" onClick={onBack} style={{ flex: 1, background: SURF, border: `1.5px solid ${BDR}`, color: T2, fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: '10px', borderRadius: 12, fontFamily: 'Inter,system-ui,sans-serif' }}>
+              Ajustar detalles
+            </button>
+            <button type="button" onClick={onRestart} style={{ flex: 1, background: 'none', border: `1.5px solid ${BDR}`, color: T3, fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: '10px', borderRadius: 12, fontFamily: 'Inter,system-ui,sans-serif' }}>
+              Descartar
+            </button>
+          </div>
         </div>
       </CtaBar>
     </div>
@@ -1622,7 +1639,7 @@ function ScreenContact({ state, onBack, onSubmit, saving }) {
 // its own fixed overlay, not inside .cz-inner), so it always shows at the same
 // compact size and centered position regardless of how big the card/rig was. ────────
 function SuccessNote({ state, onRestart }) {
-  const { result, from, to, manualReview } = state;
+  const { result, from, to, manualReview, preliminary } = state;
   const waMsg = manualReview
     ? `Hola MUVE! 👋 Solicité una cotización de mudanza grande.\n📍 ${from?.address || ''} → ${to?.address || ''}`
     : `Hola MUVE! 👋 Acabo de solicitar una cotización.\n🚚 ${result?.vehicleName || ''}\n📍 ${from?.address || ''} → ${to?.address || ''}\n💰 Estimado: ${fmt(result?.price)}`;
@@ -1657,15 +1674,19 @@ function SuccessNote({ state, onRestart }) {
         }}>
           <Check size={32} color="#fff" strokeWidth={3}/>
         </div>
-        <h2 style={{ fontSize: 21, fontWeight: 900, color: N, margin: '0 0 6px', letterSpacing: '-0.5px' }}>¡Solicitud enviada!</h2>
+        <h2 style={{ fontSize: 21, fontWeight: 900, color: N, margin: '0 0 6px', letterSpacing: '-0.5px' }}>
+          {manualReview ? '¡Solicitud enviada!' : '¡Cotización aceptada!'}
+        </h2>
         <p style={{ fontSize: 13, color: T2, margin: '0 0 18px', lineHeight: 1.5 }}>
           {manualReview
             ? 'Tienes muchas cosas — un asesor MUVE se comunicará contigo en un instante.'
-            : 'Revisaremos tu solicitud y te contactaremos pronto.'
+            : preliminary
+              ? 'Guardamos tu cotización con el precio estimado. Un asesor MUVE te confirma el valor final muy pronto.'
+              : 'Revisaremos tu solicitud y te contactaremos para coordinar los detalles.'
           }
         </p>
 
-        {!manualReview && result?.price && (
+        {result?.price && (
           <div style={{ background: BG, borderRadius: 14, border: `1px solid ${BDR}`, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, textAlign: 'left' }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
               <span style={{ fontSize: 22, flexShrink: 0 }}>{result?.vehicleIcon || '🚐'}</span>
@@ -1699,76 +1720,136 @@ function SuccessNote({ state, onRestart }) {
 
 // ─── LOADING ──────────────────────────────────────────────────
 function ScreenCalculating() {
-  const MSGS = [
-    'Calculando la distancia…',
-    'Eligiendo el mejor vehículo…',
-    'Analizando tus artículos…',
-    'Aplicando tarifas vigentes…',
-    'Preparando tu cotización…',
+  const STEPS = [
+    { icon: MapPin,   label: 'Midiendo la ruta',        hint: 'Distancia y peajes del trayecto' },
+    { icon: Truck,    label: 'Eligiendo el vehículo',   hint: 'Furgón, 3/4 o camión según volumen' },
+    { icon: Building2,label: 'Revisando tus artículos', hint: 'Ayudantes, pisos y embalaje' },
+    { icon: Sparkles, label: 'Aplicando tarifas MUVE',  hint: 'Precio de red, sin sorpresas' },
+    { icon: Check,    label: 'Preparando tu cotización',hint: 'Ajustando el rango final' },
   ];
-  const [msgIdx, setMsgIdx] = useState(0);
+  const [idx, setIdx] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setMsgIdx(i => (i + 1) % MSGS.length), 1500);
+    const t = setInterval(() => setIdx(i => Math.min(i + 1, STEPS.length - 1)), 1250);
     return () => clearInterval(t);
   }, []);
+  const pct = Math.round(((idx + 1) / STEPS.length) * 100);
 
   return (
-    <div style={{ height: '100dvh', background: GRAD_DEEP, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+    <div style={{ height: '100dvh', background: GRAD_DEEP, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden', fontFamily: 'Inter,system-ui,sans-serif' }}>
       <style>{`
-        @keyframes czCalcRing  { from{transform:scale(0.5);opacity:.55} to{transform:scale(2.4);opacity:0} }
-        @keyframes czCalcFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-14px)} }
-        @keyframes czCalcMsg   { 0%{opacity:0;transform:translateY(10px)} 15%,85%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-8px)} }
-        @keyframes czCalcDot   { 0%,60%,100%{transform:scale(0.6);opacity:.3} 30%{transform:scale(1.15);opacity:1} }
+        @keyframes czCalcRing  { from{transform:scale(.55);opacity:.5} to{transform:scale(2.5);opacity:0} }
+        @keyframes czCalcFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+        @keyframes czCalcSpin  { to{transform:rotate(360deg)} }
+        @keyframes czCalcRoad  { to{background-position:-48px 0} }
+        @keyframes czCalcPop   { 0%{transform:scale(.4);opacity:0} 60%{transform:scale(1.15)} 100%{transform:scale(1);opacity:1} }
+        @keyframes czCalcPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.45;transform:scale(.82)} }
+        @keyframes czCalcRow   { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
       `}</style>
 
       {/* Radial glow */}
-      <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse at 50% 42%, rgba(63,190,237,.22), transparent 62%)', pointerEvents:'none' }}/>
+      <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse at 50% 38%, rgba(63,190,237,.24), transparent 60%)', pointerEvents:'none' }}/>
 
-      {/* Expanding rings */}
-      {[0,1,2].map(i => (
-        <div key={i} style={{
-          position:'absolute', width:160, height:160, borderRadius:'50%',
-          border:'1.5px solid rgba(255,255,255,.2)',
-          animation:`czCalcRing 2.6s ease-out ${i * 0.86}s infinite`,
-        }}/>
-      ))}
-
-      {/* Floating vehicle icon */}
-      <div style={{
-        position:'relative', zIndex:2,
-        width:100, height:100, borderRadius:28,
-        background:'rgba(255,255,255,.13)',
-        border:'1px solid rgba(255,255,255,.22)',
-        display:'grid', placeItems:'center',
-        marginBottom:32,
-        animation:'czCalcFloat 2.4s ease-in-out infinite',
-        boxShadow:'0 24px 60px rgba(0,0,0,.25), 0 0 0 1px rgba(255,255,255,.08)',
-      }}>
-        <span style={{ fontSize:46 }}>🚐</span>
+      {/* Wordmark */}
+      <div style={{ position:'absolute', top:'max(26px, env(safe-area-inset-top))', left:0, right:0, textAlign:'center', zIndex:3 }}>
+        <span style={{ fontSize:15, fontWeight:900, letterSpacing:3, color:'rgba(255,255,255,.9)' }}>MUVE</span>
       </div>
 
-      {/* Title */}
-      <div style={{ position:'relative', zIndex:2, textAlign:'center', padding:'0 32px' }}>
-        <div style={{ fontSize:22, fontWeight:900, color:'#fff', letterSpacing:'-0.5px', marginBottom:14 }}>
-          Calculando tu precio
-        </div>
-        {/* Cycling message */}
-        <div style={{ height:22, overflow:'hidden', position:'relative' }}>
-          <div key={msgIdx} style={{ fontSize:13, color:'rgba(255,255,255,.65)', fontWeight:500, animation:'czCalcMsg 1.5s ease both' }}>
-            {MSGS[msgIdx]}
-          </div>
-        </div>
-      </div>
-
-      {/* Bouncing dots */}
-      <div style={{ display:'flex', gap:8, marginTop:30, position:'relative', zIndex:2 }}>
+      {/* Halo + spinning conic ring + floating vehicle */}
+      <div style={{ position:'relative', zIndex:2, marginBottom:30, display:'grid', placeItems:'center' }}>
         {[0,1,2].map(i => (
           <div key={i} style={{
-            width:8, height:8, borderRadius:'50%',
-            background:'rgba(255,255,255,.65)',
-            animation:`czCalcDot 1.4s ease-in-out ${i * 0.23}s infinite`,
+            gridArea:'1/1', width:150, height:150, borderRadius:'50%',
+            border:'1.5px solid rgba(255,255,255,.18)',
+            animation:`czCalcRing 2.7s ease-out ${i * 0.9}s infinite`,
           }}/>
         ))}
+        <div style={{
+          gridArea:'1/1', width:132, height:132, borderRadius:'50%',
+          background:'conic-gradient(from 0deg, transparent 0 62%, rgba(120,210,255,.95) 88%, transparent 100%)',
+          animation:'czCalcSpin 1.15s linear infinite',
+          maskImage:'radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px))',
+          WebkitMaskImage:'radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px))',
+        }}/>
+        <div style={{
+          gridArea:'1/1', width:96, height:96, borderRadius:28,
+          background:'rgba(255,255,255,.14)', border:'1px solid rgba(255,255,255,.24)',
+          display:'grid', placeItems:'center',
+          animation:'czCalcFloat 2.4s ease-in-out infinite',
+          boxShadow:'0 24px 60px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.25)',
+        }}>
+          <Truck size={40} color="#fff" strokeWidth={1.7}/>
+        </div>
+      </div>
+
+      {/* Title + live percentage */}
+      <div style={{ position:'relative', zIndex:2, textAlign:'center', padding:'0 32px' }}>
+        <div style={{ fontSize:22, fontWeight:900, color:'#fff', letterSpacing:'-0.4px' }}>
+          Calculando tu precio
+        </div>
+        <div style={{ fontSize:12.5, color:'rgba(255,255,255,.62)', fontWeight:600, marginTop:5 }}>
+          {STEPS[idx].hint}
+        </div>
+      </div>
+
+      {/* Progress track */}
+      <div style={{ position:'relative', zIndex:2, width:'min(300px, 78vw)', marginTop:22 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, fontWeight:700, color:'rgba(255,255,255,.55)', marginBottom:7 }}>
+          <span>Analizando…</span><span>{pct}%</span>
+        </div>
+        <div style={{ height:7, borderRadius:99, background:'rgba(255,255,255,.14)', overflow:'hidden' }}>
+          <div style={{
+            height:'100%', width:`${pct}%`, borderRadius:99,
+            background:'linear-gradient(90deg,#7FD4FF,#2E9BF0)',
+            boxShadow:'0 0 12px rgba(127,212,255,.7)',
+            transition:'width .7s cubic-bezier(.4,0,.2,1)',
+          }}/>
+        </div>
+      </div>
+
+      {/* Step checklist */}
+      <div style={{ position:'relative', zIndex:2, width:'min(320px, 82vw)', marginTop:22, display:'flex', flexDirection:'column', gap:9 }}>
+        {STEPS.map((s, i) => {
+          const done = i < idx, active = i === idx;
+          const StepIcon = s.icon;
+          return (
+            <div key={s.label} style={{
+              display:'flex', alignItems:'center', gap:11,
+              opacity: done || active ? 1 : 0.4,
+              animation: active ? 'czCalcRow .35s ease both' : undefined,
+              transition:'opacity .4s ease',
+            }}>
+              <div style={{
+                width:26, height:26, borderRadius:'50%', flexShrink:0,
+                display:'grid', placeItems:'center',
+                background: done ? 'rgba(120,220,170,.22)' : active ? 'rgba(255,255,255,.16)' : 'rgba(255,255,255,.07)',
+                border:`1px solid ${done ? 'rgba(120,220,170,.55)' : 'rgba(255,255,255,.2)'}`,
+              }}>
+                {done
+                  ? <div style={{ animation:'czCalcPop .3s ease both', display:'grid', placeItems:'center' }}><Check size={14} color="#78E0AA" strokeWidth={3}/></div>
+                  : active
+                    ? <div style={{ width:8, height:8, borderRadius:'50%', background:'#7FD4FF', animation:'czCalcPulse 1s ease-in-out infinite' }}/>
+                    : <StepIcon size={12} color="rgba(255,255,255,.55)" strokeWidth={2}/>}
+              </div>
+              <span style={{ fontSize:13, fontWeight: active ? 800 : 600, color: done ? 'rgba(255,255,255,.8)' : '#fff' }}>
+                {s.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Moving road */}
+      <div style={{
+        position:'absolute', left:0, right:0, bottom:0, height:34, zIndex:1,
+        background:'rgba(255,255,255,.05)',
+        borderTop:'1px solid rgba(255,255,255,.12)',
+      }}>
+        <div style={{
+          position:'absolute', top:'50%', left:0, right:0, height:3, transform:'translateY(-50%)',
+          background:'repeating-linear-gradient(90deg, rgba(255,255,255,.55) 0 16px, transparent 16px 32px)',
+          backgroundSize:'48px 3px',
+          animation:'czCalcRoad .6s linear infinite',
+        }}/>
       </div>
     </div>
   );
@@ -1868,6 +1949,7 @@ const INIT = {
   result: null,
   selectedHelpers: 0,
   manualReview: false,
+  preliminary: false,
   name: '', phone: '', email: '',
 };
 
@@ -1982,13 +2064,22 @@ export default function CotizadorView() {
         needsPacking: extras.packing,
       });
 
-      const isManualReview = res.needsManualReview || res.price > 400000;
-      if (isManualReview) {
-        setState(s => ({ ...s, result: res, manualReview: true, step: 5 }));
+      const price = Number(res?.price) || 0;
+      // "Sin precio online" de verdad: el cliente ya marcó la carga como sobre-dimensionada
+      // (volumen > 30 m³ antes de llamar) o el motor no devolvió ningún monto.
+      const noOnlinePrice = state.manualReview === true || price <= 0;
+      // Hay estimación, pero sujeta a que un asesor la confirme (IA caída / fallback,
+      // baja confianza, o monto muy alto). Igual SE MUESTRA el precio y el cliente decide.
+      const preliminary = !noOnlinePrice && (
+        Boolean(res.needsManualReview) || res.confidence === 'low' || price > 400000
+      );
+
+      if (noOnlinePrice) {
+        setState(s => ({ ...s, result: res, manualReview: true, preliminary: false, step: 5 }));
         trackStep(6);
         _trackEventDB(7);
       } else {
-        setState(s => ({ ...s, result: res, manualReview: false, step: 4 }));
+        setState(s => ({ ...s, result: res, manualReview: false, preliminary, step: 4 }));
         trackStep(5);
         _trackEventDB(6, res.detectedType);
       }
@@ -2024,9 +2115,9 @@ export default function CotizadorView() {
         numFloors: extras.floors,
         needsPacking: extras.packing,
         itemsDescription: itemsDesc,
-        priceMin: manualReview ? null : (result?.priceMin || null),
-        priceMax: manualReview ? null : (result?.priceMax || null),
-        clientNotes: `Cotizador 2.0 | ${result?.vehicleName || ''}${manualReview ? ' | REVISIÓN MANUAL — mudanza grande' : ''}`,
+        priceMin: result?.priceMin || null,
+        priceMax: result?.priceMax || null,
+        clientNotes: `Cotizador 2.0 | ${result?.vehicleName || ''}${manualReview ? ' | REVISIÓN MANUAL — mudanza grande' : state.preliminary ? ' | ESTIMACIÓN PRELIMINAR — confirmar con asesor' : ''}`,
       });
       trackMetaEvent('Lead', { content_name: 'Cotizador 2.0', value: result?.price });
       _trackSubmitDB(result?.detectedType || 'flete_mudanza');
