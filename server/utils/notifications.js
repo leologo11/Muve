@@ -56,19 +56,43 @@ function quoteSummaryLines({ quote, payload }) {
   return lines;
 }
 
-async function postWithTimeout(url, options, timeoutMs = 8000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
-    const text = await res.text();
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`);
-    if (!text) return null;
-    try { return JSON.parse(text); }
-    catch { return { raw: text }; }
-  } finally {
-    clearTimeout(timer);
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+// Valor seguro para un header HTTP (ByteString / Latin-1). Un emoji o un guion
+// largo en el nombre/dirección del cliente hacía que fetch lanzara y la
+// notificación se perdiera en silencio ("algunas llegan, otras no").
+function headerSafe(value, max = 200) {
+  return String(value ?? '')
+    .replace(/[^\x00-\xFF]/g, '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/ {2,}/g, ' ')
+    .trim()
+    .slice(0, max) || 'MUVE';
+}
+
+async function postWithTimeout(url, options, { timeoutMs = 10000, retries = 0, retryDelayMs = 1200 } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      const text = await res.text();
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`);
+      if (!text) return null;
+      try { return JSON.parse(text); }
+      catch { return { raw: text }; }
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries) {
+        console.warn(`[notify] reintento ${attempt + 1}/${retries} tras fallo: ${err.message}`);
+        await wait(retryDelayMs * (attempt + 1));
+      }
+    } finally {
+      clearTimeout(timer);
+    }
   }
+  throw lastErr;
 }
 
 async function sendNtfyNotification({ quote, payload }) {
@@ -102,7 +126,7 @@ async function sendNtfyNotification({ quote, payload }) {
   ].filter(Boolean).join('\n');
 
   const headers = {
-    'Title':    title,
+    'Title':    headerSafe(title),
     'Priority': manual ? 'max' : 'high',
     'Tags':     manual ? 'warning,muve' : 'truck,muve',
     'Click':    quoteAdminUrl(quote),
@@ -114,7 +138,7 @@ async function sendNtfyNotification({ quote, payload }) {
     method: 'POST',
     headers,
     body,
-  });
+  }, { timeoutMs: 12000, retries: 3 });
   console.log(`[notify] ntfy enviado al topic "${topic}" (${base})`);
   return res;
 }
@@ -176,7 +200,7 @@ async function sendTelegramNotification({ quote, payload }) {
         parse_mode: 'HTML',
         disable_web_page_preview: true,
       }),
-    })
+    }, { retries: 2 })
   ));
 
   const failed = results.filter(r => r.status === 'rejected');
@@ -274,7 +298,7 @@ async function sendWhatsAppNotification({ quote, payload, message }) {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(buildMessage(to)),
-    })
+    }, { retries: 2 })
   ));
 
   const failed = results.filter(r => r.status === 'rejected');
@@ -298,7 +322,7 @@ export async function notifyAdminLead({ name, phone, origin, destination }) {
     const base = (process.env.NTFY_SERVER || 'https://ntfy.sh').replace(/\/+$/, '');
     const headers = {
       // Sin emoji en headers (ByteString). El icono lo pone Tags.
-      'Title': `Lead nuevo (sin terminar) - ${name || 'sin nombre'}`,
+      'Title': headerSafe(`Lead nuevo (sin terminar) - ${name || 'sin nombre'}`),
       'Priority': 'default',
       'Tags': 'hourglass_flowing_sand,muve',
       'Content-Type': 'text/plain; charset=utf-8',
@@ -307,7 +331,7 @@ export async function notifyAdminLead({ name, phone, origin, destination }) {
     tasks.push(postWithTimeout(`${base}/${encodeURIComponent(topic)}`, {
       method: 'POST', headers,
       body: `${line || 'Cotización en proceso'}\n(aún no terminó la cotización)`,
-    }));
+    }, { retries: 2 }));
   }
 
   const tgToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -325,7 +349,7 @@ export async function notifyAdminLead({ name, phone, origin, destination }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true }),
-      }));
+      }, { retries: 2 }));
     }
   }
 
