@@ -820,7 +820,7 @@ function ScreenWelcome({ onStart }) {
           .czCtaArrow { animation: none; }
         }
         @media (min-width: 640px) {
-          .czContent { flex: 1 !important; padding: 0 40px !important; flex-direction: row !important; align-items: center; gap: 36px; }
+          .czContent { flex: 1 !important; padding: 0 40px !important; flex-direction: row !important; align-items: center; gap: 30px; }
           .czHeroInner { align-items: flex-start !important; text-align: left !important; }
           .czHeroTitle { font-size: 54px !important; letter-spacing: -2.4px !important; line-height: 1.05 !important; }
           .czHeroSub { font-size: 17px !important; max-width: 100% !important; }
@@ -832,8 +832,9 @@ function ScreenWelcome({ onStart }) {
           .czChipIcon { width: 32px !important; height: 32px !important; }
           .czChipTitle { font-size: 12px !important; }
           .czChipSub { font-size: 10.5px !important; }
-          .czSideCards { display: flex !important; flex-direction: column; width: 340px; flex-shrink: 0; }
-          .czCardPhoto { height: 148px !important; }
+          .czSideCards { display: flex !important; flex-direction: column; width: 404px; flex-shrink: 0; }
+          .czCardPhoto { height: 158px !important; }
+          .czTestimonialText { line-height: 1.62 !important; }
           .czCardHeader { padding: 18px 22px !important; gap: 12px !important; }
           .czCardIcon { width: 48px !important; height: 48px !important; font-size: 24px !important; }
           .czCardType { font-size: 16px !important; }
@@ -948,7 +949,7 @@ function ScreenWelcome({ onStart }) {
         <div className="czSideCards" style={{ display:'none', gap:10 }}>
 
           {/* Rotating testimonial card */}
-          <div style={{ borderRadius:18, overflow:'hidden', boxShadow:`0 4px 24px ${B}22`, opacity: fading ? 0 : 1, transition:'opacity .32s ease' }}>
+          <div style={{ borderRadius:22, overflow:'hidden', border:'1px solid rgba(255,255,255,.7)', boxShadow:'0 28px 60px rgba(10,31,61,.20), 0 10px 22px rgba(10,31,61,.12)', opacity: fading ? 0 : 1, transition:'opacity .32s ease' }}>
             {/* Photo — fixed height so the card never resizes as it cycles cases */}
             <div className="czCardPhoto" style={{ position:'relative', height:110, background:'#e2e8f0' }}>
               <img src={c.photo} alt={c.type} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
@@ -995,8 +996,10 @@ function ScreenWelcome({ onStart }) {
             </div>
 
             {/* Testimonial */}
-            <div className="czTestimonialSection" style={{ background:'#FAFBFF', padding:'12px 16px' }}>
-              <div className="czTestimonialInner" style={{ background:'#fff', borderRadius:10, padding:'10px 13px', border:`1px solid ${BDR}`, boxShadow:'0 1px 6px rgba(0,0,0,.04)' }}>
+            <div className="czTestimonialSection" style={{ background:'#F6F8FE', padding:'14px 16px 16px' }}>
+              <div style={{ fontSize:9, fontWeight:800, color:T3, textTransform:'uppercase', letterSpacing:.8, marginBottom:7 }}>Lo que dicen</div>
+              <div className="czTestimonialInner" style={{ position:'relative', background:'#fff', borderRadius:12, padding:'13px 15px 13px 18px', border:`1px solid ${BDR}`, boxShadow:'0 6px 18px rgba(10,31,61,.08)' }}>
+                <div style={{ position:'absolute', left:0, top:10, bottom:10, width:3, borderRadius:99, background:GRAD }}/>
                 <div className="czTestimonialText" style={{ fontSize:11, color:T2, lineHeight:1.6, fontStyle:'italic' }}>"{c.comment}"</div>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:8 }}>
                   <div className="czAvatar" style={{ width:22, height:22, borderRadius:'50%', background:GRAD, display:'grid', placeItems:'center', fontSize:10, color:'#fff', fontWeight:800, flexShrink:0 }}>
