@@ -312,7 +312,7 @@ async function sendWhatsAppNotification({ quote, payload, message }) {
 // Diagnóstico: envía un push de prueba y devuelve el resultado CRUDO de ntfy
 // (status HTTP, cuerpo, error) para poder ver desde afuera qué está pasando en
 // el server de producción sin acceso a los logs de Railway.
-export async function notifySelfTest() {
+export async function notifySelfTest({ send = false } = {}) {
   const topic = process.env.NTFY_TOPIC || '';
   const base  = (process.env.NTFY_SERVER || 'https://ntfy.sh').replace(/\/+$/, '');
   const out = {
@@ -322,6 +322,8 @@ export async function notifySelfTest() {
     telegramConfigured: Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID),
     whatsappConfigured: Boolean(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.ADMIN_WHATSAPP_TO),
   };
+  // Por defecto NO envía push — solo reporta config. Con { send:true } manda una prueba.
+  if (!send) { out.ntfy = { note: 'agregá ?send=1 para disparar un push de prueba' }; return out; }
   if (!topic) { out.ntfy = { skipped: 'NTFY_TOPIC no configurado' }; return out; }
 
   const controller = new AbortController();

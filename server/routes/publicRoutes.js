@@ -945,9 +945,9 @@ async function findRecentDraftByPhone(phone, windowHours = 6) {
 
 // GET /api/public/_notify-selftest — diagnóstico: dispara un push de prueba y
 // devuelve el resultado crudo de ntfy (para depurar sin logs de Railway).
-router.get('/_notify-selftest', publicCalculationLimiter, async (_req, res) => {
+router.get('/_notify-selftest', publicCalculationLimiter, async (req, res) => {
   try {
-    res.json(await notifySelfTest());
+    res.json(await notifySelfTest({ send: req.query.send === '1' }));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
