@@ -179,6 +179,29 @@ export default function QuotesView() {
   const [detailQuote, setDetailQuote] = useState(null);
   const [serviceFilter, setServiceFilter] = useState('all');
   const [periodFilter, setPeriodFilter]   = useState('mes');
+  const [selectMode, setSelectMode]       = useState(false);
+  const [selectedIds, setSelectedIds]     = useState(() => new Set());
+
+  const toggleSelect = useCallback((id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+  const exitSelect = useCallback(() => { setSelectMode(false); setSelectedIds(new Set()); }, []);
+
+  const handleBulkDelete = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    if (!confirm(`¿Eliminar ${ids.length} cotización${ids.length !== 1 ? 'es' : ''}? No se puede deshacer.`)) return;
+    const results = await Promise.allSettled(ids.map(id => api.deleteQuote(id)));
+    const okIds = new Set(ids.filter((_, i) => results[i].status === 'fulfilled'));
+    const failed = ids.length - okIds.size;
+    setQuotes(prev => prev.filter(q => !okIds.has(q._id)));
+    exitSelect();
+    toast(failed ? `🗑️ ${okIds.size} eliminadas · ${failed} fallaron` : `🗑️ ${okIds.size} eliminada${okIds.size !== 1 ? 's' : ''}`);
+  };
 
   useEffect(() => {
     Promise.all([
@@ -326,26 +349,69 @@ export default function QuotesView() {
           </div>
         )}
 
-        {visible.length > 0 && (
-          <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, marginBottom: 8, paddingLeft: 2 }}>
-            {visible.length} cotizacion{visible.length !== 1 ? 'es' : ''}
-          </div>
-        )}
+        {visible.length > 0 && (() => {
+          const allSel = visible.every(q => selectedIds.has(q._id));
+          const selBtn = { background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 800, color: 'var(--accent)', cursor: 'pointer' };
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8, paddingLeft: 2 }}>
+              <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>
+                {selectMode
+                  ? `${selectedIds.size} seleccionada${selectedIds.size !== 1 ? 's' : ''}`
+                  : `${visible.length} cotizacion${visible.length !== 1 ? 'es' : ''}`}
+              </span>
+              {selectMode ? (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button style={selBtn} onClick={() => setSelectedIds(allSel ? new Set() : new Set(visible.map(q => q._id)))}>
+                    {allSel ? 'Ninguna' : 'Todas'}
+                  </button>
+                  <button style={{ ...selBtn, color: 'var(--muted)' }} onClick={exitSelect}>Cancelar</button>
+                </div>
+              ) : (
+                <button style={selBtn} onClick={() => setSelectMode(true)}>☑︎ Seleccionar</button>
+              )}
+            </div>
+          );
+        })()}
 
         {visible.map(q => (
-          <QuoteCard key={q._id} quote={q} onOpen={setDetailQuote} />
+          <QuoteCard
+            key={q._id}
+            quote={q}
+            onOpen={setDetailQuote}
+            selectMode={selectMode}
+            selected={selectedIds.has(q._id)}
+            onToggleSelect={toggleSelect}
+          />
         ))}
 
-        <button
-          onClick={reload}
-          style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 76, width: 52, height: 52, borderRadius: '50%', background: '#0284c7', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', boxShadow: '0 4px 16px #0284c740', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          title="Actualizar cotizaciones"
-        >🔄</button>
+        {!selectMode && (
+          <button
+            onClick={reload}
+            style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 76, width: 52, height: 52, borderRadius: '50%', background: '#0284c7', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', boxShadow: '0 4px 16px #0284c740', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            title="Actualizar cotizaciones"
+          >🔄</button>
+        )}
 
-        <button
-          onClick={() => setCreating(true)}
-          style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16, width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', boxShadow: '0 4px 16px #0052FF40', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >＋</button>
+        {!selectMode && (
+          <button
+            onClick={() => setCreating(true)}
+            style={{ position: 'fixed', bottom: 'calc(20px + env(safe-area-inset-bottom))', right: 16, width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: '#fff', fontSize: 26, cursor: 'pointer', boxShadow: '0 4px 16px #0052FF40', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >＋</button>
+        )}
+
+        {selectMode && selectedIds.size > 0 && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, padding: '12px 16px calc(12px + env(safe-area-inset-bottom))', background: '#fff', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'center', zIndex: 450, boxShadow: '0 -4px 16px #0000000f' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, flex: 1 }}>
+              {selectedIds.size} seleccionada{selectedIds.size !== 1 ? 's' : ''}
+            </span>
+            <button onClick={exitSelect} style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 700, color: 'var(--muted)', cursor: 'pointer' }}>
+              Cancelar
+            </button>
+            <button onClick={handleBulkDelete} style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+              🗑️ Eliminar
+            </button>
+          </div>
+        )}
 
         {creating && (
           <CreateQuoteModal
@@ -360,13 +426,21 @@ export default function QuotesView() {
 
 // ── Quote card ────────────────────────────────────────────────────────────────
 
-function QuoteCard({ quote: q, onOpen }) {
+function QuoteCard({ quote: q, onOpen, selectMode = false, selected = false, onToggleSelect }) {
   const meta   = STATUS_META[q.status] || STATUS_META.draft;
   const isFlete = q.serviceType === 'flete' || q.serviceType === 'mudanza';
 
   return (
-    <div onClick={() => onOpen(q)} style={{ background: 'var(--card)', border: `1px solid ${q.status === 'submitted' ? '#0077aa40' : 'var(--border)'}`, borderRadius: 14, marginBottom: 10, overflow: 'hidden', boxShadow: '0 1px 4px #0000000a', cursor: 'pointer' }}>
+    <div
+      onClick={() => (selectMode ? onToggleSelect?.(q._id) : onOpen(q))}
+      style={{ background: 'var(--card)', border: `${selected ? 2 : 1}px solid ${selected ? 'var(--accent)' : q.status === 'submitted' ? '#0077aa40' : 'var(--border)'}`, borderRadius: 14, marginBottom: 10, overflow: 'hidden', boxShadow: '0 1px 4px #0000000a', cursor: 'pointer' }}
+    >
       <div style={{ padding: '13px 14px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        {selectMode && (
+          <div style={{ flexShrink: 0, width: 22, height: 22, marginTop: 1, borderRadius: 6, border: `2px solid ${selected ? 'var(--accent)' : 'var(--border)'}`, background: selected ? 'var(--accent)' : '#fff', display: 'grid', placeItems: 'center' }}>
+            {selected && <span style={{ color: '#fff', fontSize: 13, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+          </div>
+        )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 800, fontSize: 14 }}>{q.quoteCode}</span>
