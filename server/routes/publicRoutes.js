@@ -1137,9 +1137,12 @@ router.post('/quotes', publicQuoteLimiter, validatePublicQuotePayload, quoteSpam
       }),
     });
 
-    notifyAdminQuoteCreated({ quote, payload }).catch(err => {
-      console.warn('Quote notification failed:', err.message);
-    });
+    // Darle a la notificación una ventana real para completarse antes de responder
+    // (así no depende de que el proceso siga "vivo" tras el response). Si ntfy está
+    // lento, la respuesta igual sale a los ~9 s y los reintentos siguen en segundo plano.
+    const notifyDone = notifyAdminQuoteCreated({ quote, payload })
+      .catch(err => console.warn('[public/quotes] notificación falló:', err.message));
+    await Promise.race([notifyDone, new Promise(r => setTimeout(r, 9000))]);
 
     return res.status(201).json({
       _id: quote.id,
