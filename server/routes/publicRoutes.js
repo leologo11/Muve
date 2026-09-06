@@ -898,6 +898,31 @@ async function replaceSupabaseQuoteItems(quoteId, items = []) {
   });
 }
 
+const onlyDigits = v => String(v || '').replace(/\D/g, '');
+
+// El cotizador crea un borrador ("lead") al ingresar nombre + teléfono, y luego
+// envía la cotización completa al aceptar el precio. Sin esto se guardaban DOS
+// registros por cotización. Esta búsqueda enlaza ambos pasos: el envío final
+// reutiliza el borrador reciente del mismo teléfono en vez de crear otra fila.
+async function findRecentDraftByPhone(phone, windowHours = 6) {
+  const digits = onlyDigits(phone);
+  if (!isSupabaseEnabled() || digits.length < 8) return null;
+  const since = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
+  try {
+    const rows = await supabaseRequest(`/quotes${qs({
+      select: 'id,quote_code,status,contact_phone,created_at',
+      status: 'eq.draft',
+      created_at: `gte.${since}`,
+      order: 'created_at.desc',
+      limit: '30',
+    })}`);
+    return (rows || []).find(r => onlyDigits(r.contact_phone) === digits) || null;
+  } catch (err) {
+    console.warn('[public] findRecentDraftByPhone falló:', err.message);
+    return null;
+  }
+}
+
 // POST /api/public/lead — captura parcial antes de mostrar precio
 router.post('/lead', publicQuoteLimiter, async (req, res) => {
   try {
@@ -909,21 +934,34 @@ router.post('/lead', publicQuoteLimiter, async (req, res) => {
     const destinationAddress = (req.body.to   || '').toString().trim().slice(0, 300);
 
     if (isSupabaseEnabled()) {
-      const ds = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-      const quoteCode = `MUVE-${ds}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
-      await supabaseRequest('/quotes', {
-        method: 'POST',
-        body: JSON.stringify({
-          quote_code: quoteCode,
-          service_type: 'flete',
-          contact_person: name,
-          contact_phone: phone,
-          origin_address: originAddress,
-          destination_address: destinationAddress,
-          status: 'draft',
-          client_notes: 'Lead parcial — cotizador web (pre-precio)',
-        }),
-      });
+      // Si el usuario vuelve atrás y avanza de nuevo, no acumular borradores:
+      // actualizar el que ya existe para ese teléfono.
+      const existing = await findRecentDraftByPhone(phone);
+      if (existing) {
+        const patch = { contact_person: name };
+        if (originAddress)      patch.origin_address = originAddress;
+        if (destinationAddress) patch.destination_address = destinationAddress;
+        await supabaseRequest(`/quotes${qs({ id: `eq.${existing.id}` })}`, {
+          method: 'PATCH',
+          body: JSON.stringify(patch),
+        });
+      } else {
+        const ds = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const quoteCode = `MUVE-${ds}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+        await supabaseRequest('/quotes', {
+          method: 'POST',
+          body: JSON.stringify({
+            quote_code: quoteCode,
+            service_type: 'flete',
+            contact_person: name,
+            contact_phone: phone,
+            origin_address: originAddress,
+            destination_address: destinationAddress,
+            status: 'draft',
+            client_notes: 'Lead parcial — cotizador web (pre-precio)',
+          }),
+        });
+      }
     }
     res.json({ ok: true });
   } catch (err) {
@@ -1021,17 +1059,30 @@ router.post('/quotes', publicQuoteLimiter, validatePublicQuotePayload, quoteSpam
       if (priceMax !== null) payload.price_max = priceMax;
     }
 
+    // Si ya hay un borrador (lead) reciente de este teléfono, promoverlo en vez de
+    // crear una segunda fila — así cada cotización queda en UN solo registro.
+    const draft = await findRecentDraftByPhone(contactPhone);
+    const writeQuote = async body => {
+      if (draft) {
+        const promote = { ...body };
+        delete promote.quote_code; // conservar el código con el que nació el borrador
+        return supabaseRequest(`/quotes${qs({ id: `eq.${draft.id}` })}`, { method: 'PATCH', body: JSON.stringify(promote) });
+      }
+      return supabaseRequest('/quotes', { method: 'POST', body: JSON.stringify(body) });
+    };
+
     let quoteRows;
     try {
-      quoteRows = await supabaseRequest('/quotes', { method: 'POST', body: JSON.stringify(payload) });
+      quoteRows = await writeQuote(payload);
     } catch (schemaErr) {
       if (!schemaErr.message.includes('origin_floors') && !schemaErr.message.includes('destination_floors') && !schemaErr.message.includes('schema cache')) throw schemaErr;
       const legacyPayload = { ...payload };
       delete legacyPayload.origin_floors;
       delete legacyPayload.destination_floors;
-      quoteRows = await supabaseRequest('/quotes', { method: 'POST', body: JSON.stringify(legacyPayload) });
+      quoteRows = await writeQuote(legacyPayload);
     }
     const quote = quoteRows?.[0];
+    if (draft) console.log(`[public/quotes] borrador ${draft.quote_code} promovido a cotización enviada`);
 
     const noteParts = [];
     if (originAddress) noteParts.push(`Origen: ${originAddress}`);
