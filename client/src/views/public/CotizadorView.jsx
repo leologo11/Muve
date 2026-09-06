@@ -254,39 +254,32 @@ const BtnBack = ({ onClick }) => (
 // La PISTA se mantiene recta y horizontal en la misma posición de siempre
 // (y=593, línea discontinua en y=644) para que la transición del camión no cambie.
 // `packed` = el camión ya arrancó: las cajas de la mudanza "se cargaron" y desaparecen.
+// Escena low-poly / origami: cada volumen con cara superior clara, cara derecha
+// media y frente en sombra (luz desde arriba-derecha), + sombras proyectadas.
 function SceneStatic({ packed = false }) {
-  const SKY1 = '#9CCBEE', SKY2 = '#E2F0FB';
-  const GND = '#D7E6D9', GND2 = '#C4DEC8';
-  const ROAD = '#AAB8C8', DASH = 'rgba(255,255,255,.95)';
-  const WHT = '#FDFEFF', FACE = '#E3ECF6', FACE2 = '#CBDCEE', LINE = '#AFC6DE';
-  const GLOW = '#FBDE8C', GLOW2 = '#F4C65B';
-  const TREE = '#7FBE9A', TREE2 = '#5EA37F', TREE3 = '#A9D8BC', TRUNK = '#C0946A';
-  const ROCK = '#CBD6E4', ROCK2 = '#B0C0D4';
+  // Caja isométrica facetada. (x,y)=esquina sup-izq del frente; d=profundidad.
+  const IsoBox = (x, y, w, h, d, top, side, front, i) => {
+    const dy = d * 0.52;
+    return (
+      <g key={`ib${i}`}>
+        <polygon points={`${x},${y} ${x + w},${y} ${x + w},${y + h} ${x},${y + h}`} fill={front}/>
+        <polygon points={`${x + w},${y} ${x + w + d},${y - dy} ${x + w + d},${y + h - dy} ${x + w},${y + h}`} fill={side}/>
+        <polygon points={`${x},${y} ${x + d},${y - dy} ${x + w + d},${y - dy} ${x + w},${y}`} fill={top}/>
+      </g>
+    );
+  };
 
-  // Cajas de mudanza ordenadas [x, y, w, h]
-  const BOXES = [[104, 500, 46, 44], [106, 466, 40, 34], [156, 508, 44, 36], [204, 496, 42, 46], [206, 464, 34, 32]];
-  const Box = ([x, y, w, h], i) => (
-    <g key={`bx${i}`}>
-      <rect x={x} y={y} width={w} height={h} rx="2" fill="#DBB489" stroke="#C09367" strokeWidth="1.5"/>
-      <rect x={x} y={y} width={w} height={h * 0.32} fill="#E7CBA4"/>
-      <rect x={x + w / 2 - 3.5} y={y} width="7" height={h} fill="#EFE0C6" opacity=".85"/>
-      <rect x={x} y={y + h * 0.32 - 2} width={w} height="4" fill="#EFE0C6" opacity=".85"/>
-    </g>
-  );
+  // Cajas de mudanza: [x, y, w, h] (frente). Profundidad fija.
+  const BOXES = [[92, 500, 46, 42], [146, 506, 42, 36], [200, 498, 38, 44], [100, 468, 38, 32], [202, 462, 32, 30]];
 
-  // Coníferas facetadas (x centro, base y, escala)
-  const CONIFERS = [[520, 545, 1], [1180, 542, 0.92], [1330, 548, 1.08]];
-  // Árboles redondos facetados
-  const BLOBS = [[770, 548, 1], [980, 545, 0.85]];
-  // Rocas facetadas (x, y, escala)
-  const ROCKS = [[300, 540, 1.1], [352, 546, 0.8], [60, 636, 1.9], [1250, 560, 0.9]];
-  // Destellos tipo estrella (x, y, escala)
-  const SPARKS = [[210, 470, 1], [430, 585, .8], [905, 505, 1.1], [1140, 470, .7], [660, 660, .9], [1015, 665, .8]];
+  // Coníferas / árboles redondos / rocas / destellos
+  const CONIFERS = [[520, 548, 1], [1300, 552, 1.05], [640, 546, .78]];
+  const BLOBS = [[770, 550, 1], [980, 548, .82], [1180, 552, 1.08]];
+  const ROCKS = [[300, 540, 1.15], [352, 546, .8], [1240, 560, .95]];
+  const SPARKS = [[240, 452, .9], [900, 500, 1], [1130, 452, .7], [660, 662, .8], [1020, 668, .7]];
 
-  const Spark = ([x, y, s], i) => (
-    <path key={`sp${i}`}
-      d={`M${x},${y - 7 * s} L${x + 2 * s},${y - 2 * s} L${x + 7 * s},${y} L${x + 2 * s},${y + 2 * s} L${x},${y + 7 * s} L${x - 2 * s},${y + 2 * s} L${x - 7 * s},${y} L${x - 2 * s},${y - 2 * s} Z`}
-      fill="#fff" opacity=".85"/>
+  const shadow = (cx, cy, rx) => (
+    <ellipse cx={cx} cy={cy} rx={rx} ry={rx * 0.16} fill="rgba(28,44,74,.12)"/>
   );
 
   return (
@@ -294,144 +287,198 @@ function SceneStatic({ packed = false }) {
          xmlns="http://www.w3.org/2000/svg" style={{ display: 'block', position: 'absolute', inset: 0 }}>
       <defs>
         <linearGradient id="czSky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={SKY1}/><stop offset="1" stopColor={SKY2}/>
+          <stop offset="0" stopColor="#8FC4EB"/><stop offset="1" stopColor="#DFF0FA"/>
+        </linearGradient>
+        <linearGradient id="czGround" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#CFE3D2"/><stop offset="1" stopColor="#DEEBDD"/>
+        </linearGradient>
+        <linearGradient id="czGlass" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#C7E6F6"/><stop offset="1" stopColor="#8FBFE2"/>
+        </linearGradient>
+        <linearGradient id="czDoor" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#FDE7A6"/><stop offset="1" stopColor="#F3C766"/>
         </linearGradient>
         <radialGradient id="czHaze" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0" stopColor="rgba(255,244,214,.85)"/>
+          <stop offset="0" stopColor="rgba(255,244,214,.9)"/>
           <stop offset="45%" stopColor="rgba(255,236,190,.4)"/>
           <stop offset="100%" stopColor="rgba(255,236,190,0)"/>
         </radialGradient>
+        <radialGradient id="czDoorPool" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="rgba(250,214,130,.55)"/>
+          <stop offset="100%" stopColor="rgba(250,214,130,0)"/>
+        </radialGradient>
       </defs>
 
-      {/* Cielo */}
+      {/* Cielo + sol */}
       <rect x="0" y="0" width="1440" height="560" fill="url(#czSky)"/>
-      {/* Sol cálido superior derecha */}
-      <circle cx="1290" cy="40" r="300" fill="url(#czHaze)"/>
-      <circle cx="1290" cy="40" r="46" fill="rgba(255,240,196,.95)"/>
+      <circle cx="1290" cy="36" r="300" fill="url(#czHaze)"/>
+      <circle cx="1290" cy="36" r="44" fill="rgba(255,240,196,.95)"/>
 
-      {/* Nubes suaves que derivan lento */}
-      <g opacity=".85">
-        <animateTransform attributeName="transform" type="translate" from="0 0" to="80 0" dur="120s" repeatCount="indefinite"/>
-        <ellipse cx="200" cy="95"  rx="90" ry="34" fill="#fff"/>
-        <ellipse cx="262" cy="78"  rx="60" ry="30" fill="#fff"/>
-        <ellipse cx="150" cy="86"  rx="46" ry="24" fill="#fff"/>
+      {/* Nubes que derivan lento */}
+      <g opacity=".9">
+        <animateTransform attributeName="transform" type="translate" from="0 0" to="80 0" dur="130s" repeatCount="indefinite"/>
+        <polygon points="150,96 200,72 262,80 296,100 210,110" fill="#fff"/>
+        <polygon points="150,96 210,110 296,100 240,116" fill="#EAF4FC"/>
       </g>
       <g opacity=".6">
-        <animateTransform attributeName="transform" type="translate" from="0 0" to="60 0" dur="160s" repeatCount="indefinite"/>
-        <ellipse cx="760" cy="120" rx="100" ry="36" fill="#fff"/>
-        <ellipse cx="840" cy="104" rx="66"  ry="30" fill="#fff"/>
+        <animateTransform attributeName="transform" type="translate" from="0 0" to="60 0" dur="170s" repeatCount="indefinite"/>
+        <polygon points="740,124 800,100 866,110 892,130 810,140" fill="#fff"/>
+        <polygon points="740,124 810,140 892,130 838,146" fill="#EAF4FC"/>
       </g>
       <g opacity=".5">
-        <animateTransform attributeName="transform" type="translate" from="0 0" to="45 0" dur="200s" repeatCount="indefinite"/>
-        <ellipse cx="1060" cy="150" rx="78" ry="28" fill="#fff"/>
-        <ellipse cx="1118" cy="138" rx="50" ry="24" fill="#fff"/>
+        <animateTransform attributeName="transform" type="translate" from="0 0" to="45 0" dur="210s" repeatCount="indefinite"/>
+        <polygon points="1030,150 1078,132 1130,140 1152,158 1082,166" fill="#fff"/>
       </g>
 
-      {/* Silueta lejana de ciudad (derecha, tenue, azulada) */}
-      {[[905, 432], [968, 384], [1030, 414], [1096, 360], [1162, 406], [1232, 372], [1300, 420], [1372, 366]].map(([x, y], i) => (
-        <rect key={`fc${i}`} x={x} y={y} width={i % 2 ? 44 : 56} height={520 - y} rx="3" fill={i % 2 ? '#B9CFE6' : '#A9C3DF'} opacity=".55"/>
-      ))}
+      {/* Ciudad lejana facetada (atmósfera azulada) */}
+      {[[905, 430], [966, 380], [1030, 412], [1098, 356], [1164, 404], [1236, 366], [1306, 418], [1378, 360]].map(([x, y], i) => {
+        const w = i % 2 ? 46 : 58, h = 520 - y;
+        return (
+          <g key={`fc${i}`} opacity=".6">
+            <polygon points={`${x},${y} ${x + w},${y} ${x + w},${y + h} ${x},${y + h}`} fill="#AFC8E1"/>
+            <polygon points={`${x},${y} ${x + 12},${y - 8} ${x + w + 12},${y - 8} ${x + w},${y}`} fill="#C6DAEC"/>
+            <polygon points={`${x + w},${y} ${x + w + 12},${y - 8} ${x + w + 12},${y + h - 8} ${x + w},${y + h}`} fill="#9BB8D6"/>
+          </g>
+        );
+      })}
 
-      {/* Colinas suaves al fondo */}
-      <path d="M0,512 Q360,452 720,500 T1440,486 L1440,540 L0,540 Z" fill="#BFDBC5" opacity=".8"/>
-      <path d="M0,520 Q300,486 640,514 T1440,506 L1440,552 L0,552 Z" fill="#AAD0B4" opacity=".65"/>
+      {/* Colinas facetadas */}
+      <polygon points="0,520 240,470 520,506 760,468 1060,500 1440,472 1440,540 0,540" fill="#B7D9BF"/>
+      <polygon points="0,520 240,470 520,506 300,540 0,540" fill="#A6CEAE"/>
+      <polygon points="760,468 1060,500 1440,472 1440,540 900,540" fill="#A6CEAE"/>
 
-      {/* Suelo / explanada */}
-      <rect x="0" y="512" width="1440" height="188" fill={GND}/>
-      <rect x="0" y="540" width="1440" height="52" fill={GND2} opacity=".8"/>
-      <rect x="0" y="584" width="1440" height="12" fill="#B6D4BB"/>
+      {/* Suelo */}
+      <rect x="0" y="512" width="1440" height="188" fill="url(#czGround)"/>
+      <rect x="0" y="586" width="1440" height="10" fill="#BFDCC4"/>
+      <rect x="0" y="512" width="1440" height="10" fill="rgba(255,255,255,.28)"/>
 
-      {/* ── Casa moderna (izquierda) ─────────────────────────────── */}
-      {/* Garaje con listones verticales */}
-      <rect x="26" y="366" width="96" height="176" fill={WHT} stroke={LINE} strokeWidth="2"/>
-      {Array.from({ length: 8 }, (_, i) => (
-        <line key={`gs${i}`} x1={38 + i * 11} y1="378" x2={38 + i * 11} y2="536" stroke={FACE2} strokeWidth="3"/>
-      ))}
+      {/* ── Casa moderna (izquierda), volúmenes facetados ───────── */}
+      {/* Sombra proyectada de la casa hacia la izquierda */}
+      <polygon points="20,540 120,540 40,566 -60,566" fill="rgba(28,44,74,.10)"/>
+      {/* Garaje */}
+      {IsoBox(20, 372, 96, 168, 22, '#F4F8FC', '#DCE8F4', '#CBDDEE', 'g')}
+      <rect x="30" y="392" width="76" height="130" fill="#BDD2E6"/>
+      {[0, 1, 2, 3, 4, 5].map(k => <line key={`gl${k}`} x1={30} y1={392 + k * 22} x2={106} y2={392 + k * 22} stroke="#A9C2DA" strokeWidth="2.5"/>)}
       {/* Ala baja derecha */}
-      <polygon points="272,322 458,300 458,318 272,340" fill={FACE2}/>
-      <rect x="272" y="322" width="186" height="8" fill="#5E9E7A"/>
-      <rect x="272" y="336" width="186" height="206" fill={FACE} stroke={LINE} strokeWidth="2"/>
-      <rect x="300" y="356" width="118" height="22" rx="2" fill="#8FC0E2" stroke={LINE} strokeWidth="1.5" opacity=".95"/>
-      {/* Cuerpo principal + techo inclinado */}
-      <polygon points="118,252 312,214 312,236 118,272" fill={FACE2}/>
-      <rect x="120" y="256" width="156" height="286" fill={WHT} stroke={LINE} strokeWidth="2"/>
-      <rect x="136" y="288" width="46" height="32" rx="2" fill="#8FC0E2" stroke={LINE} strokeWidth="1.5" opacity=".95"/>
-      {/* Chimenea */}
-      <rect x="150" y="206" width="26" height="52" fill="#C97A63"/>
-      {/* Entrada con luz cálida + marco color */}
-      <rect x="172" y="356" width="62" height="188" fill="#1F8FA6"/>
-      <rect x="180" y="362" width="46" height="182" fill={GLOW}/>
-      <rect x="190" y="374" width="26" height="170" fill={GLOW2}/>
-      {/* Escalón */}
-      <rect x="164" y="538" width="150" height="8" fill={FACE2}/>
-      {/* Jardinera con flores */}
-      <rect x="248" y="506" width="122" height="32" fill="#6BA07B"/>
-      {[260, 280, 300, 320, 340, 358].map((fx, i) => (
-        <circle key={`fl${i}`} cx={fx} cy={509 - (i % 2) * 5} r="4.5" fill={['#F2C14E', '#E8617A', '#F2C14E', '#7BB6E0', '#E8617A', '#F2C14E'][i]}/>
-      ))}
+      {IsoBox(268, 336, 188, 204, 26, '#F1F6FB', '#D7E5F2', '#C6DAEC', 'w')}
+      <rect x="296" y="356" width="120" height="24" fill="url(#czGlass)" stroke="#B7CFE4" strokeWidth="1.5"/>
+      <rect x="296" y="420" width="120" height="24" fill="url(#czGlass)" stroke="#B7CFE4" strokeWidth="1.5"/>
+      {/* Cuerpo principal con techo a un agua */}
+      {IsoBox(116, 262, 150, 278, 30, '#F6FAFD', '#DCEAF6', '#D4E4F1', 'b')}
+      {/* Techo inclinado (cara propia, más clara) */}
+      <polygon points="116,262 146,238 326,214 296,262" fill="#FBFDFF"/>
+      <polygon points="296,262 326,214 326,232 296,282" fill="#E4EEF7"/>
+      {/* Ventana grande */}
+      <rect x="134" y="292" width="52" height="60" fill="url(#czGlass)" stroke="#B7CFE4" strokeWidth="1.5"/>
+      <line x1="160" y1="292" x2="160" y2="352" stroke="#B7CFE4" strokeWidth="1.5"/>
+      {/* Charco de luz cálida en el piso */}
+      <ellipse cx="206" cy="546" rx="90" ry="26" fill="url(#czDoorPool)"/>
+      {/* Entrada: marco + hueco iluminado (recesado) */}
+      <polygon points="170,352 236,352 236,542 170,542" fill="#1B7C90"/>
+      <polygon points="236,352 246,344 246,534 236,542" fill="#155F70"/>
+      <rect x="180" y="360" width="46" height="182" fill="url(#czDoor)"/>
+      <polygon points="180,360 226,360 220,372 186,372" fill="#FFF0C4"/>
+      {/* Escalón facetado */}
+      <polygon points="150,540 316,540 300,556 134,556" fill="#DCE7F1"/>
+      <polygon points="134,556 300,556 300,562 134,562" fill="#C7D6E5"/>
 
-      {/* Cajas de mudanza — ordenadas junto a la entrada. Se van cuando arranca el camión. */}
-      <g style={{
-        opacity: packed ? 0 : 1,
-        transform: packed ? 'translateY(8px)' : 'none',
-        transition: 'opacity .7s ease, transform .7s ease',
-      }}>
-        <ellipse cx="176" cy="546" rx="120" ry="9" fill="rgba(20,30,50,.08)"/>
-        {BOXES.map(Box)}
-      </g>
-
-      {/* Rocas facetadas */}
-      {ROCKS.map(([x, y, s], i) => (
-        <g key={`rk${i}`}>
-          <polygon points={`${x - 22 * s},${y} ${x - 8 * s},${y - 16 * s} ${x + 10 * s},${y - 12 * s} ${x + 22 * s},${y} `} fill={ROCK}/>
-          <polygon points={`${x - 8 * s},${y - 16 * s} ${x + 10 * s},${y - 12 * s} ${x + 4 * s},${y}`} fill={ROCK2}/>
+      {/* Jardinera con flores (volumen) */}
+      {IsoBox(250, 508, 120, 28, 14, '#8FBE9C', '#5E9E7A', '#4F8F6B', 'j')}
+      {[262, 284, 306, 328, 350, 362].map((fx, i) => (
+        <g key={`fl${i}`}>
+          <polygon points={`${fx},${503 - (i % 2) * 4} ${fx + 5},${509 - (i % 2) * 4} ${fx},${515 - (i % 2) * 4} ${fx - 5},${509 - (i % 2) * 4}`}
+            fill={['#F4C453', '#EC6A82', '#F4C453', '#84BEE6', '#EC6A82', '#F4C453'][i]}/>
         </g>
       ))}
 
-      {/* Coníferas facetadas */}
+      {/* Cajas de mudanza — ordenadas junto a la entrada. Se van al arrancar el camión. */}
+      <g style={{
+        opacity: packed ? 0 : 1,
+        transform: packed ? 'translateY(10px) scale(0.96)' : 'none',
+        transformOrigin: '170px 540px',
+        transition: 'opacity .7s ease, transform .7s ease',
+      }}>
+        {shadow(168, 548, 118)}
+        {BOXES.map(([x, y, w, h], i) => (
+          <g key={`bx${i}`}>
+            {IsoBox(x, y, w, h, 15, '#F0DCBB', '#CBA678', '#DFC099', i)}
+            {/* Cinta: frente vertical + tope horizontal */}
+            <rect x={x + w / 2 - 3} y={y} width="6" height={h} fill="#F7ECD5" opacity=".9"/>
+            <polygon points={`${x + w / 2 - 3},${y} ${x + w / 2 - 3 + 15},${y - 7.8} ${x + w / 2 + 3 + 15},${y - 7.8} ${x + w / 2 + 3},${y}`} fill="#F7ECD5" opacity=".9"/>
+          </g>
+        ))}
+      </g>
+
+      {/* Rocas facetadas (3 caras) */}
+      {ROCKS.map(([x, y, s], i) => (
+        <g key={`rk${i}`}>
+          <polygon points={`${x - 20 * s},${y} ${x - 6 * s},${y - 15 * s} ${x + 8 * s},${y - 11 * s} ${x + 20 * s},${y}`} fill="#C7D3E2"/>
+          <polygon points={`${x - 6 * s},${y - 15 * s} ${x + 8 * s},${y - 11 * s} ${x + 2 * s},${y - 2 * s}`} fill="#E1E9F2"/>
+          <polygon points={`${x + 8 * s},${y - 11 * s} ${x + 20 * s},${y} ${x + 2 * s},${y - 2 * s}`} fill="#AFBFD3"/>
+        </g>
+      ))}
+
+      {/* Coníferas facetadas (cada tier: mitad luz / mitad sombra + tope) */}
       {CONIFERS.map(([cx, by, s], i) => (
         <g key={`cf${i}`}>
-          <rect x={cx - 4 * s} y={by - 14 * s} width={8 * s} height={22 * s} fill={TRUNK}/>
+          {shadow(cx + 14 * s, by + 2, 40 * s)}
+          <polygon points={`${cx - 4 * s},${by - 12 * s} ${cx + 4 * s},${by - 12 * s} ${cx + 4 * s},${by + 6 * s} ${cx - 4 * s},${by + 6 * s}`} fill="#B98D63"/>
           {[0, 1, 2].map(t => {
-            const w = (62 - t * 16) * s, h = 42 * s, ty = by - 22 * s - t * 30 * s;
+            const w = (66 - t * 17) * s, h = 46 * s, ty = by - 20 * s - t * 32 * s, tx = cx;
             return (
               <g key={t}>
-                <polygon points={`${cx},${ty - h} ${cx - w / 2},${ty} ${cx + w / 2},${ty}`} fill={TREE}/>
-                <polygon points={`${cx},${ty - h} ${cx},${ty} ${cx + w / 2},${ty}`} fill={TREE2}/>
+                <polygon points={`${tx},${ty - h} ${tx - w / 2},${ty} ${tx},${ty}`} fill="#5CA07E"/>
+                <polygon points={`${tx},${ty - h} ${tx},${ty} ${tx + w / 2},${ty}`} fill="#7FC09E"/>
+                <polygon points={`${tx},${ty - h} ${tx - w / 6},${ty - h + 12 * s} ${tx + w / 6},${ty - h + 12 * s}`} fill="#A9D8BC"/>
               </g>
             );
           })}
         </g>
       ))}
 
-      {/* Árboles redondos facetados */}
+      {/* Árboles redondos: gema facetada */}
       {BLOBS.map(([cx, by, s], i) => {
-        const r = 34 * s;
+        const R = 36 * s, cy = by - R - 6 * s;
+        const pts = Array.from({ length: 7 }, (_, k) => {
+          const a = -Math.PI / 2 + (k / 7) * Math.PI * 2;
+          return [cx + Math.cos(a) * R, cy + Math.sin(a) * R];
+        });
         return (
           <g key={`bl${i}`}>
-            <rect x={cx - 4 * s} y={by - 12 * s} width={8 * s} height={20 * s} fill={TRUNK}/>
-            <polygon points={`${cx - r},${by - 26 * s} ${cx - r * .5},${by - r - 20 * s} ${cx + r * .5},${by - r - 20 * s} ${cx + r},${by - 26 * s} ${cx + r * .6},${by - 6 * s} ${cx - r * .6},${by - 6 * s}`} fill={TREE}/>
-            <polygon points={`${cx},${by - r - 20 * s} ${cx + r},${by - 26 * s} ${cx + r * .6},${by - 6 * s} ${cx},${by - 6 * s}`} fill={TREE2}/>
-            <polygon points={`${cx - r * .5},${by - r - 20 * s} ${cx + r * .5},${by - r - 20 * s} ${cx},${by - r - 2 * s}`} fill={TREE3} opacity=".7"/>
+            {shadow(cx + 12 * s, by + 2, 34 * s)}
+            <polygon points={`${cx - 4 * s},${by - 14 * s} ${cx + 4 * s},${by - 14 * s} ${cx + 4 * s},${by + 4 * s} ${cx - 4 * s},${by + 4 * s}`} fill="#B98D63"/>
+            {pts.map((p, k) => {
+              const q = pts[(k + 1) % 7];
+              const g = ['#5CA07E', '#7FC09E', '#6BB490', '#A9D8BC', '#7FC09E', '#5CA07E', '#8FCBAA'][k];
+              return <polygon key={k} points={`${cx},${cy} ${p[0]},${p[1]} ${q[0]},${q[1]}`} fill={g}/>;
+            })}
           </g>
         );
       })}
 
-      {/* Matas de pasto */}
-      {[140, 240, 470, 640, 820, 1000, 1210, 1380].map((x, i) => (
-        <path key={`gt${i}`} d={`M${x},560 l-4,-12 M${x},560 l0,-15 M${x},560 l4,-11`} stroke="#BFD4C6" strokeWidth="2.4" fill="none" strokeLinecap="round"/>
+      {/* Matas de pasto facetadas */}
+      {[130, 250, 470, 660, 850, 1050, 1250, 1400].map((x, i) => (
+        <g key={`gt${i}`}>
+          <polygon points={`${x - 5},560 ${x - 2},546 ${x + 1},560`} fill="#8FC0A0"/>
+          <polygon points={`${x},560 ${x + 3},544 ${x + 6},560`} fill="#A9D2B6"/>
+        </g>
       ))}
 
       {/* ── PISTA — recta y horizontal, misma geometría de siempre ── */}
-      <rect x="0" y="591" width="1440" height="2" fill="rgba(120,140,165,.22)"/>
-      <rect x="0" y="593" width="1440" height="107" fill={ROAD}/>
-      <rect x="0" y="596" width="1440" height="3" fill="rgba(255,255,255,.28)"/>
+      <rect x="0" y="591" width="1440" height="2" fill="rgba(120,140,165,.25)"/>
+      <rect x="0" y="593" width="1440" height="107" fill="#ABB9C9"/>
+      <rect x="0" y="596" width="1440" height="4" fill="rgba(255,255,255,.30)"/>
+      <rect x="0" y="672" width="1440" height="28" fill="rgba(28,44,74,.06)"/>
       {Array.from({ length: 14 }, (_, i) => (
-        <rect key={`d${i}`} x={i * 110} y="644" width="72" height="5" rx="2" fill={DASH}/>
+        <rect key={`d${i}`} x={i * 110} y="644" width="72" height="5" rx="2" fill="rgba(255,255,255,.95)"/>
       ))}
 
       {/* Destellos */}
-      {SPARKS.map(Spark)}
+      {SPARKS.map(([x, y, s], i) => (
+        <path key={`sp${i}`}
+          d={`M${x},${y - 7 * s} L${x + 2 * s},${y - 2 * s} L${x + 7 * s},${y} L${x + 2 * s},${y + 2 * s} L${x},${y + 7 * s} L${x - 2 * s},${y + 2 * s} L${x - 7 * s},${y} L${x - 2 * s},${y - 2 * s} Z`}
+          fill="#fff" opacity=".8"/>
+      ))}
     </svg>
   );
 }
