@@ -9,7 +9,7 @@ import {
   validatePublicCalculationPayload,
   validatePublicQuotePayload,
 } from '../middleware/security.js';
-import { notifyAdminQuoteCreated, notifyAdminLead } from '../utils/notifications.js';
+import { notifyAdminQuoteCreated, notifyAdminLead, notifySelfTest } from '../utils/notifications.js';
 import { OSRM_BASE_URL } from '../utils/geocode.js';
 import { findTierPricePerKm, calcVehiclePrice } from '../utils/vehiclePricing.js';
 import { isSupabaseEnabled, normalizeQuote, normalizeQuoteItem, qs, supabaseRequest } from '../utils/supabase.js';
@@ -942,6 +942,16 @@ async function findRecentDraftByPhone(phone, windowHours = 6) {
     return null;
   }
 }
+
+// GET /api/public/_notify-selftest — diagnóstico: dispara un push de prueba y
+// devuelve el resultado crudo de ntfy (para depurar sin logs de Railway).
+router.get('/_notify-selftest', publicCalculationLimiter, async (_req, res) => {
+  try {
+    res.json(await notifySelfTest());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // POST /api/public/lead — captura parcial antes de mostrar precio
 router.post('/lead', publicQuoteLimiter, async (req, res) => {

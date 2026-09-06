@@ -309,6 +309,45 @@ async function sendWhatsAppNotification({ quote, payload, message }) {
   return { ok: true };
 }
 
+// Diagnóstico: envía un push de prueba y devuelve el resultado CRUDO de ntfy
+// (status HTTP, cuerpo, error) para poder ver desde afuera qué está pasando en
+// el server de producción sin acceso a los logs de Railway.
+export async function notifySelfTest() {
+  const topic = process.env.NTFY_TOPIC || '';
+  const base  = (process.env.NTFY_SERVER || 'https://ntfy.sh').replace(/\/+$/, '');
+  const out = {
+    topicConfigured: Boolean(topic),
+    topicMasked: topic ? `${topic.slice(0, 12)}… (largo ${topic.length})` : null,
+    ntfyServer: base,
+    telegramConfigured: Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID),
+    whatsappConfigured: Boolean(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.ADMIN_WHATSAPP_TO),
+  };
+  if (!topic) { out.ntfy = { skipped: 'NTFY_TOPIC no configurado' }; return out; }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const headers = {
+      'Title': 'MUVE selftest',
+      'Priority': 'high',
+      'Tags': 'test_tube',
+      'Content-Type': 'text/plain; charset=utf-8',
+    };
+    if (process.env.NTFY_TOKEN) headers.Authorization = `Bearer ${process.env.NTFY_TOKEN}`;
+    const r = await fetch(`${base}/${encodeURIComponent(topic)}`, {
+      method: 'POST', headers,
+      body: `Prueba de notificación ${new Date().toISOString()}`,
+      signal: controller.signal,
+    });
+    out.ntfy = { httpStatus: r.status, ok: r.ok, body: (await r.text()).slice(0, 400) };
+  } catch (err) {
+    out.ntfy = { error: err.message };
+  } finally {
+    clearTimeout(timer);
+  }
+  return out;
+}
+
 // Aviso ligero al crear un lead (nombre + teléfono, antes del precio). Garantiza
 // que el operador tenga el contacto aunque el cliente no termine la cotización.
 export async function notifyAdminLead({ name, phone, origin, destination }) {
