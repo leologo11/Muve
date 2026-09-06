@@ -282,6 +282,64 @@ function SceneStatic({ packed = false }) {
     <ellipse cx={cx} cy={cy} rx={rx} ry={rx * 0.16} fill="rgba(28,44,74,.12)"/>
   );
 
+  // ── Muebles de mudanza (facetados, luz arriba-derecha) ──────────────
+  const Sofa = (x, y) => (
+    <g key="sofa">
+      <ellipse cx={x + 66} cy={y + 4} rx="82" ry="10" fill="rgba(28,44,74,.13)"/>
+      <polygon points={`${x + 6},${y - 48} ${x + 122},${y - 48} ${x + 130},${y - 55} ${x + 14},${y - 55}`} fill="#8FCFD9"/>
+      <polygon points={`${x + 6},${y - 48} ${x + 122},${y - 48} ${x + 122},${y - 14} ${x + 6},${y - 14}`} fill="#5AA1AD"/>
+      <polygon points={`${x - 2},${y - 20} ${x + 130},${y - 20} ${x + 138},${y - 27} ${x + 6},${y - 27}`} fill="#A6DDE4"/>
+      <polygon points={`${x - 2},${y - 20} ${x + 130},${y - 20} ${x + 130},${y} ${x - 2},${y}`} fill="#559AA6"/>
+      {[0, 1, 2].map(k => <rect key={k} x={x + 8 + k * 41} y={y - 33} width="35" height="15" rx="4" fill="#BEE7EC"/>)}
+      <polygon points={`${x - 8},${y - 32} ${x + 12},${y - 32} ${x + 18},${y - 39} ${x - 2},${y - 39}`} fill="#8FCFD9"/>
+      <polygon points={`${x - 8},${y - 32} ${x + 12},${y - 32} ${x + 12},${y} ${x - 8},${y}`} fill="#468693"/>
+      <polygon points={`${x + 116},${y - 32} ${x + 136},${y - 32} ${x + 142},${y - 39} ${x + 122},${y - 39}`} fill="#8FCFD9"/>
+      <polygon points={`${x + 116},${y - 32} ${x + 136},${y - 32} ${x + 136},${y} ${x + 116},${y}`} fill="#468693"/>
+      <rect x={x + 2} y={y} width="5" height="8" fill="#8A6A45"/><rect x={x + 122} y={y} width="5" height="8" fill="#8A6A45"/>
+    </g>
+  );
+  const Chair = (x, y) => (
+    <g key="chair">
+      <ellipse cx={x + 22} cy={y + 3} rx="36" ry="7" fill="rgba(28,44,74,.13)"/>
+      <polygon points={`${x + 2},${y - 44} ${x + 44},${y - 44} ${x + 50},${y - 50} ${x + 8},${y - 50}`} fill="#F2CE84"/>
+      <polygon points={`${x + 2},${y - 44} ${x + 44},${y - 44} ${x + 44},${y - 16} ${x + 2},${y - 16}`} fill="#D6A247"/>
+      <polygon points={`${x - 4},${y - 20} ${x + 48},${y - 20} ${x + 54},${y - 26} ${x + 2},${y - 26}`} fill="#F2CE84"/>
+      <polygon points={`${x - 4},${y - 20} ${x + 48},${y - 20} ${x + 48},${y} ${x - 4},${y}`} fill="#D6A247"/>
+      <rect x={x - 2} y={y} width="5" height="8" fill="#8A6A45"/><rect x={x + 40} y={y} width="5" height="8" fill="#8A6A45"/>
+    </g>
+  );
+  const Dresser = (x, y) => (
+    <g key="dresser">
+      <ellipse cx={x + 34} cy={y + 3} rx="46" ry="7" fill="rgba(28,44,74,.13)"/>
+      {IsoBox(x, y - 62, 62, 62, 16, '#DEBB8F', '#B58A60', '#CBA679', 'dr')}
+      {[0, 1, 2].map(k => (
+        <g key={k}>
+          <rect x={x + 6} y={y - 56 + k * 19} width="50" height="15" fill="none" stroke="#A57C53" strokeWidth="1.5"/>
+          <rect x={x + 27} y={y - 51 + k * 19} width="8" height="4" rx="2" fill="#7C5E3E"/>
+        </g>
+      ))}
+    </g>
+  );
+  const Lamp = (x, y) => (
+    <g key="lamp">
+      <ellipse cx={x} cy={y + 3} rx="16" ry="5" fill="rgba(28,44,74,.13)"/>
+      <rect x={x - 2} y={y - 74} width="4" height="74" fill="#9AA7B5"/>
+      <ellipse cx={x} cy={y} rx="13" ry="4" fill="#8A97A5"/>
+      <polygon points={`${x - 17},${y - 74} ${x + 17},${y - 74} ${x + 11},${y - 100} ${x - 11},${y - 100}`} fill="#F5E8C6"/>
+      <polygon points={`${x - 17},${y - 74} ${x},${y - 74} ${x - 6},${y - 100} ${x - 11},${y - 100}`} fill="#E4D0A4"/>
+    </g>
+  );
+  const Plant = (x, y) => (
+    <g key="plant">
+      <ellipse cx={x} cy={y + 3} rx="18" ry="5" fill="rgba(28,44,74,.13)"/>
+      {[[-11, -42, '#5CA07E'], [11, -46, '#7FC09E'], [0, -58, '#A9D8BC'], [-17, -30, '#6BB490'], [17, -30, '#5CA07E']].map(([dx, dy, c], k) => (
+        <polygon key={k} points={`${x},${y - 18} ${x + dx},${y + dy} ${x + dx * 0.4},${y + dy + 15}`} fill={c}/>
+      ))}
+      <polygon points={`${x - 13},${y} ${x + 13},${y} ${x + 10},${y - 20} ${x - 10},${y - 20}`} fill="#C77C56"/>
+      <polygon points={`${x - 10},${y - 20} ${x + 10},${y - 20} ${x + 8},${y - 8} ${x - 8},${y - 8}`} fill="#A6633F"/>
+    </g>
+  );
+
   return (
     <svg width="100%" height="100%" viewBox="0 0 1440 700" preserveAspectRatio="xMidYMax slice"
          xmlns="http://www.w3.org/2000/svg" style={{ display: 'block', position: 'absolute', inset: 0 }}>
@@ -330,14 +388,26 @@ function SceneStatic({ packed = false }) {
         <polygon points="1030,150 1078,132 1130,140 1152,158 1082,166" fill="#fff"/>
       </g>
 
-      {/* Ciudad lejana facetada (atmósfera azulada) */}
-      {[[905, 430], [966, 380], [1030, 412], [1098, 356], [1164, 404], [1236, 366], [1306, 418], [1378, 360]].map(([x, y], i) => {
-        const w = i % 2 ? 46 : 58, h = 520 - y;
+      {/* Ciudad de fondo — dos filas facetadas con ventanas */}
+      {[
+        // fila lejana (tenue, más alta)
+        ...Array.from({ length: 15 }, (_, k) => ({ x: -20 + k * 100, y: 336 + (k * 47 % 88), w: 46 + (k % 3) * 12, op: 0.45, base: '#A6C0DC', d: 10 })),
+        // fila media (más marcada, más baja)
+        ...Array.from({ length: 10 }, (_, k) => ({ x: 20 + k * 150, y: 408 + (k * 33 % 66), w: 78 + (k % 2) * 26, op: 0.72, base: '#8FB1D2', d: 16 })),
+      ].map(({ x, y, w, op, base, d }, i) => {
+        const h = 524 - y;
+        const rows = Math.max(1, Math.floor(h / 28));
+        const cols = Math.max(1, Math.floor((w - 12) / 18));
         return (
-          <g key={`fc${i}`} opacity=".6">
-            <polygon points={`${x},${y} ${x + w},${y} ${x + w},${y + h} ${x},${y + h}`} fill="#AFC8E1"/>
-            <polygon points={`${x},${y} ${x + 12},${y - 8} ${x + w + 12},${y - 8} ${x + w},${y}`} fill="#C6DAEC"/>
-            <polygon points={`${x + w},${y} ${x + w + 12},${y - 8} ${x + w + 12},${y + h - 8} ${x + w},${y + h}`} fill="#9BB8D6"/>
+          <g key={`bld${i}`} opacity={op}>
+            <polygon points={`${x},${y} ${x + w},${y} ${x + w},${y + h} ${x},${y + h}`} fill={base}/>
+            <polygon points={`${x},${y} ${x + d},${y - d * 0.6} ${x + w + d},${y - d * 0.6} ${x + w},${y}`} fill="#C8DBED"/>
+            <polygon points={`${x + w},${y} ${x + w + d},${y - d * 0.6} ${x + w + d},${y + h - d * 0.6} ${x + w},${y + h}`} fill="#87A6C6"/>
+            {Array.from({ length: rows }).map((_, r) =>
+              Array.from({ length: cols }).map((__, c) => (
+                <rect key={`${r}-${c}`} x={x + 8 + c * 18} y={y + 12 + r * 28} width="9" height="12" fill="#E9F2F9" opacity=".6"/>
+              ))
+            )}
           </g>
         );
       })}
@@ -391,22 +461,29 @@ function SceneStatic({ packed = false }) {
         </g>
       ))}
 
-      {/* Cajas de mudanza — ordenadas junto a la entrada. Se van al arrancar el camión. */}
+      {/* Mudanza en la vereda — cajas + muebles. Todo se va al arrancar el camión. */}
       <g style={{
         opacity: packed ? 0 : 1,
-        transform: packed ? 'translateY(10px) scale(0.96)' : 'none',
-        transformOrigin: '170px 540px',
+        transform: packed ? 'translateY(12px) scale(0.95)' : 'none',
+        transformOrigin: '190px 560px',
         transition: 'opacity .7s ease, transform .7s ease',
       }}>
-        {shadow(168, 548, 118)}
+        {shadow(210, 566, 190)}
+        {/* muebles detrás */}
+        {Dresser(292, 566)}
+        {Lamp(66, 566)}
+        {/* cajas */}
         {BOXES.map(([x, y, w, h], i) => (
           <g key={`bx${i}`}>
             {IsoBox(x, y, w, h, 15, '#F0DCBB', '#CBA678', '#DFC099', i)}
-            {/* Cinta: frente vertical + tope horizontal */}
             <rect x={x + w / 2 - 3} y={y} width="6" height={h} fill="#F7ECD5" opacity=".9"/>
             <polygon points={`${x + w / 2 - 3},${y} ${x + w / 2 - 3 + 15},${y - 7.8} ${x + w / 2 + 3 + 15},${y - 7.8} ${x + w / 2 + 3},${y}`} fill="#F7ECD5" opacity=".9"/>
           </g>
         ))}
+        {/* muebles delante */}
+        {Sofa(96, 584)}
+        {Chair(250, 584)}
+        {Plant(228, 560)}
       </g>
 
       {/* Rocas facetadas (3 caras) */}
