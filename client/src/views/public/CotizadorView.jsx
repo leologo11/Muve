@@ -2009,6 +2009,7 @@ export default function CotizadorView() {
   // has arrived. See the .czDoor cover inside .cz-inner in the main render.
   const [doorOpen, setDoorOpen] = useState(!playIntro);
   const frameRef = useRef(null);
+  const submittingRef = useRef(false); // evita doble envío si tocan "Aceptar" dos veces
 
   useEffect(() => {
     if (!playIntro) return;
@@ -2077,11 +2078,11 @@ export default function CotizadorView() {
       if (noOnlinePrice) {
         // Aun sin precio online, la cotización se GUARDA y NOTIFICA — así el
         // operador la ve en el admin y puede escribirle al cliente.
-        setState(s => ({ ...s, result: res, manualReview: true, preliminary: false }));
+        // Se guarda en segundo plano: no bloquear la pantalla.
+        setState(s => ({ ...s, result: res, manualReview: true, preliminary: false, step: 5 }));
         trackStep(6);
         _trackEventDB(7);
-        await persistQuote({ result: res, manualReview: true, preliminary: false });
-        setState(s => ({ ...s, step: 5 }));
+        persistQuote({ result: res, manualReview: true, preliminary: false });
       } else {
         setState(s => ({ ...s, result: res, manualReview: false, preliminary, step: 4 }));
         trackStep(5);
@@ -2132,8 +2133,12 @@ export default function CotizadorView() {
   };
 
   const submitContact = async (extra = {}) => {
+    if (submittingRef.current) return;   // ya se tocó "Aceptar"
+    submittingRef.current = true;
     setSaving(true);
-    await persistQuote(extra);
+    // La cotización se guarda + notifica en SEGUNDO PLANO. El botón responde al
+    // instante: el camión arranca ya, sin esperar la red.
+    persistQuote(extra).finally(() => setSaving(false));
 
     if (typeof window !== 'undefined' && window.innerWidth >= 640) {
       // Reverse the arrival first: card re-crops (the rear wheel reappears) and the
@@ -2149,12 +2154,12 @@ export default function CotizadorView() {
       setRigPhase('attached');
     }
 
-    setSaving(false);
     setState(s => ({ ...s, step: 5 }));
     trackStep(5);
   };
 
   const restart = () => {
+    submittingRef.current = false;
     setState(INIT);
     if (!playIntro) return;
     // The cab retired off-screen when the last quote finished — bring it back for
