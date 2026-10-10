@@ -20,9 +20,9 @@ function mergeTypedStreetNumber(address, typed) {
 const KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || '';
 
 // ── Google Places API (New) ───────────────────────────────────────────────────
-async function googleSearch(q) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 1800);
+// El timeout cubre preflight CORS + POST (~1 s cada uno desde Chile): con 1800 ms se abortaba siempre.
+async function googleSearch(q, ctrl) {
+  const t = setTimeout(() => ctrl.abort(), 8000);
   try {
     const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
       method: 'POST',
@@ -97,6 +97,7 @@ export default function AddressAutocomplete({
   const inputRef     = useRef();
   const debounceRef  = useRef();
   const mountedRef   = useRef(true);
+  const searchCtrlRef = useRef(null);
 
   // ── fix React StrictMode: resetear mountedRef en cada mount ─────────────────
   useEffect(() => {
@@ -114,20 +115,25 @@ export default function AddressAutocomplete({
 
   const search = useCallback((q) => {
     clearTimeout(debounceRef.current);
-    if (!q || q.trim().length < 3) { setSuggestions([]); setOpen(false); return; }
+    searchCtrlRef.current?.abort();
+    searchCtrlRef.current = null;
+    if (!q || q.trim().length < 3) { setSuggestions([]); setOpen(false); setLoading(false); return; }
 
     debounceRef.current = setTimeout(async () => {
       if (!mountedRef.current) return;
+      const ctrl = new AbortController();
+      searchCtrlRef.current = ctrl;
       setLoading(true);
       let results = [];
 
       try {
-        if (KEY) results = await googleSearch(q.trim());
+        if (KEY) results = await googleSearch(q.trim(), ctrl);
       } catch (e) {
+        if (searchCtrlRef.current !== ctrl) return;
         console.warn('[Google Places]', e.message);
       }
 
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || searchCtrlRef.current !== ctrl) return;
       setLoading(false);
       setProvider(results.length ? 'google' : '');
       if (results.length) {
